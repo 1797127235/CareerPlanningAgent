@@ -172,30 +172,44 @@ def llm_chat(
     temperature: float = 0.7,
     timeout: int = 60,
 ) -> str:
-    """Simple synchronous chat call. Returns the assistant message content.
+    """Simple synchronous chat call with automatic retry (tenacity).
 
-    Args:
-        messages: List of {role, content} dicts.
-        model: Model name; defaults to get_model('default').
-        temperature: Sampling temperature.
-        timeout: Request timeout in seconds.
+    Retries up to 3 times on transient errors (rate limits, network issues)
+    with exponential backoff: 2s → 4s → 8s.
 
     Returns:
-        Assistant reply as a plain string (empty string on failure).
+        Assistant reply as a plain string (empty string on all failures).
     """
+    from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+    import openai as _openai
+
     if model is None:
         model = get_model("default")
 
     client = get_llm_client(timeout=timeout)
-    try:
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=8),
+        retry=retry_if_exception_type((
+            _openai.RateLimitError,
+            _openai.APITimeoutError,
+            _openai.APIConnectionError,
+        )),
+        reraise=False,
+    )
+    def _call() -> str:
         resp = client.chat.completions.create(
             model=model,
             messages=messages,
             temperature=temperature,
         )
         return resp.choices[0].message.content or ""
+
+    try:
+        return _call()
     except Exception as exc:
-        logger.error("llm_chat failed (model=%s): %s", model, exc)
+        logger.error("llm_chat failed after retries (model=%s): %s", model, exc)
         return ""
 
 

@@ -61,10 +61,9 @@ export function buildChecklist(p: ProfileData): CheckItem[] {
 
 /* ── Upload step config ── */
 export const uploadSteps = [
-  { label: '准备上传', icon: '📤' },
-  { label: '上传文件', icon: '📤' },
-  { label: 'AI 解析简历', icon: '🧠' },
-  { label: '生成画像', icon: '✨' },
+  { label: '读取文件', icon: '📄' },
+  { label: 'AI 提取技能与项目', icon: '🧠' },
+  { label: '保存并生成画像', icon: '✨' },
 ]
 
 export const uploadTips = [

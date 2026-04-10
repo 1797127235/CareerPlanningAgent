@@ -7,6 +7,7 @@ import type { ManualProfilePayload } from '@/components/profile'
 interface UseProfileDataReturn {
   profile: ProfileData | null
   loading: boolean
+  loadError: string | null
   loadProfile: () => Promise<void>
 
   /* actions */
@@ -35,14 +36,17 @@ export function useProfileData(token: string | null): UseProfileDataReturn {
   const [savingEdit, setSavingEdit] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
+  const [loadError, setLoadError] = useState<string | null>(null)
+
   const loadProfile = useCallback(async () => {
     if (!token) { setLoading(false); return }
     setLoading(true)
+    setLoadError(null)
     try {
       const data = await fetchProfile()
       setProfile(data)
-    } catch {
-      /* noop */
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : '画像加载失败，请刷新重试')
     }
     setLoading(false)
   }, [token])
@@ -113,6 +117,7 @@ export function useProfileData(token: string | null): UseProfileDataReturn {
   return {
     profile,
     loading,
+    loadError,
     loadProfile,
     reparsing,
     handleReparse,

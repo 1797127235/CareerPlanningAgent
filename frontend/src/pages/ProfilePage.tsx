@@ -95,7 +95,7 @@ function RecommendationCard({
 
 export default function ProfilePage() {
   const { token } = useAuth()
-  const { profile, loading, loadProfile, handleSaveEdit, savingEdit } = useProfileData(token)
+  const { profile, loading, loadError, loadProfile, handleSaveEdit, savingEdit } = useProfileData(token)
   const { fileInputRef, triggerFileDialog, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -223,6 +223,23 @@ export default function ProfilePage() {
   }
 
   if (loading) return <ProfileSkeleton />
+  if (loadError) return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-6">
+      <div className="w-12 h-12 rounded-full bg-red-50 flex items-center justify-center">
+        <AlertTriangle className="w-6 h-6 text-red-400" />
+      </div>
+      <div>
+        <p className="text-[15px] font-semibold text-slate-700 mb-1">画像加载失败</p>
+        <p className="text-[12px] text-slate-400">{loadError}</p>
+      </div>
+      <button
+        onClick={loadProfile}
+        className="px-4 py-2 rounded-xl bg-blue-50 text-blue-600 text-[13px] font-semibold hover:bg-blue-100 transition-colors cursor-pointer"
+      >
+        重新加载
+      </button>
+    </div>
+  )
   if (!hasProfile && !editing) return <ProfileEmptyState onUpload={triggerFileDialog} onManualEntry={handleManualEntry} />
   if (!hasProfile && editing) {
     return (

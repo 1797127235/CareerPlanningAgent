@@ -805,9 +805,26 @@ async def chat(
     db: Session = Depends(get_db),
 ):
     """SSE streaming chat — frontend primary endpoint (POST /api/chat)."""
-    return StreamingResponse(
-        _build_event_stream(req, user, db), media_type="text/event-stream"
-    )
+    import asyncio
+
+    _SSE_TIMEOUT = 120  # 2 minutes max per chat turn
+
+    async def _guarded_stream():
+        """Wrap the event stream with an overall timeout."""
+        try:
+            async with asyncio.timeout(_SSE_TIMEOUT):
+                async for chunk in _build_event_stream(req, user, db):
+                    yield chunk
+        except TimeoutError:
+            logger.warning("SSE stream timed out after %ds for user %s", _SSE_TIMEOUT, user.id)
+            yield 'data: {"error": "响应超时，请重试"}\n\n'
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            logger.exception("SSE stream error for user %s: %s", user.id, e)
+            yield 'data: {"error": "服务异常，请稍后重试"}\n\n'
+            yield "data: [DONE]\n\n"
+
+    return StreamingResponse(_guarded_stream(), media_type="text/event-stream")
 
 
 # ── FR37: Chat session CRUD ──────────────────────────────────────────────────

@@ -9,7 +9,7 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -195,7 +195,7 @@ def _merge_profiles(existing: dict, incoming: dict) -> dict:
 
 # ── LLM-based role matching ───────────────────────────────────────────────────
 
-_ROLE_LIST_CACHE: str | None = None
+_ROLE_LIST_CACHE: str | None = None    # cleared on restart — now includes distinguishing_features
 _GRAPH_NODES_CACHE: dict | None = None
 _skill_vocab_cache: str | None = None
 
@@ -212,28 +212,28 @@ def _get_graph_nodes() -> dict:
 
 
 def _get_role_list_text(node_ids: list[str] | None = None) -> str:
-    """Build a role list string for the LLM prompt. If node_ids given, only include those."""
+    """Build a role list string for the LLM prompt, including distinguishing_features."""
     global _ROLE_LIST_CACHE
     graph_nodes = _get_graph_nodes()
 
+    def _format_node(nid: str, n: dict) -> str:
+        label = n.get("label", nid)
+        ms = ", ".join(str(s) for s in (n.get("must_skills") or [])[:6])
+        line = f"- {nid}: {label}（核心技能: {ms}）"
+        df = n.get("distinguishing_features") or []
+        if df:
+            line += f"\n  适合信号: {'; '.join(df[:3])}"
+        ntrf = n.get("not_this_role_if") or []
+        if ntrf:
+            line += f"\n  不适合: {'; '.join(ntrf[:2])}"
+        return line
+
     if node_ids is not None:
-        # Filtered list — don't use cache
-        lines = []
-        for nid in node_ids:
-            n = graph_nodes.get(nid, {})
-            label = n.get("label", nid)
-            ms = ", ".join(str(s) for s in (n.get("must_skills") or [])[:6])
-            lines.append(f"- {nid}: {label}（{ms}）")
-        return "\n".join(lines)
+        return "\n".join(_format_node(nid, graph_nodes.get(nid, {})) for nid in node_ids)
 
     if _ROLE_LIST_CACHE:
         return _ROLE_LIST_CACHE
-    lines = []
-    for nid, n in graph_nodes.items():
-        label = n.get("label", nid)
-        ms = ", ".join(str(s) for s in (n.get("must_skills") or [])[:6])
-        lines.append(f"- {nid}: {label}（{ms}）")
-    _ROLE_LIST_CACHE = "\n".join(lines)
+    _ROLE_LIST_CACHE = "\n".join(_format_node(nid, n) for nid, n in graph_nodes.items())
     return _ROLE_LIST_CACHE
 
 
@@ -332,25 +332,32 @@ def _embedding_prefilter(profile_data: dict, ratio: float = 0.70) -> list[str]:
     return candidates
 
 
-_ROLE_MATCH_PROMPT = """你是一个职业匹配 AI。根据用户的技能和背景，完成两件事：
+_ROLE_MATCH_PROMPT = """你是一个职业匹配 AI。根据用户的完整背景，完成两件事：
 
 1. 从以下 {role_count} 个岗位中选出最匹配的 1 个作为用户**当前定位**（current_position）
 2. 推荐 5-6 个最适合的方向，按匹配度从高到低排序
-   - 最匹配的排第一（包括当前定位岗位本身）
-   - 只推荐和用户技能有真实关联的岗位，宁少勿滥，不要凑数
-   - 每个推荐附一句话理由，说明用户的哪些技能/经验和这个方向相关
-   - affinity_pct 反映技能匹配程度（0-100）
+   - 只推荐和用户背景有真实关联的岗位，宁少勿滥
+   - 每个推荐附一句话理由，说明用户的哪些经历/信号匹配该方向
+   - affinity_pct 反映综合契合度（0-100）
 
-【关键规则 — 必须严格执行】
-1. 用户的主方向（primary_domain）是最重要的匹配信号，权重远高于单项技能。
-2. 基础设施/工具技能（Docker、Linux、Git、CI/CD、Kubernetes）是大多数开发者都具备的辅助技能，不能作为匹配 DevOps/运维 类岗位的主要依据，除非用户 primary_domain 明确是"系统/基础设施"。
-3. 只有当某个技能是用户的核心产出技能（项目主体技术栈），而非顺手用的工具，才应拉高该方向的 affinity_pct。
+【匹配优先级规则 — 严格执行】
+1. **primary_domain > 单项技能**：用户主方向是第一权重。
+2. **career_signals 是区分相似岗位的关键信号**：
+   - has_publication=true + research_vs_engineering=research → 算法工程师/研究岗优先于工程岗
+   - competition_awards（Kaggle金牌/数学建模）→ 算法/数据科学岗加权
+   - internship_company_tier=顶级大厂 → 整体上调
+   - research_vs_engineering=engineering → 工程岗优先于研究岗
+3. **工具技能不驱动主方向**：Docker/Linux/Git/CI/CD 是辅助技能，不能是 DevOps 匹配的主要依据（除非 primary_domain=系统/基础设施）。
+4. **distinguishing_features 是决定因素**：当两个岗位技能相似时，对照每个岗位的"适合信号"和"不适合"来判断，而非单纯技能重叠度。
 
-【岗位列表】
+【岗位列表（含区分信号）】
 {role_list}
 
 【用户主方向】
 {primary_domain}
+
+【用户职业信号】
+{career_signals}
 
 【用户技能】
 {user_skills}
@@ -386,10 +393,20 @@ def _llm_match_role(profile_data: dict) -> dict | None:
 
         edu = profile_data.get("education", {})
         primary_domain = profile_data.get("primary_domain", "未知")
+        cs = profile_data.get("career_signals", {})
+        career_signals_text = (
+            f"论文发表: {'有（' + cs.get('publication_level','') + '）' if cs.get('has_publication') else '无'}，"
+            f"竞赛获奖: {'/'.join(cs.get('competition_awards') or []) or '无'}，"
+            f"领域专精: {cs.get('domain_specialization') or '无'}，"
+            f"研究/工程倾向: {cs.get('research_vs_engineering','未知')}，"
+            f"开源贡献: {'有' if cs.get('open_source') else '无'}，"
+            f"实习公司: {cs.get('internship_company_tier','未知')}"
+        ) if cs else "未提取到职业信号"
         prompt = _ROLE_MATCH_PROMPT.format(
             role_count=len(candidate_ids),
             role_list=role_list,
             primary_domain=primary_domain,
+            career_signals=career_signals_text,
             user_skills=", ".join(skills),
             major=edu.get("major", "未知"),
             degree=edu.get("degree", "未知"),
@@ -598,7 +615,16 @@ _RESUME_PARSE_PROMPT = """你是一个简历解析 AI。请从以下简历文本
 返回格式（严格 JSON，不要加注释或 markdown）：
 {{
   "name": "姓名（可选）",
-  "primary_domain": "此人最主要的技术方向，从以下选一个：AI/LLM开发|后端开发|前端开发|游戏开发|数据工程|系统/基础设施|安全|其他",
+  "primary_domain": "此人最主要的技术方向，从以下选一个：AI/LLM开发|后端开发|前端开发|游戏开发|数据工程|系统/基础设施|安全|算法研究|其他",
+  "career_signals": {{
+    "has_publication": true或false（是否有论文发表，包括在投/预印本）,
+    "publication_level": "顶会（NeurIPS/ICML/CVPR/ACL/KDD/ICLR等）|CCF-A|CCF-B|CCF-C|无",
+    "competition_awards": ["获奖竞赛名称，如Kaggle金牌、数学建模省一等奖"],
+    "domain_specialization": "深耕的细分领域，如异常检测、推荐系统、计算机视觉等，无则填空字符串",
+    "research_vs_engineering": "research（偏学术/算法创新）|engineering（偏工程落地）|balanced（均衡）",
+    "open_source": true或false（是否有开源项目/贡献）,
+    "internship_company_tier": "顶级大厂（字节/阿里/腾讯/华为/百度等）|中大厂|初创/中小公司|无"
+  }},
   "experience_years": 工作年限数字（在校生/应届生填0）,
   "education": {{"degree": "学位", "major": "专业", "school": "学校"}},
   "skills": [
@@ -877,6 +903,7 @@ def get_profile(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.post("/parse-resume")
 async def parse_resume(
+    request: Request,
     file: UploadFile = File(...),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -885,8 +912,29 @@ async def parse_resume(
 
     Does NOT save to DB — call PUT /profiles to merge the result.
     """
-    content = await file.read()
-    filename = file.filename or "resume.txt"
+    # ── File validation ───────────────────────────────────────────────
+    _MAX_SIZE = 10 * 1024 * 1024  # 10 MB
+    _ALLOWED_EXTENSIONS = {".pdf", ".doc", ".docx", ".txt"}
+    _ALLOWED_MIMES = {
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/plain",
+    }
+
+    # Peek at first 10 MB, reject the rest
+    content = await file.read(_MAX_SIZE + 1)
+    if len(content) > _MAX_SIZE:
+        raise HTTPException(413, "文件过大，请上传 10MB 以内的简历文件")
+
+    filename = (file.filename or "resume.txt").strip()
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"不支持的文件格式 {ext!r}，请上传 PDF、Word 或 TXT 格式的简历")
+
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    if content_type and content_type not in _ALLOWED_MIMES and content_type != "application/octet-stream":
+        raise HTTPException(400, "文件类型不符，请上传简历文档")
 
     if filename.lower().endswith(".pdf"):
         try:

@@ -421,7 +421,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
               )
             })()}
 
-            {/* Typing dots */}
+            {/* Typing dots + slow-response warning */}
             {isStreaming && !currentStreamText && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-1.5">
@@ -435,6 +435,8 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
                   <div className="typing-dot bg-slate-400" />
                   <div className="typing-dot bg-slate-400" />
                 </div>
+                {/* Show slow-response hint after 15s */}
+                <SlowResponseHint isStreaming={isStreaming} />
               </div>
             )}
           </>
@@ -611,6 +613,22 @@ function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose:
   )
 }
 
+
+/* ── Slow Response Hint ── */
+function SlowResponseHint({ isStreaming }: { isStreaming: boolean }) {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    if (!isStreaming) { setShow(false); return }
+    const t = setTimeout(() => setShow(true), 15000)
+    return () => clearTimeout(t)
+  }, [isStreaming])
+  if (!show) return null
+  return (
+    <p className="text-[10px] text-slate-400 mt-1.5 ml-1">
+      AI 正在思考中，复杂任务可能需要 30 秒...
+    </p>
+  )
+}
 
 /* ── Add to Tracking Button ── */
 function AddToTrackingButton({ card }: { card: CardData }) {

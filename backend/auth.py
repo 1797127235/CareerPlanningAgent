@@ -19,10 +19,23 @@ from backend.db_models import User
 
 # ── Config ────────────────────────────────────────────────────────
 
-SECRET_KEY = os.getenv("JWT_SECRET_KEY") or "career-planning-agent-dev-secret-change-in-prod"
-if SECRET_KEY == "career-planning-agent-dev-secret-change-in-prod":
+_DEFAULT_KEY = "career-planning-agent-dev-secret-change-in-prod"
+SECRET_KEY = os.getenv("JWT_SECRET_KEY") or _DEFAULT_KEY
+if SECRET_KEY == _DEFAULT_KEY:
+    import sys
+    # Dev mode: auto-generate a random key per-process (sessions reset on restart, acceptable for dev)
+    if os.getenv("ENV", "development").lower() in ("production", "prod"):
+        raise RuntimeError(
+            "FATAL: JWT_SECRET_KEY is not set. "
+            "Set it in .env before starting the production server."
+        )
+    SECRET_KEY = secrets.token_hex(32)
     import warnings
-    warnings.warn("JWT_SECRET_KEY not set — using insecure default. Set it in .env for production.", stacklevel=2)
+    warnings.warn(
+        "JWT_SECRET_KEY not set — using a randomly generated key (sessions reset on restart). "
+        "Set JWT_SECRET_KEY in .env for stable sessions.",
+        stacklevel=2,
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 72
 
