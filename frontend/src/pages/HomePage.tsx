@@ -38,8 +38,13 @@ export default function HomePage() {
   const { fileInputRef, triggerFileDialog, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
 
   const hasProfile = (profile?.profile?.skills?.length ?? 0) > 0
+    || (profile?.profile?.knowledge_areas?.length ?? 0) > 0
+    || (profile?.profile?.projects?.length ?? 0) > 0
     || (profile?.profile?.experience_years ?? 0) > 0
     || !!profile?.profile?.education?.school
+    || !!profile?.profile?.education?.major
+    || !!profile?.name
+    || !!profile?.profile?.raw_text
   const graphPos = profile?.graph_position
   const careerGoals = profile?.career_goals ?? []
   const extraGoalCount = careerGoals.length > 1 ? careerGoals.length - 1 : 0

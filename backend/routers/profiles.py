@@ -197,6 +197,7 @@ def _merge_profiles(existing: dict, incoming: dict) -> dict:
 
 _ROLE_LIST_CACHE: str | None = None
 _GRAPH_NODES_CACHE: dict | None = None
+_skill_vocab_cache: str | None = None
 
 
 def _get_graph_nodes() -> dict:
@@ -340,8 +341,16 @@ _ROLE_MATCH_PROMPT = """你是一个职业匹配 AI。根据用户的技能和�
    - 每个推荐附一句话理由，说明用户的哪些技能/经验和这个方向相关
    - affinity_pct 反映技能匹配程度（0-100）
 
+【关键规则 — 必须严格执行】
+1. 用户的主方向（primary_domain）是最重要的匹配信号，权重远高于单项技能。
+2. 基础设施/工具技能（Docker、Linux、Git、CI/CD、Kubernetes）是大多数开发者都具备的辅助技能，不能作为匹配 DevOps/运维 类岗位的主要依据，除非用户 primary_domain 明确是"系统/基础设施"。
+3. 只有当某个技能是用户的核心产出技能（项目主体技术栈），而非顺手用的工具，才应拉高该方向的 affinity_pct。
+
 【岗位列表】
 {role_list}
+
+【用户主方向】
+{primary_domain}
 
 【用户技能】
 {user_skills}
@@ -359,22 +368,28 @@ _ROLE_MATCH_PROMPT = """你是一个职业匹配 AI。根据用户的技能和�
 
 
 def _llm_match_role(profile_data: dict) -> dict | None:
-    """Embedding pre-filter → LLM fine-rank. One call for position + recommendations."""
+    """LLM role matching using full node list (embedding prefilter removed — only 40 nodes)."""
     try:
         from backend.llm import llm_chat, parse_json_response
 
         skills = [s.get("name", "") for s in profile_data.get("skills", []) if s.get("name")]
+        # Fallback: use knowledge_areas when skills are empty
+        if not skills:
+            skills = (profile_data.get("knowledge_areas") or [])[:10]
         if not skills:
             return None
 
-        # Step 1: Embedding coarse filter — relative threshold
-        candidate_ids = _embedding_prefilter(profile_data)
-        role_list = _get_role_list_text(candidate_ids)
+        # Use all nodes directly — 40 nodes fits comfortably in one LLM call
+        all_node_ids = list(_get_graph_nodes().keys())
+        role_list = _get_role_list_text(all_node_ids)
+        candidate_ids = all_node_ids
 
         edu = profile_data.get("education", {})
+        primary_domain = profile_data.get("primary_domain", "未知")
         prompt = _ROLE_MATCH_PROMPT.format(
             role_count=len(candidate_ids),
             role_list=role_list,
+            primary_domain=primary_domain,
             user_skills=", ".join(skills),
             major=edu.get("major", "未知"),
             degree=edu.get("degree", "未知"),
@@ -525,6 +540,57 @@ def _auto_locate_on_graph(
         return None
 
 
+# ── Skill alias normalization ─────────────────────────────────────────────────
+# Maps common resume variants → canonical graph vocab names (lowercase key)
+_SKILL_ALIASES: dict[str, str] = {
+    # Game engine
+    "unreal engine 5": "Unreal", "unreal engine 4": "Unreal",
+    "ue5": "Unreal", "ue4": "Unreal", "unreal engine": "Unreal",
+    "unity3d": "Unity",
+    # Spring / Java
+    "springboot": "Spring Boot", "spring-boot": "Spring Boot",
+    "spring boot framework": "Spring Boot",
+    "mybatisplus": "MyBatis", "mybatis-plus": "MyBatis",
+    # LangChain ecosystem
+    "langgraph": "LangChain", "langchain4j": "LangChain",
+    "langserve": "LangChain", "langchain/langgraph": "LangChain",
+    # Vector DBs
+    "pgvector": "Vector DB", "pinecone": "Vector DB",
+    "weaviate": "Vector DB", "chroma": "Vector DB",
+    "milvus": "Vector DB", "qdrant": "Vector DB",
+    # LLM APIs
+    "openai api": "OpenAI API", "chatgpt api": "OpenAI API",
+    "gpt-4": "OpenAI API", "gpt4": "OpenAI API",
+    "dashscope": "OpenAI API",
+    # Frontend
+    "react.js": "React", "reactjs": "React",
+    "vue.js": "Vue.js", "vuejs": "Vue.js",
+    "nextjs": "Next.js",
+    "nodejs": "Node.js",
+    # DB
+    "postgresql": "PostgreSQL", "postgres": "PostgreSQL",
+    # K8s
+    "k8s": "Kubernetes",
+    # PyTorch / TF
+    "pytorch": "PyTorch", "tensorflow": "TensorFlow",
+}
+
+
+def _normalize_skill_name(name: str) -> str:
+    return _SKILL_ALIASES.get(name.lower().strip(), name)
+
+
+def _normalize_skills(skills: list) -> list:
+    """Normalize each skill's name using the alias map."""
+    result = []
+    for s in skills:
+        if isinstance(s, dict):
+            result.append({**s, "name": _normalize_skill_name(s.get("name", ""))})
+        else:
+            result.append(s)
+    return result
+
+
 # ── Resume parsing ────────────────────────────────────────────────────────────
 
 _RESUME_PARSE_PROMPT = """你是一个简历解析 AI。请从以下简历文本中提取结构化信息，以 JSON 格式返回。
@@ -532,6 +598,7 @@ _RESUME_PARSE_PROMPT = """你是一个简历解析 AI。请从以下简历文本
 返回格式（严格 JSON，不要加注释或 markdown）：
 {{
   "name": "姓名（可选）",
+  "primary_domain": "此人最主要的技术方向，从以下选一个：AI/LLM开发|后端开发|前端开发|游戏开发|数据工程|系统/基础设施|安全|其他",
   "experience_years": 工作年限数字（在校生/应届生填0）,
   "education": {{"degree": "学位", "major": "专业", "school": "学校"}},
   "skills": [
@@ -547,6 +614,7 @@ _RESUME_PARSE_PROMPT = """你是一个简历解析 AI。请从以下简历文本
 优先使用以下标准词表中的名称（如果简历中的技能可以对应上）：
 {skill_vocab}
 如果简历中的技能不在词表中，使用简短通用名称（如"多线程"而非"多线程编程"，"Linux"而非"Linux系统编程"，"C++"而非"C/C++语言"）。
+【别名归一化（强制）】Unreal Engine 5/UE5 → Unreal，LangGraph/LangChain4j → LangChain，PGVector → Vector DB，SpringBoot → Spring Boot。
 
 【字段分类规则（严格执行）】
 - projects：仅放实际动手开发/实施的项目，如"高并发内存池"、"SACOS测试项目"
@@ -603,8 +671,81 @@ def _postprocess_profile(parsed: dict) -> dict:
     return parsed
 
 
+def _extract_profile_multimodal_vl(content: bytes) -> dict:
+    """Directly extract structured profile from scanned PDF pages using qwen-vl-plus.
+
+    Skips the OCR→text intermediate step. Sends each page image + resume parse prompt
+    to the vision model and returns a structured profile dict.
+    """
+    try:
+        import base64
+        import io as _io
+        import fitz  # pymupdf
+        import openai
+        from backend.llm import get_env_str, parse_json_response
+
+        api_key = get_env_str("DASHSCOPE_API_KEY")
+        base_url = get_env_str("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+        if not api_key:
+            logger.warning("No DASHSCOPE_API_KEY for multimodal profile extraction")
+            return {}
+
+        doc = fitz.open(stream=_io.BytesIO(content), filetype="pdf")
+        skill_vocab = _build_skill_vocab()
+
+        # Build message content: all page images + extraction prompt
+        content_parts: list[dict] = []
+        for page_num in range(min(len(doc), 3)):
+            page = doc[page_num]
+            pix = page.get_pixmap(dpi=150)
+            img_b64 = base64.b64encode(pix.tobytes("png")).decode()
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/png;base64,{img_b64}"},
+            })
+
+        prompt_text = _RESUME_PARSE_PROMPT.replace("{resume_text}", "[见上方简历图片]").replace(
+            "{skill_vocab}", skill_vocab
+        )
+        content_parts.append({"type": "text", "text": prompt_text})
+
+        client = openai.OpenAI(api_key=api_key, base_url=base_url)
+        resp = client.chat.completions.create(
+            model="qwen-vl-plus",
+            messages=[{"role": "user", "content": content_parts}],
+            max_tokens=3000,
+        )
+        raw_result = resp.choices[0].message.content or ""
+        parsed = parse_json_response(raw_result)
+        if not parsed or not isinstance(parsed, dict):
+            logger.warning("Multimodal VL profile extraction: invalid JSON response")
+            return {}
+
+        parsed.setdefault("skills", [])
+        parsed.setdefault("knowledge_areas", [])
+        parsed.setdefault("experience_years", 0)
+        parsed.setdefault("projects", [])
+        parsed.setdefault("awards", [])
+        parsed = _postprocess_profile(parsed)
+        parsed["soft_skills"] = {
+            "_version": 2,
+            "communication": None, "learning": None, "collaboration": None,
+            "innovation": None, "resilience": None,
+        }
+        logger.info(
+            "Multimodal VL extraction: %d skills, %d projects",
+            len(parsed.get("skills", [])), len(parsed.get("projects", []))
+        )
+        return parsed
+    except Exception as e:
+        logger.warning("Multimodal VL profile extraction failed: %s", e)
+        return {}
+
+
 def _ocr_pdf_with_vl(content: bytes) -> str:
-    """OCR fallback for scanned PDFs using qwen-vl-plus vision API."""
+    """OCR fallback for scanned PDFs using qwen-vl-plus vision API.
+    Used as last resort when _extract_profile_multimodal_vl also fails.
+    """
     try:
         import base64
         import io as _io
@@ -615,49 +756,53 @@ def _ocr_pdf_with_vl(content: bytes) -> str:
         api_key = get_env_str("DASHSCOPE_API_KEY")
         base_url = get_env_str("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
         if not api_key:
-            logger.warning("No DASHSCOPE_API_KEY for OCR fallback")
             return ""
 
         doc = fitz.open(stream=_io.BytesIO(content), filetype="pdf")
         texts: list[str] = []
         client = openai.OpenAI(api_key=api_key, base_url=base_url)
 
-        for page_num in range(min(len(doc), 3)):  # OCR at most 3 pages
+        for page_num in range(min(len(doc), 3)):
             page = doc[page_num]
             pix = page.get_pixmap(dpi=150)
             img_b64 = base64.b64encode(pix.tobytes("png")).decode()
-
             resp = client.chat.completions.create(
                 model="qwen-vl-plus",
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
-                        {"type": "text", "text": "请识别并提取这张简历图片中的所有文字内容，保持原始格式，不要添加额外说明。"},
-                    ],
-                }],
+                messages=[{"role": "user", "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                    {"type": "text", "text": "请识别并提取这张简历图片中的所有文字内容，保持原始格式，不要添加额外说明。"},
+                ]}],
                 max_tokens=2000,
             )
             page_text = resp.choices[0].message.content or ""
             if page_text.strip():
                 texts.append(page_text)
 
-        result = "\n\n".join(texts)
-        logger.info("OCR extracted %d chars from scanned PDF", len(result))
-        return result
+        return "\n\n".join(texts)
     except Exception as e:
         logger.warning("OCR fallback failed: %s", e)
         return ""
 
 
 def _build_skill_vocab() -> str:
-    """Collect all unique must_skills from graph as standard vocabulary."""
+    """Collect all unique must_skills from graph as standard vocabulary (module-level cached)."""
+    global _skill_vocab_cache
+    if _skill_vocab_cache is not None:
+        return _skill_vocab_cache
     graph_nodes = _get_graph_nodes()
     all_skills: set[str] = set()
     for n in graph_nodes.values():
         for s in n.get("must_skills", []):
             all_skills.add(s)
-    return ", ".join(sorted(all_skills))
+    _skill_vocab_cache = ", ".join(sorted(all_skills))
+    return _skill_vocab_cache
+
+
+_SKILLS_RETRY_PROMPT = """从以下简历文本中只提取技能列表，返回严格 JSON，不要其他文字：
+{{"skills": [{{"name": "技能名（英文或通用短名）", "level": "familiar"}}]}}
+
+优先使用词表中的名称：{skill_vocab}
+简历：{resume_text}"""
 
 
 def _extract_profile_with_llm(raw_text: str) -> dict:
@@ -665,12 +810,30 @@ def _extract_profile_with_llm(raw_text: str) -> dict:
         from backend.llm import llm_chat, parse_json_response
         skill_vocab = _build_skill_vocab()
         prompt = _RESUME_PARSE_PROMPT.format(
-            resume_text=raw_text[:4000],
+            resume_text=raw_text[:2500],
             skill_vocab=skill_vocab,
         )
         result = llm_chat([{"role": "user", "content": prompt}], temperature=0)
         parsed = parse_json_response(result)
-        parsed.setdefault("skills", [])
+
+        # Retry: if primary parse failed or returned no skills, do a focused skills-only call
+        if not parsed or not parsed.get("skills"):
+            logger.warning("_extract_profile_with_llm: primary parse returned no skills, retrying")
+            retry_prompt = _SKILLS_RETRY_PROMPT.format(
+                skill_vocab=skill_vocab,
+                resume_text=raw_text[:1500],
+            )
+            retry_result = llm_chat([{"role": "user", "content": retry_prompt}], temperature=0)
+            retry_parsed = parse_json_response(retry_result)
+            if retry_parsed and retry_parsed.get("skills"):
+                if not parsed:
+                    parsed = {}
+                parsed["skills"] = retry_parsed["skills"]
+
+        if not parsed:
+            parsed = {}
+        # Normalize skill names using alias map
+        parsed["skills"] = _normalize_skills(parsed.get("skills", []))
         parsed.setdefault("knowledge_areas", [])
         parsed.setdefault("experience_years", 0)
         parsed.setdefault("projects", [])
@@ -686,7 +849,8 @@ def _extract_profile_with_llm(raw_text: str) -> dict:
             "resilience": None,
         }
         return parsed
-    except Exception:
+    except Exception as e:
+        logger.exception("_extract_profile_with_llm failed: %s", e)
         return {
             "skills": [],
             "knowledge_areas": [],
@@ -735,12 +899,17 @@ async def parse_resume(
     else:
         raw_text = content.decode("utf-8", errors="ignore")
 
-    # OCR fallback for scanned PDFs (pdfplumber returns empty)
+    # Scanned PDF: use multimodal VL to extract profile directly (image → structured data)
     if not raw_text.strip() and filename.lower().endswith(".pdf"):
+        profile_data = _extract_profile_multimodal_vl(content)
+        if profile_data and profile_data.get("skills"):
+            quality_data = ProfileService.compute_quality(profile_data)
+            return ok({"profile": profile_data, "quality": quality_data})
+        # Fallback: OCR text → LLM
         raw_text = _ocr_pdf_with_vl(content)
 
     if not raw_text.strip():
-        raise HTTPException(400, "无法提取简历文本")
+        raise HTTPException(400, "无法提取简历文本，请使用文字版 PDF 或直接粘贴简历文本")
 
     profile_data = _extract_profile_with_llm(raw_text)
     quality_data = ProfileService.compute_quality(profile_data)
@@ -793,9 +962,23 @@ def update_profile(
     db.commit()
     db.refresh(profile)
 
+    # Graph location runs in a background thread — don't block the response
     if req.profile is not None:
-        final_data = json.loads(profile.profile_json)
-        _auto_locate_on_graph(profile.id, user.id, final_data, db)
+        import threading as _threading
+        from backend.db import SessionLocal as _SL
+        _final = json.loads(profile.profile_json)
+        _pid, _uid = profile.id, user.id
+
+        def _locate_bg():
+            _bg_db = _SL()
+            try:
+                _auto_locate_on_graph(_pid, _uid, _final, _bg_db)
+            except Exception:
+                logger.exception("Background graph location failed (profile %s)", _pid)
+            finally:
+                _bg_db.close()
+
+        _threading.Thread(target=_locate_bg, daemon=True).start()
 
     return ok(_profile_to_dict(profile, db, user.id), message="画像已更新")
 

@@ -116,8 +116,34 @@ export default function ProfilePage() {
   const newSkillParam = searchParams.get('newSkill')
 
   const hasProfile = (profile?.profile?.skills?.length ?? 0) > 0
+    || (profile?.profile?.knowledge_areas?.length ?? 0) > 0
+    || (profile?.profile?.projects?.length ?? 0) > 0
     || (profile?.profile?.experience_years ?? 0) > 0
     || !!profile?.profile?.education?.school
+    || !!profile?.profile?.education?.major
+    || !!profile?.name
+    || !!profile?.profile?.raw_text
+
+  // True ONLY when: has profile data, not loading, no graph position set, AND no recs yet
+  // (recs loading = location done; graph_position set = location done)
+  const isLocating = hasProfile && !loading
+    && !profile?.graph_position?.from_node_id
+    && recs.length === 0
+    && recsLoading
+
+  // Auto-refresh at most 3 times (18s total) while waiting for async graph location
+  const locateRefetchCount = useRef(0)
+  useEffect(() => {
+    if (!hasProfile || loading) return
+    if (!!profile?.graph_position?.from_node_id) { locateRefetchCount.current = 0; return }
+    if (locateRefetchCount.current >= 3) return  // Hard stop — prevent infinite loop
+    const timer = setTimeout(() => {
+      locateRefetchCount.current += 1
+      loadProfile()
+    }, 6000)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile?.updated_at, profile?.graph_position?.from_node_id])
 
   // Load recommendations only when no goal is set
   const goal = profile?.career_goals?.find((g: any) => g.is_primary) || profile?.career_goals?.[0]
@@ -301,12 +327,25 @@ export default function ProfilePage() {
             ) : (
               <>
                 <div className="flex justify-center">
-                  <div className="flex flex-col items-center gap-1.5">
-                    <div className="w-[60px] h-[60px] rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
-                      <Check className="w-6 h-6 text-emerald-500" />
+                  {isLocating ? (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="w-[60px] h-[60px] rounded-full bg-blue-50 border-2 border-blue-200 flex items-center justify-center">
+                        <svg className="w-6 h-6 text-blue-400 animate-spin" viewBox="0 0 24 24" fill="none">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                        </svg>
+                      </div>
+                      <span className="text-[12px] font-medium text-blue-500">AI 定位中...</span>
+                      <span className="text-[10px] text-slate-400 text-center leading-relaxed">正在匹配最适合的方向</span>
                     </div>
-                    <span className="text-[12px] font-medium text-slate-500">画像已建立</span>
-                  </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1.5">
+                      <div className="w-[60px] h-[60px] rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
+                        <Check className="w-6 h-6 text-emerald-500" />
+                      </div>
+                      <span className="text-[12px] font-medium text-slate-500">画像已建立</span>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {
@@ -408,12 +447,28 @@ export default function ProfilePage() {
                   <GrowthPathMap roleId={goal!.target_node_id} roleLabel={goal!.target_label} />
                 </div>
               </div>
-            ) : recsLoading ? (
-              <div className="animate-pulse space-y-4">
-                <div className="h-4 bg-slate-200 rounded w-1/4"></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="h-32 bg-slate-200 rounded-xl"></div>
-                  <div className="h-32 bg-slate-200 rounded-xl"></div>
+            ) : (recsLoading || (isLocating && recs.length === 0)) ? (
+              <div className="space-y-3">
+                {isLocating && (
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50/60 border border-blue-100">
+                    <svg className="w-4 h-4 text-blue-400 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+                    </svg>
+                    <div>
+                      <p className="text-[13px] font-semibold text-blue-700">AI 正在分析你的技术方向</p>
+                      <p className="text-[11px] text-blue-400 mt-0.5">根据简历技能匹配最适合的职业路径，通常需要 5-10 秒</p>
+                    </div>
+                  </div>
+                )}
+                <div className="animate-pulse space-y-4">
+                  <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="h-32 bg-slate-200 rounded-xl"></div>
+                    <div className="h-32 bg-slate-200 rounded-xl"></div>
+                    <div className="h-32 bg-slate-200 rounded-xl"></div>
+                    <div className="h-32 bg-slate-200 rounded-xl"></div>
+                  </div>
                 </div>
               </div>
             ) : (
