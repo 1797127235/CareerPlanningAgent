@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Paperclip, ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, Mic, MicOff, PanelRightClose, RotateCcw, Search } from 'lucide-react'
+import { Paperclip, ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, Mic, MicOff, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { marked } from 'marked'
 import { useChat } from '@/hooks/useChat'
@@ -9,6 +9,7 @@ import { useSessions } from '@/hooks/useSessions'
 import { useBrowserTTS } from '@/hooks/useBrowserTTS'
 import { useBrowserSTT } from '@/hooks/useBrowserSTT'
 import { useCoachTriggerListener } from '@/hooks/useCoachTrigger'
+import { createApplication } from '@/api/applications'
 
 /* ── Placeholder rotation texts ── */
 const placeholders = [
@@ -611,6 +612,51 @@ function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose:
 }
 
 
+/* ── Add to Tracking Button ── */
+function AddToTrackingButton({ card }: { card: CardData }) {
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+
+  function parseJdTitle(title: string): { company: string; position: string } {
+    const separators = /[—\-·|]/
+    const parts = title.split(separators).map(s => s.trim()).filter(Boolean)
+    if (parts.length >= 2) {
+      return { company: parts[0], position: parts.slice(1).join(' ') }
+    }
+    return { company: '', position: title }
+  }
+
+  async function handleAdd() {
+    if (state !== 'idle') return
+    setState('loading')
+    try {
+      const { company, position } = parseJdTitle(card.jd_title || card.title || '')
+      await createApplication({ company: company || undefined, position: position || undefined })
+      setState('done')
+    } catch {
+      setState('error')
+      setTimeout(() => setState('idle'), 2000)
+    }
+  }
+
+  if (state === 'done') {
+    return (
+      <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-100">
+        <CheckCircle2 className="w-3 h-3" /> 已加入追踪
+      </span>
+    )
+  }
+
+  return (
+    <button
+      onClick={handleAdd}
+      disabled={state === 'loading'}
+      className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 transition-colors cursor-pointer disabled:opacity-60"
+    >
+      {state === 'loading' ? '添加中...' : state === 'error' ? '添加失败，重试' : '+ 加入实战追踪'}
+    </button>
+  )
+}
+
 function PanelBubble({
   message,
   onTTSToggle,
@@ -684,6 +730,7 @@ function PanelBubble({
               {chip.label}
             </button>
           ))}
+          <AddToTrackingButton card={message.card} />
         </div>
       )}
     </div>

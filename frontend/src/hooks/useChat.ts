@@ -7,6 +7,7 @@ export interface CardData {
   title: string
   score?: number
   gap_count?: number
+  jd_title?: string  // for jd_diagnosis: used to pre-fill "加入实战追踪"
 }
 
 export interface JdCardData {

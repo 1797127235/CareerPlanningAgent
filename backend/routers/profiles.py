@@ -603,6 +603,53 @@ def _postprocess_profile(parsed: dict) -> dict:
     return parsed
 
 
+def _ocr_pdf_with_vl(content: bytes) -> str:
+    """OCR fallback for scanned PDFs using qwen-vl-plus vision API."""
+    try:
+        import base64
+        import io as _io
+        import fitz  # pymupdf
+        import openai
+        from backend.llm import get_env_str
+
+        api_key = get_env_str("DASHSCOPE_API_KEY")
+        base_url = get_env_str("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
+        if not api_key:
+            logger.warning("No DASHSCOPE_API_KEY for OCR fallback")
+            return ""
+
+        doc = fitz.open(stream=_io.BytesIO(content), filetype="pdf")
+        texts: list[str] = []
+        client = openai.OpenAI(api_key=api_key, base_url=base_url)
+
+        for page_num in range(min(len(doc), 3)):  # OCR at most 3 pages
+            page = doc[page_num]
+            pix = page.get_pixmap(dpi=150)
+            img_b64 = base64.b64encode(pix.tobytes("png")).decode()
+
+            resp = client.chat.completions.create(
+                model="qwen-vl-plus",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                        {"type": "text", "text": "请识别并提取这张简历图片中的所有文字内容，保持原始格式，不要添加额外说明。"},
+                    ],
+                }],
+                max_tokens=2000,
+            )
+            page_text = resp.choices[0].message.content or ""
+            if page_text.strip():
+                texts.append(page_text)
+
+        result = "\n\n".join(texts)
+        logger.info("OCR extracted %d chars from scanned PDF", len(result))
+        return result
+    except Exception as e:
+        logger.warning("OCR fallback failed: %s", e)
+        return ""
+
+
 def _build_skill_vocab() -> str:
     """Collect all unique must_skills from graph as standard vocabulary."""
     graph_nodes = _get_graph_nodes()
@@ -687,6 +734,10 @@ async def parse_resume(
             raw_text = content.decode("utf-8", errors="ignore")
     else:
         raw_text = content.decode("utf-8", errors="ignore")
+
+    # OCR fallback for scanned PDFs (pdfplumber returns empty)
+    if not raw_text.strip() and filename.lower().endswith(".pdf"):
+        raw_text = _ocr_pdf_with_vl(content)
 
     if not raw_text.strip():
         raise HTTPException(400, "无法提取简历文本")

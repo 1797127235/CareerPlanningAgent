@@ -3,10 +3,15 @@ from __future__ import annotations
 
 import json
 import logging
+from contextvars import ContextVar
 
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
+
+# ── ContextVar 注入（supervisor 在调用 jd_agent 前设置）────────────────────────
+_injected_profile: ContextVar[dict | None] = ContextVar('_injected_profile', default=None)
+_injected_user_id: ContextVar[int | None] = ContextVar('_injected_user_id', default=None)
 
 
 def _save_jd_coach_result(
@@ -59,20 +64,88 @@ def _save_jd_coach_result(
         return None
 
 
+def _auto_link_diagnosis_to_application(jd_title: str, user_id: int) -> None:
+    """Link the latest JDDiagnosis to a matching JobApplication (by company name hint)."""
+    if not user_id or not jd_title:
+        return
+    try:
+        from backend.db import SessionLocal
+        from backend.db_models import JobApplication, JDDiagnosis
+
+        db = SessionLocal()
+        try:
+            latest_diag = (
+                db.query(JDDiagnosis)
+                .filter_by(user_id=user_id)
+                .order_by(JDDiagnosis.created_at.desc())
+                .first()
+            )
+            if not latest_diag:
+                return
+
+            # Extract company hint: first token of jd_title (e.g. "腾讯-后端工程师" → "腾讯")
+            company_hint = jd_title.replace('—', '-').replace('–', '-').split('-')[0].strip().split()[0]
+            if len(company_hint) < 2:
+                return
+
+            # Find the most recent unlinked application matching the company
+            app = (
+                db.query(JobApplication)
+                .filter(
+                    JobApplication.user_id == user_id,
+                    JobApplication.jd_diagnosis_id == None,
+                    JobApplication.company.ilike(f"%{company_hint}%"),
+                )
+                .order_by(JobApplication.created_at.desc())
+                .first()
+            )
+            if app:
+                app.jd_diagnosis_id = latest_diag.id
+                db.commit()
+                logger.info(
+                    "Auto-linked JDDiagnosis %s → JobApplication %s (%s)",
+                    latest_diag.id, app.id, app.company,
+                )
+        finally:
+            db.close()
+    except Exception:
+        logger.exception("Failed to auto-link diagnosis to application")
+
+
 @tool
-def diagnose_jd(jd_text: str, profile_json: str) -> str:
+def diagnose_jd(jd_text: str) -> str:
     """JD诊断：分析岗位JD与用户画像的匹配度，识别技能缺口和改进方向。"""
     if not jd_text or not jd_text.strip():
         return "请提供岗位JD文本内容。"
 
-    try:
-        profile = json.loads(profile_json)
-    except (json.JSONDecodeError, TypeError):
-        return "画像数据格式错误，请提供有效的JSON字符串。"
+    # Read injected context (set by supervisor before jd_agent runs)
+    profile = _injected_profile.get()
+    user_id = _injected_user_id.get()
+
+    # Fallback: load profile from DB if ContextVar not set
+    if profile is None and user_id:
+        try:
+            from backend.db import SessionLocal
+            from backend.db_models import Profile as _Profile
+            db = SessionLocal()
+            try:
+                p = (
+                    db.query(_Profile)
+                    .filter_by(user_id=user_id)
+                    .order_by(_Profile.updated_at.desc())
+                    .first()
+                )
+                profile = json.loads(p.profile_json or "{}") if p else {}
+            finally:
+                db.close()
+        except Exception:
+            profile = {}
+
+    if not profile:
+        return "未找到用户画像，请先上传简历建立画像后再进行 JD 诊断。"
 
     try:
         from backend.services.jd_service import JDService
-
         svc = JDService()
         result = svc.diagnose(jd_text, profile)
     except Exception as e:
@@ -81,27 +154,30 @@ def diagnose_jd(jd_text: str, profile_json: str) -> str:
     match_score = result.get("match_score", 0)
     matched = result.get("matched_skills", [])
     gaps = result.get("gap_skills", [])
+    jd_title = result.get("jd_title", "")
 
-    # Save structured result to CoachResult DB table
-    # Try to get user_id from the JDDiagnosis that was just created by JDService
-    _user_id = None
-    try:
-        from backend.db import SessionLocal as _SL
-        from backend.db_models import JDDiagnosis as _JD
-        _db = _SL()
-        _latest = _db.query(_JD).order_by(_JD.created_at.desc()).first()
-        if _latest:
-            _user_id = _latest.user_id
-        _db.close()
-    except Exception:
-        pass
+    # Fallback user_id from latest JDDiagnosis if still unknown
+    if not user_id:
+        try:
+            from backend.db import SessionLocal as _SL
+            from backend.db_models import JDDiagnosis as _JD
+            _db = _SL()
+            _latest = _db.query(_JD).order_by(_JD.created_at.desc()).first()
+            if _latest:
+                user_id = _latest.user_id
+            _db.close()
+        except Exception:
+            pass
 
     coach_result_id = _save_jd_coach_result(
-        jd_text, match_score, matched, gaps, result.get("jd_title", ""),
-        user_id=_user_id,
+        jd_text, match_score, matched, gaps, jd_title,
+        user_id=user_id,
     )
 
-    # Return summary for LLM + result_id for card
+    # Auto-link to existing JobApplication by company name
+    if user_id and jd_title:
+        _auto_link_diagnosis_to_application(jd_title, user_id)
+
     gap_names = [g.get("skill", "?") for g in gaps[:5]]
     lines = [
         f"JD匹配度: {match_score}%",

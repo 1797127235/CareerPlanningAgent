@@ -738,15 +738,21 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                 db.commit()
             if cr:
                 meta = json.loads(cr.metadata_json or "{}")
-                card_data = {
-                    "card": {
-                        "type": cr.result_type,
-                        "id": cr.id,
-                        "title": cr.title,
-                        "score": meta.get("match_score"),
-                        "gap_count": meta.get("gap_count"),
-                    }
+                card_payload: dict = {
+                    "type": cr.result_type,
+                    "id": cr.id,
+                    "title": cr.title,
+                    "score": meta.get("match_score"),
+                    "gap_count": meta.get("gap_count"),
                 }
+                # For jd_diagnosis, also carry jd_title for "加入实战追踪"
+                if cr.result_type == "jd_diagnosis":
+                    try:
+                        detail = json.loads(cr.detail_json or "{}")
+                        card_payload["jd_title"] = detail.get("jd_title", "")
+                    except Exception:
+                        pass
+                card_data = {"card": card_payload}
                 yield f"data: {json.dumps(card_data, ensure_ascii=False)}\n\n"
         except Exception:
             logger.exception("Failed to emit CoachResult card")

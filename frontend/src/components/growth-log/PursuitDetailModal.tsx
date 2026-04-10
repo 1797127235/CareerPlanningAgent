@@ -544,6 +544,51 @@ export function PursuitDetailModal({ appId, onClose, onRefresh }: {
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3"
           style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(0,0,0,0.08) transparent' }}>
 
+          {/* JD Diagnosis Result — shown when linked diagnosis exists */}
+          {app.jd_diagnosis && (
+            <div className="rounded-[14px] p-3.5 space-y-2.5"
+              style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.04), rgba(124,58,237,0.04))', border: '1px solid rgba(37,99,235,0.12)' }}>
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-bold" style={{ color: '#2563EB' }}>JD 诊断结果</p>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[18px] font-extrabold" style={{ color: app.jd_diagnosis.match_score >= 70 ? '#16A34A' : app.jd_diagnosis.match_score >= 50 ? '#D97706' : '#EF4444' }}>
+                    {app.jd_diagnosis.match_score}%
+                  </span>
+                  <span className="text-[10px] text-[#8E8E93]">匹配度</span>
+                </div>
+              </div>
+              {app.jd_diagnosis.matched_skills?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-emerald-600 mb-1">已具备</p>
+                  <div className="flex flex-wrap gap-1">
+                    {app.jd_diagnosis.matched_skills.slice(0, 8).map((s: string) => (
+                      <span key={s} className="px-2 py-0.5 rounded-[6px] text-[10px] font-medium"
+                        style={{ background: 'rgba(22,163,74,0.08)', color: '#16A34A' }}>
+                        {s}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {app.jd_diagnosis.gap_skills?.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-semibold text-amber-600 mb-1">需补齐</p>
+                  <div className="flex flex-wrap gap-1">
+                    {app.jd_diagnosis.gap_skills.slice(0, 8).map((g: { skill?: string } | string) => {
+                      const name = typeof g === 'string' ? g : (g.skill ?? String(g))
+                      return (
+                        <span key={name} className="px-2 py-0.5 rounded-[6px] text-[10px] font-medium"
+                          style={{ background: 'rgba(217,119,6,0.08)', color: '#D97706' }}>
+                          {name}
+                        </span>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Rounds header */}
           <div className="flex items-center justify-between">
             <p className="text-[12px] font-bold text-[#1a1a1a]">
