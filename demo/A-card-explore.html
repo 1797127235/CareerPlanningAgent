@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>方案A — 卡片式岗位探索</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#f8fafc;font-family:-apple-system,'PingFang SC','Microsoft YaHei',sans-serif;color:#1e293b}
+.header{background:#fff;border-bottom:1px solid #e2e8f0;padding:14px 24px;display:flex;align-items:center;gap:12px}
+.header h1{font-size:16px;font-weight:700;color:#334155}
+.header .badge{font-size:11px;background:#f1f5f9;color:#64748b;padding:3px 10px;border-radius:6px}
+.container{max-width:1200px;margin:0 auto;padding:24px}
+
+/* ── Grid ── */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:24px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px;cursor:pointer;transition:all .2s}
+.card:hover{border-color:#a78bfa;box-shadow:0 4px 16px rgba(124,58,237,.08)}
+.card.active{border-color:#7c3aed;box-shadow:0 4px 20px rgba(124,58,237,.15)}
+.card-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px}
+.card-title{font-size:15px;font-weight:700}
+.zone{font-size:11px;padding:2px 8px;border-radius:6px;font-weight:600}
+.zone-safe{background:#dcfce7;color:#16a34a}
+.zone-transition{background:#fef3c7;color:#d97706}
+.zone-danger{background:#fee2e2;color:#dc2626}
+.card-family{font-size:12px;color:#64748b;margin-bottom:10px}
+.skill-tags{display:flex;flex-wrap:wrap;gap:4px}
+.skill-tag{font-size:11px;background:#f1f5f9;color:#475569;padding:2px 8px;border-radius:4px}
+.card canvas{display:block;margin:12px auto 0}
+
+/* ── Detail Panel ── */
+.detail-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:50}
+.detail-overlay.open{display:flex;justify-content:center;align-items:flex-start;padding:40px 20px;overflow-y:auto}
+.detail{background:#fff;border-radius:16px;max-width:800px;width:100%;padding:28px;box-shadow:0 20px 60px rgba(0,0,0,.12)}
+.detail-close{float:right;background:none;border:none;font-size:20px;cursor:pointer;color:#94a3b8;padding:4px 8px;border-radius:6px}
+.detail-close:hover{background:#f1f5f9;color:#475569}
+.detail h2{font-size:20px;font-weight:800;margin-bottom:4px}
+.detail .meta{font-size:13px;color:#64748b;margin-bottom:20px}
+
+.detail-section{margin-bottom:24px}
+.detail-section h3{font-size:14px;font-weight:700;color:#475569;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #f1f5f9}
+
+/* Radar */
+.radar-wrap{display:flex;justify-content:center;margin-bottom:20px}
+
+/* Promotion Path */
+.promo-path{display:flex;flex-direction:column;gap:0;align-items:center}
+.promo-step{display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:10px;width:100%;max-width:400px;transition:background .15s}
+.promo-step.current{background:#f5f3ff;border:1px solid #c4b5fd}
+.promo-step .level-badge{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0}
+.promo-step .step-info{flex:1}
+.promo-step .step-title{font-size:14px;font-weight:600}
+.promo-step .step-desc{font-size:11px;color:#94a3b8}
+.promo-arrow{color:#cbd5e1;font-size:18px;margin:2px 0}
+
+/* Transition Cards */
+.transition-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.trans-card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:14px;cursor:pointer;transition:all .15s}
+.trans-card:hover{border-color:#a78bfa;background:#faf5ff}
+.trans-card .trans-name{font-size:14px;font-weight:600;margin-bottom:6px}
+.trans-card .overlap-bar{height:6px;background:#e2e8f0;border-radius:3px;overflow:hidden;margin:8px 0 4px}
+.trans-card .overlap-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#7c3aed,#a78bfa)}
+.trans-card .overlap-text{font-size:11px;color:#64748b}
+.trans-card .gap-skills{font-size:11px;color:#94a3b8;margin-top:6px}
+
+/* Requirements List */
+.req-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.req-item{display:flex;align-items:center;gap:8px;font-size:13px;padding:6px 10px;background:#f8fafc;border-radius:6px}
+.req-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>方案A — 卡片式岗位探索</h1>
+  <span class="badge">点击卡片查看详情 · 晋升路径 · 换岗路径</span>
+</div>
+
+<div class="container">
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="detail-overlay" id="overlay">
+  <div class="detail" id="detail"></div>
+</div>
+
+<script>
+// ── Data ──
+const JOBS = [
+  {
+    id:'fe', name:'前端工程师', family:'前端开发', zone:'safe',
+    skills:['JavaScript','React/Vue','CSS','TypeScript','Webpack'],
+    certs:['FCC认证'],
+    abilities:{专业技能:85,创新能力:70,学习能力:80,抗压能力:65,沟通能力:70,实习经验:75},
+    promoPath:[
+      {title:'初级前端工程师',level:'P4',color:'#94a3b8',desc:'1-2年经验'},
+      {title:'前端工程师',level:'P5',color:'#3b82f6',desc:'2-4年经验',current:true},
+      {title:'高级前端工程师',level:'P6',color:'#6366f1',desc:'4-6年经验'},
+      {title:'前端架构师',level:'P7',color:'#7c3aed',desc:'6-10年经验'},
+      {title:'技术总监',level:'P8',color:'#a855f7',desc:'10年+经验'},
+    ],
+    transitions:[
+      {target:'全栈工程师',overlap:72,gaps:['Node.js','数据库设计','DevOps']},
+      {target:'React Native工程师',overlap:68,gaps:['移动端调试','原生模块']},
+      {target:'交互设计师',overlap:45,gaps:['Figma','用户研究','设计系统']},
+      {target:'产品经理',overlap:35,gaps:['需求分析','数据驱动','商业思维']},
+      {target:'大模型应用工程师',overlap:50,gaps:['Python','Prompt Engineering','LangChain']},
+    ],
+  },
+  {
+    id:'be', name:'后端工程师', family:'后端开发', zone:'safe',
+    skills:['Java/Go/Python','MySQL','Redis','微服务','Docker'],
+    certs:['AWS认证','Oracle认证'],
+    abilities:{专业技能:85,创新能力:65,学习能力:80,抗压能力:75,沟通能力:60,实习经验:70},
+    promoPath:[
+      {title:'初级后端工程师',level:'P4',color:'#94a3b8',desc:'1-2年'},
+      {title:'后端工程师',level:'P5',color:'#3b82f6',desc:'2-4年',current:true},
+      {title:'高级后端工程师',level:'P6',color:'#6366f1',desc:'4-6年'},
+      {title:'架构师',level:'P7',color:'#7c3aed',desc:'6-10年'},
+      {title:'CTO/VP',level:'P9',color:'#a855f7',desc:'10年+'},
+    ],
+    transitions:[
+      {target:'全栈工程师',overlap:65,gaps:['前端框架','CSS布局','UI设计感']},
+      {target:'DevOps工程师',overlap:60,gaps:['CI/CD','K8s','监控体系']},
+      {target:'数据工程师',overlap:55,gaps:['Spark','数据仓库','ETL']},
+      {target:'算法工程师',overlap:40,gaps:['机器学习','数学基础','模型训练']},
+      {target:'技术经理',overlap:50,gaps:['团队管理','项目管理','沟通协作']},
+    ],
+  },
+  {
+    id:'algo', name:'算法工程师', family:'数据/AI', zone:'safe',
+    skills:['Python','PyTorch','数学建模','特征工程','分布式训练'],
+    certs:['Kaggle Master'],
+    abilities:{专业技能:90,创新能力:85,学习能力:90,抗压能力:70,沟通能力:55,实习经验:65},
+    promoPath:[
+      {title:'算法实习生',level:'P3',color:'#94a3b8',desc:'在校'},
+      {title:'算法工程师',level:'P5',color:'#3b82f6',desc:'1-3年',current:true},
+      {title:'高级算法工程师',level:'P6',color:'#6366f1',desc:'3-6年'},
+      {title:'算法专家',level:'P7',color:'#7c3aed',desc:'6-10年'},
+      {title:'首席科学家',level:'P9',color:'#a855f7',desc:'10年+'},
+    ],
+    transitions:[
+      {target:'大模型工程师',overlap:78,gaps:['LLM微调','RLHF','推理优化']},
+      {target:'数据科学家',overlap:70,gaps:['商业分析','可视化','沟通汇报']},
+      {target:'量化工程师',overlap:60,gaps:['金融知识','交易系统','风控']},
+      {target:'后端工程师',overlap:45,gaps:['系统设计','工程规范','运维']},
+      {target:'产品经理(AI)',overlap:35,gaps:['需求管理','用户研究','项目管理']},
+    ],
+  },
+  {
+    id:'pm', name:'产品经理', family:'产品', zone:'transition',
+    skills:['需求分析','PRD撰写','数据分析','原型设计','用户研究'],
+    certs:['NPDP','PMP'],
+    abilities:{专业技能:70,创新能力:80,学习能力:75,抗压能力:80,沟通能力:90,实习经验:70},
+    promoPath:[
+      {title:'产品助理',level:'P4',color:'#94a3b8',desc:'0-1年'},
+      {title:'产品经理',level:'P5',color:'#f59e0b',desc:'1-3年',current:true},
+      {title:'高级产品经理',level:'P6',color:'#f97316',desc:'3-6年'},
+      {title:'产品总监',level:'P7',color:'#ef4444',desc:'6-10年'},
+      {title:'VP产品',level:'P9',color:'#a855f7',desc:'10年+'},
+    ],
+    transitions:[
+      {target:'数据产品经理',overlap:70,gaps:['SQL','数据建模','BI工具']},
+      {target:'项目经理',overlap:65,gaps:['PMP方法论','资源调度','风险管理']},
+      {target:'增长运营',overlap:55,gaps:['投放策略','转化漏斗','AB测试']},
+      {target:'创业CEO',overlap:40,gaps:['融资','团队搭建','商业模型']},
+      {target:'UX设计师',overlap:50,gaps:['视觉设计','交互规范','设计工具']},
+    ],
+  },
+  {
+    id:'devops', name:'DevOps工程师', family:'运维', zone:'safe',
+    skills:['Docker/K8s','CI/CD','Linux','Terraform','监控告警'],
+    certs:['CKA','AWS SAA'],
+    abilities:{专业技能:85,创新能力:60,学习能力:80,抗压能力:85,沟通能力:60,实习经验:65},
+    promoPath:[
+      {title:'运维工程师',level:'P4',color:'#94a3b8',desc:'1-2年'},
+      {title:'DevOps工程师',level:'P5',color:'#14b8a6',desc:'2-4年',current:true},
+      {title:'SRE工程师',level:'P6',color:'#0891b2',desc:'4-6年'},
+      {title:'平台架构师',level:'P7',color:'#7c3aed',desc:'6-10年'},
+    ],
+    transitions:[
+      {target:'SRE工程师',overlap:80,gaps:['SLO设计','故障演练','容量规划']},
+      {target:'云架构师',overlap:65,gaps:['多云架构','成本优化','安全合规']},
+      {target:'后端工程师',overlap:50,gaps:['编程语言深度','系统设计','算法']},
+      {target:'安全工程师',overlap:45,gaps:['渗透测试','安全审计','密码学']},
+      {target:'技术经理',overlap:40,gaps:['团队管理','预算规划','沟通汇报']},
+    ],
+  },
+  {
+    id:'data', name:'数据分析师', family:'数据/AI', zone:'transition',
+    skills:['SQL','Python','Excel','Tableau','统计学'],
+    certs:['Google Analytics'],
+    abilities:{专业技能:70,创新能力:65,学习能力:75,抗压能力:65,沟通能力:80,实习经验:70},
+    promoPath:[
+      {title:'数据分析实习',level:'P3',color:'#94a3b8',desc:'在校'},
+      {title:'数据分析师',level:'P5',color:'#f59e0b',desc:'1-3年',current:true},
+      {title:'高级数据分析师',level:'P6',color:'#f97316',desc:'3-5年'},
+      {title:'数据科学家',level:'P7',color:'#7c3aed',desc:'5-8年'},
+    ],
+    transitions:[
+      {target:'数据科学家',overlap:65,gaps:['机器学习','深度学习','模型部署']},
+      {target:'BI工程师',overlap:70,gaps:['ETL','数据仓库','维度建模']},
+      {target:'数据产品经理',overlap:60,gaps:['产品思维','需求管理','原型设计']},
+      {target:'增长运营',overlap:55,gaps:['运营策略','用户增长','AB测试']},
+      {target:'量化分析师',overlap:45,gaps:['金融知识','编程深度','时序分析']},
+    ],
+  },
+  {
+    id:'test', name:'测试工程师', family:'测试/QA', zone:'danger',
+    skills:['Selenium','Pytest','JMeter','SQL','接口测试'],
+    certs:['ISTQB'],
+    abilities:{专业技能:70,创新能力:50,学习能力:65,抗压能力:70,沟通能力:75,实习经验:70},
+    promoPath:[
+      {title:'初级测试工程师',level:'P4',color:'#94a3b8',desc:'0-2年'},
+      {title:'测试工程师',level:'P5',color:'#ef4444',desc:'2-4年',current:true},
+      {title:'自动化测试工程师',level:'P6',color:'#f97316',desc:'3-5年'},
+      {title:'测试架构师',level:'P7',color:'#7c3aed',desc:'5-8年'},
+    ],
+    transitions:[
+      {target:'自动化测试工程师',overlap:75,gaps:['编程能力','框架设计','CI集成']},
+      {target:'DevOps工程师',overlap:45,gaps:['Docker','K8s','Linux运维']},
+      {target:'后端工程师',overlap:40,gaps:['系统设计','编程深度','数据库']},
+      {target:'产品经理',overlap:35,gaps:['需求分析','用户研究','商业思维']},
+      {target:'项目经理',overlap:50,gaps:['PMP','资源调度','风险管理']},
+    ],
+  },
+  {
+    id:'ux', name:'交互设计师', family:'设计', zone:'transition',
+    skills:['Figma','用户研究','信息架构','原型设计','设计系统'],
+    certs:['Nielsen Norman UX'],
+    abilities:{专业技能:75,创新能力:90,学习能力:75,抗压能力:60,沟通能力:85,实习经验:65},
+    promoPath:[
+      {title:'UI设计师',level:'P4',color:'#94a3b8',desc:'0-2年'},
+      {title:'交互设计师',level:'P5',color:'#ec4899',desc:'2-4年',current:true},
+      {title:'高级UX设计师',level:'P6',color:'#d946ef',desc:'4-6年'},
+      {title:'设计总监',level:'P8',color:'#a855f7',desc:'8年+'},
+    ],
+    transitions:[
+      {target:'产品经理',overlap:60,gaps:['数据分析','技术理解','商业思维']},
+      {target:'前端工程师',overlap:45,gaps:['JavaScript','React','CSS深度']},
+      {target:'UX研究员',overlap:70,gaps:['定量分析','统计学','研究方法论']},
+      {target:'品牌设计师',overlap:55,gaps:['视觉传达','品牌策略','动效']},
+      {target:'设计管理',overlap:50,gaps:['团队管理','预算','设计流程']},
+    ],
+  },
+  {
+    id:'sec', name:'安全工程师', family:'安全', zone:'safe',
+    skills:['渗透测试','代码审计','安全架构','应急响应','密码学'],
+    certs:['CISP','OSCP'],
+    abilities:{专业技能:85,创新能力:75,学习能力:85,抗压能力:80,沟通能力:55,实习经验:60},
+    promoPath:[
+      {title:'安全运维',level:'P4',color:'#94a3b8',desc:'0-2年'},
+      {title:'安全工程师',level:'P5',color:'#10b981',desc:'2-4年',current:true},
+      {title:'高级安全工程师',level:'P6',color:'#059669',desc:'4-7年'},
+      {title:'安全架构师',level:'P7',color:'#7c3aed',desc:'7-10年'},
+      {title:'CSO',level:'P9',color:'#a855f7',desc:'10年+'},
+    ],
+    transitions:[
+      {target:'云安全工程师',overlap:70,gaps:['云原生安全','IAM','合规框架']},
+      {target:'后端工程师',overlap:50,gaps:['系统设计','业务逻辑','工程规范']},
+      {target:'DevOps工程师',overlap:55,gaps:['CI/CD','容器编排','监控']},
+      {target:'安全顾问',overlap:65,gaps:['合规标准','风险评估','沟通汇报']},
+      {target:'漏洞研究员',overlap:60,gaps:['逆向工程','二进制分析','Exploit开发']},
+    ],
+  },
+  {
+    id:'llm', name:'大模型工程师', family:'数据/AI', zone:'safe',
+    skills:['Python','PyTorch','LLM微调','RAG','Prompt Engineering'],
+    certs:[],
+    abilities:{专业技能:90,创新能力:85,学习能力:90,抗压能力:70,沟通能力:60,实习经验:55},
+    promoPath:[
+      {title:'AI应用开发',level:'P4',color:'#94a3b8',desc:'0-1年'},
+      {title:'大模型工程师',level:'P5',color:'#8b5cf6',desc:'1-3年',current:true},
+      {title:'高级大模型工程师',level:'P6',color:'#7c3aed',desc:'3-5年'},
+      {title:'AI架构师',level:'P7',color:'#6d28d9',desc:'5-8年'},
+      {title:'AI Lab负责人',level:'P9',color:'#a855f7',desc:'8年+'},
+    ],
+    transitions:[
+      {target:'算法工程师',overlap:75,gaps:['传统ML','特征工程','数学推导']},
+      {target:'后端工程师',overlap:50,gaps:['系统设计','数据库','微服务']},
+      {target:'AI产品经理',overlap:40,gaps:['需求分析','用户研究','商业化']},
+      {target:'技术布道师',overlap:45,gaps:['演讲能力','写作','社区运营']},
+      {target:'AI创业',overlap:35,gaps:['融资','团队搭建','商业模型']},
+    ],
+  },
+]
+
+const ZONE_MAP = {safe:'安全区',transition:'过渡区',danger:'危险区'}
+const ZONE_CLS = {safe:'zone-safe',transition:'zone-transition',danger:'zone-danger'}
+
+// ── Render Grid ──
+const grid = document.getElementById('grid')
+JOBS.forEach(job => {
+  const el = document.createElement('div')
+  el.className = 'card'
+  el.onclick = () => openDetail(job)
+  el.innerHTML = `
+    <div class="card-head">
+      <div class="card-title">${job.name}</div>
+      <span class="zone ${ZONE_CLS[job.zone]}">${ZONE_MAP[job.zone]}</span>
+    </div>
+    <div class="card-family">${job.family}</div>
+    <canvas id="mini-${job.id}" width="140" height="140"></canvas>
+    <div class="skill-tags">${job.skills.slice(0,4).map(s=>`<span class="skill-tag">${s}</span>`).join('')}</div>
+  `
+  grid.appendChild(el)
+  setTimeout(() => drawRadar(document.getElementById('mini-'+job.id), job.abilities, 70, true), 0)
+})
+
+// ── Radar Chart ──
+function drawRadar(canvas, abilities, size, mini=false) {
+  const ctx = canvas.getContext('2d')
+  const cx = canvas.width/2, cy = canvas.height/2
+  const labels = Object.keys(abilities)
+  const values = Object.values(abilities)
+  const n = labels.length
+  const r = size
+
+  // Background rings
+  for (let ring = 1; ring <= 4; ring++) {
+    const rr = r * ring / 4
+    ctx.beginPath()
+    for (let i = 0; i <= n; i++) {
+      const angle = (i / n) * Math.PI * 2 - Math.PI / 2
+      const x = cx + Math.cos(angle) * rr
+      const y = cy + Math.sin(angle) * rr
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    }
+    ctx.strokeStyle = '#e2e8f0'
+    ctx.lineWidth = 0.5
+    ctx.stroke()
+  }
+
+  // Axes
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    ctx.lineTo(cx + Math.cos(angle) * r, cy + Math.sin(angle) * r)
+    ctx.strokeStyle = '#e2e8f0'
+    ctx.lineWidth = 0.5
+    ctx.stroke()
+  }
+
+  // Data polygon
+  ctx.beginPath()
+  for (let i = 0; i <= n; i++) {
+    const idx = i % n
+    const angle = (idx / n) * Math.PI * 2 - Math.PI / 2
+    const v = values[idx] / 100 * r
+    const x = cx + Math.cos(angle) * v
+    const y = cy + Math.sin(angle) * v
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+  }
+  ctx.fillStyle = 'rgba(124,58,237,0.12)'
+  ctx.fill()
+  ctx.strokeStyle = '#7c3aed'
+  ctx.lineWidth = 1.5
+  ctx.stroke()
+
+  // Dots + Labels
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2
+    const v = values[i] / 100 * r
+    const x = cx + Math.cos(angle) * v
+    const y = cy + Math.sin(angle) * v
+    ctx.beginPath()
+    ctx.arc(x, y, 2.5, 0, Math.PI * 2)
+    ctx.fillStyle = '#7c3aed'
+    ctx.fill()
+
+    if (!mini) {
+      const lx = cx + Math.cos(angle) * (r + 18)
+      const ly = cy + Math.sin(angle) * (r + 18)
+      ctx.font = '12px sans-serif'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      ctx.fillStyle = '#475569'
+      ctx.fillText(labels[i], lx, ly)
+    }
+  }
+}
+
+// ── Detail Panel ──
+const overlay = document.getElementById('overlay')
+const detail = document.getElementById('detail')
+
+function openDetail(job) {
+  const promoHTML = job.promoPath.map((step, i) => {
+    const isCurrent = step.current
+    const arrow = i < job.promoPath.length - 1 ? '<div class="promo-arrow">↓</div>' : ''
+    return `
+      <div class="promo-step ${isCurrent ? 'current' : ''}">
+        <div class="level-badge" style="background:${step.color}">${step.level}</div>
+        <div class="step-info">
+          <div class="step-title">${step.title}</div>
+          <div class="step-desc">${step.desc}</div>
+        </div>
+      </div>
+      ${arrow}
+    `
+  }).join('')
+
+  const transHTML = job.transitions.map(t => `
+    <div class="trans-card" onclick="event.stopPropagation()">
+      <div class="trans-name">${t.target}</div>
+      <div class="overlap-bar"><div class="overlap-fill" style="width:${t.overlap}%"></div></div>
+      <div class="overlap-text">技能重合度 ${t.overlap}%</div>
+      <div class="gap-skills">需补充：${t.gaps.join('、')}</div>
+    </div>
+  `).join('')
+
+  const reqHTML = Object.entries(job.abilities).map(([k, v]) => {
+    const color = v >= 80 ? '#22c55e' : v >= 60 ? '#f59e0b' : '#ef4444'
+    return `<div class="req-item"><div class="req-dot" style="background:${color}"></div>${k} <strong>${v}</strong></div>`
+  }).join('')
+
+  detail.innerHTML = `
+    <button class="detail-close" onclick="closeDetail()">✕</button>
+    <h2>${job.name}</h2>
+    <div class="meta">${job.family} · <span class="zone ${ZONE_CLS[job.zone]}" style="font-size:12px">${ZONE_MAP[job.zone]}</span>
+      ${job.certs.length ? ' · 推荐证书：' + job.certs.join('、') : ''}</div>
+
+    <div class="radar-wrap"><canvas id="detail-radar" width="300" height="300"></canvas></div>
+
+    <div class="detail-section">
+      <h3>岗位能力要求</h3>
+      <div class="req-grid">${reqHTML}</div>
+    </div>
+
+    <div class="detail-section">
+      <h3>核心技能</h3>
+      <div class="skill-tags">${job.skills.map(s=>`<span class="skill-tag">${s}</span>`).join('')}</div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🔼 晋升路径</h3>
+      <div class="promo-path">${promoHTML}</div>
+    </div>
+
+    <div class="detail-section">
+      <h3>🔄 换岗路径（${job.transitions.length}条）</h3>
+      <div class="transition-grid">${transHTML}</div>
+    </div>
+  `
+
+  overlay.classList.add('open')
+  setTimeout(() => drawRadar(document.getElementById('detail-radar'), job.abilities, 110, false), 0)
+}
+
+function closeDetail() { overlay.classList.remove('open') }
+overlay.addEventListener('click', e => { if (e.target === overlay) closeDetail() })
+</script>
+</body>
+</html>

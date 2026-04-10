@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Light Liquid Glass — V4</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --blue: #2563EB;
+    --blue-deep: #1d4ed8;
+    --text-1: #0f172a;
+    --text-2: #475569;
+    --text-3: #94a3b8;
+    --bg: #E8ECF1;
+  }
+  body {
+    font-family: 'Inter', 'Noto Sans SC', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-1);
+    background: var(--bg);
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+
+  /* ═══ BACKGROUND — radial gradients on body via background-image ═══
+     No extra divs. Large enough to span across multiple cards so
+     backdrop-filter has real color to blur. */
+  .bg-canvas {
+    position: fixed; inset: 0; z-index: 0;
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(circle 600px at 30% 20%, rgba(59,130,246,0.28), transparent),
+      radial-gradient(circle 520px at 75% 75%, rgba(251,146,60,0.22), transparent),
+      radial-gradient(circle 480px at 25% 65%, rgba(20,184,166,0.20), transparent),
+      radial-gradient(circle 400px at 60% 35%, rgba(147,197,253,0.18), transparent);
+    background-attachment: fixed;
+  }
+
+  /* ═══ GLASS SYSTEM — unified light glass ═══ */
+  .glass-nav {
+    background: rgba(255,255,255,0.35);
+    backdrop-filter: blur(32px) saturate(150%);
+    -webkit-backdrop-filter: blur(32px) saturate(150%);
+    border-right: 1px solid rgba(255,255,255,0.25);
+    box-shadow: inset -1px 0 0 rgba(255,255,255,0.15);
+  }
+  .glass {
+    background: rgba(255,255,255,0.38);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid rgba(255,255,255,0.35);
+    border-top-color: rgba(255,255,255,0.7);
+    border-left-color: rgba(255,255,255,0.55);
+    border-radius: 20px;
+    position: relative; overflow: hidden;
+    transition: transform 0.3s cubic-bezier(0.23,1,0.32,1),
+                box-shadow 0.3s cubic-bezier(0.23,1,0.32,1);
+    box-shadow:
+      0 2px 8px rgba(0,0,0,0.04),
+      inset 0 1px 0 0 rgba(255,255,255,0.5);
+  }
+  .glass::before {
+    content:''; position:absolute;
+    top:0; left:0; right:0; height:40%;
+    background: linear-gradient(to bottom, rgba(255,255,255,0.25) 0%, rgba(255,255,255,0.04) 60%, transparent 100%);
+    pointer-events:none; border-radius:20px 20px 0 0;
+  }
+  .glass:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 8px 28px rgba(0,0,0,0.07),
+      inset 0 1px 0 0 rgba(255,255,255,0.6);
+  }
+  /* Content inside glass needs z-index above ::before */
+  .glass > .g-inner { position: relative; z-index: 1; }
+
+  /* ═══ COMPONENTS ═══ */
+  .app-shell { position:relative; z-index:1; display:flex; height:100vh; overflow:hidden; }
+
+  /* Sidebar */
+  .sidebar { width:252px; flex-shrink:0; display:flex; flex-direction:column; height:100%; }
+  .nav-item {
+    display:flex; align-items:center; gap:10px;
+    padding:9px 14px; border-radius:10px;
+    font-size:14px; font-weight:500;
+    color:var(--text-2); cursor:pointer; transition:all 0.2s;
+  }
+  .nav-item:hover { background:rgba(255,255,255,0.4); color:var(--text-1); }
+  .nav-item.active {
+    background:rgba(255,255,255,0.55); color:var(--text-1);
+    font-weight:600; box-shadow:0 1px 4px rgba(0,0,0,0.05);
+  }
+  .nav-item.active .nav-icon { color:var(--blue); }
+  .nav-icon { width:18px; height:18px; color:var(--text-3); transition:color 0.2s; }
+
+  /* Pill — glass active */
+  .pill {
+    display:inline-flex; align-items:center;
+    padding:6px 16px; border-radius:100px;
+    font-size:13px; font-weight:500; cursor:pointer;
+    transition:all 0.2s; border:1px solid transparent;
+  }
+  .pill.active {
+    background:rgba(255,255,255,0.6); backdrop-filter:blur(12px);
+    border-color:rgba(255,255,255,0.55); color:var(--text-1);
+    font-weight:600; box-shadow:0 2px 8px rgba(0,0,0,0.06);
+  }
+  .pill:not(.active) {
+    background:rgba(255,255,255,0.25); border-color:rgba(255,255,255,0.25); color:var(--text-2);
+  }
+  .pill:not(.active):hover { background:rgba(255,255,255,0.42); color:var(--text-1); }
+
+  /* Stat capsule */
+  .stat-cap {
+    display:inline-flex; align-items:center; gap:5px;
+    padding:4px 12px; border-radius:100px; font-size:12px; font-weight:500;
+    background:rgba(255,255,255,0.4); backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.4); color:var(--text-3);
+  }
+  .stat-cap strong { color:var(--text-1); font-weight:700; }
+
+  /* Buttons */
+  .btn {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:9px 18px; border-radius:10px;
+    font-size:13px; font-weight:600; font-family:inherit;
+    cursor:pointer; border:none; transition:all 0.2s cubic-bezier(0.23,1,0.32,1);
+  }
+  .btn-glass {
+    background:rgba(255,255,255,0.4); backdrop-filter:blur(10px);
+    border:1px solid rgba(255,255,255,0.45); color:var(--text-2);
+  }
+  .btn-glass:hover {
+    background:rgba(255,255,255,0.6); color:var(--text-1);
+    transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.05);
+  }
+  /* CTA — glass blue, not solid blue */
+  .btn-cta {
+    background:rgba(37,99,235,0.12); backdrop-filter:blur(10px);
+    border:1.5px solid rgba(37,99,235,0.3); color:var(--blue);
+  }
+  .btn-cta:hover {
+    background:rgba(37,99,235,0.18); border-color:rgba(37,99,235,0.45);
+    transform:translateY(-1px); box-shadow:0 2px 10px rgba(37,99,235,0.12);
+  }
+
+  /* Chip */
+  .chip {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:5px 14px; border-radius:100px; font-size:12px; font-weight:500;
+    background:rgba(255,255,255,0.35); backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,0.4); color:var(--text-2);
+    cursor:default; transition:all 0.25s cubic-bezier(0.23,1,0.32,1);
+  }
+  .chip:hover { background:rgba(255,255,255,0.55); color:var(--text-1); transform:translateY(-1px); }
+  .chip-dot { width:6px; height:6px; border-radius:50%; flex-shrink:0; }
+
+  /* Progress — glass track + gradient fill */
+  .progress-track {
+    height:6px; border-radius:100px;
+    background:rgba(255,255,255,0.35); backdrop-filter:blur(4px);
+    border:0.5px solid rgba(255,255,255,0.3);
+    overflow:hidden;
+  }
+  .progress-fill {
+    height:100%; border-radius:100px;
+    background:linear-gradient(90deg, var(--blue), #60a5fa);
+    transition:width 1.2s cubic-bezier(0.23,1,0.32,1);
+  }
+  .progress-fill.muted { background:linear-gradient(90deg, #94a3b8, #cbd5e1); }
+
+  /* Steps */
+  .step-dot {
+    width:26px; height:26px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700; flex-shrink:0;
+  }
+  .step-dot.done { background:var(--blue); color:white; }
+  .step-dot.now { background:rgba(37,99,235,0.1); border:1.5px solid rgba(37,99,235,0.35); color:var(--blue); }
+  .step-dot.later { background:rgba(0,0,0,0.04); border:1.5px solid rgba(0,0,0,0.08); color:var(--text-3); }
+
+  .section-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:var(--text-3); }
+
+  /* Entrance */
+  .fade-up {
+    opacity:0; transform:translateY(14px);
+    animation:fadeUp 0.45s cubic-bezier(0.23,1,0.32,1) forwards;
+    animation-delay:var(--d,0ms);
+  }
+  @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+  @media (prefers-reduced-motion:reduce) {
+    .fade-up { animation:none; opacity:1; transform:none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-canvas" aria-hidden="true"></div>
+
+<div class="app-shell">
+
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar glass-nav">
+    <div style="display:flex; flex-direction:column; height:100%;">
+      <div style="padding:16px 18px; display:flex; align-items:center; gap:8px; border-bottom:1px solid rgba(0,0,0,0.05);">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M4 18L10.5 11.5L15 14L20 6" stroke="var(--blue)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="20" cy="6" r="2.5" fill="var(--blue)"/>
+        </svg>
+        <span style="font-weight:700; font-size:15px; letter-spacing:-0.01em;">职途智析</span>
+      </div>
+
+      <nav style="flex:1; padding:12px 10px; overflow-y:auto;">
+        <div style="padding:2px 10px 10px;"><span class="section-label">功能</span></div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            AI 对话
+          </div>
+          <div class="nav-item active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            画像管理
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+            岗位图谱
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            JD 诊断
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+            面试练习
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+            成长看板
+          </div>
+          <div class="nav-item">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+            发展报告
+          </div>
+        </div>
+
+        <!-- Divider line before chat history -->
+        <div style="margin:18px 10px 0; border-top:1px solid rgba(0,0,0,0.06);"></div>
+        <div style="padding:12px 10px 8px; display:flex; align-items:center; justify-content:space-between;">
+          <span class="section-label">对话历史</span>
+          <div style="width:26px; height:26px; display:flex; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; color:var(--text-3); transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.4)'" onmouseout="this.style.background=''">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:1px;">
+          <div style="display:flex; align-items:center; gap:8px; height:34px; padding:0 10px; border-radius:8px; font-size:13px; color:var(--text-3); cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.35)'" onmouseout="this.style.background=''">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">前端和后端怎么选</span>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px; height:34px; padding:0 10px; border-radius:8px; font-size:13px; color:var(--text-3); cursor:pointer; transition:all 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.35)'" onmouseout="this.style.background=''">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">分析字节 JD 匹配度</span>
+          </div>
+        </div>
+      </nav>
+
+      <div style="margin:0 10px 12px; padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.3); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,0.35); display:flex; align-items:center; gap:10px;">
+        <div style="width:30px; height:30px; border-radius:50%; background:rgba(37,99,235,0.08); border:1px solid rgba(37,99,235,0.12); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:600; color:var(--blue);">L</div>
+        <span style="font-size:13px; font-weight:500; color:var(--text-2); flex:1;">Demo 用户</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ MAIN ═══ -->
+  <main class="main-scroll">
+    <div style="padding:28px 44px 0;">
+      <div class="fade-up" style="--d:0ms; display:flex; align-items:center; gap:8px; margin-bottom:20px;">
+        <div class="pill active">张明的画像</div>
+        <div class="pill">实习版画像</div>
+        <div class="pill" style="border-style:dashed; border-color:rgba(0,0,0,0.1); gap:4px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          新建
+        </div>
+      </div>
+
+      <!-- Status bar with glass capsules -->
+      <div class="fade-up" style="--d:60ms; display:flex; align-items:center; font-size:12px; margin-bottom:36px;">
+        <span style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.06em; padding:3px 10px; border-radius:6px; background:rgba(37,99,235,0.1); color:var(--blue);">进行中</span>
+        <span style="color:var(--text-2); font-weight:500; margin-left:12px;">第 3 步 — 补充知识领域</span>
+        <div style="margin-left:auto; display:flex; gap:10px;">
+          <span class="stat-cap">竞争力 <strong>67</strong></span>
+          <span class="stat-cap">完整度 <strong>72%</strong></span>
+          <span class="stat-cap">技能 <strong>12 项</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content — right column is lighter now -->
+    <div style="padding:0 44px 60px; display:grid; grid-template-columns:1fr 310px; gap:28px; max-width:1200px;">
+
+      <!-- ═══ LEFT ═══ -->
+      <div style="display:flex; flex-direction:column; gap:28px;">
+
+        <!-- Profile strip -->
+        <div class="glass fade-up" style="--d:100ms; padding:28px;">
+          <div class="g-inner" style="display:flex; align-items:center; justify-content:space-between;">
+            <div style="display:flex; align-items:center; gap:18px;">
+              <div style="width:52px; height:52px; border-radius:16px; background:rgba(37,99,235,0.07); border:1px solid rgba(37,99,235,0.1); display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; color:var(--blue);">张</div>
+              <div>
+                <div style="font-size:20px; font-weight:700; letter-spacing:-0.02em; display:flex; align-items:center; gap:10px;">
+                  张明的画像
+                  <span style="font-size:11px; font-weight:600; padding:2px 8px; background:rgba(0,0,0,0.04); color:var(--text-3); border-radius:5px;">简历解析</span>
+                </div>
+                <div style="font-size:13px; color:var(--text-3); margin-top:5px;">
+                  基于当前数据分析 <span style="margin:0 6px; opacity:0.3;">|</span> 最近更新于 2026-04-02
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-glass">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                重新解析
+              </button>
+              <button class="btn btn-glass">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                编辑
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento 5:7 -->
+        <div style="display:grid; grid-template-columns:5fr 7fr; gap:20px;">
+          <div class="glass fade-up" style="--d:180ms; padding:24px;">
+            <div class="g-inner">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:22px;">
+                <span style="font-size:15px; font-weight:700;">完善流程</span>
+                <span style="font-size:11px; font-weight:600; color:var(--text-3);">72%</span>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:14px;">
+                <div style="display:flex; align-items:center; gap:10px;"><div class="step-dot done">&#10003;</div><span style="font-size:13px;">完善基础信息</span></div>
+                <div style="display:flex; align-items:center; gap:10px;"><div class="step-dot done">&#10003;</div><span style="font-size:13px;">补充技能信息</span></div>
+                <div style="display:flex; align-items:center; gap:10px;"><div class="step-dot now">3</div><span style="font-size:13px; font-weight:500; color:var(--blue);">补充知识领域</span></div>
+                <div style="display:flex; align-items:center; gap:10px;"><div class="step-dot later">4</div><span style="font-size:13px; color:var(--text-3);">补充项目经历</span></div>
+                <div style="display:flex; align-items:center; gap:10px;"><div class="step-dot later">5</div><span style="font-size:13px; color:var(--text-3);">完成软技能测评</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass fade-up" style="--d:240ms; padding:24px 28px;">
+            <div class="g-inner">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:22px;">
+                <span style="font-size:15px; font-weight:700;">知识领域</span>
+                <span style="font-size:11px; font-weight:600; color:var(--text-3);">8 项</span>
+              </div>
+              <div style="display:flex; flex-wrap:wrap; gap:8px;">
+                <span class="chip"><span class="chip-dot" style="background:var(--blue);"></span>数据结构</span>
+                <span class="chip"><span class="chip-dot" style="background:#0891b2;"></span>操作系统</span>
+                <span class="chip"><span class="chip-dot" style="background:var(--blue);"></span>计算机网络</span>
+                <span class="chip"><span class="chip-dot" style="background:#0891b2;"></span>数据库原理</span>
+                <span class="chip"><span class="chip-dot" style="background:var(--blue);"></span>设计模式</span>
+                <span class="chip"><span class="chip-dot" style="background:#0891b2;"></span>分布式系统</span>
+                <span class="chip"><span class="chip-dot" style="background:var(--blue);"></span>机器学习</span>
+                <span class="chip"><span class="chip-dot" style="background:#0891b2;"></span>编译原理</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Skills — glass progress tracks -->
+        <div class="fade-up" style="--d:300ms;">
+          <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding:0 2px;">
+            <span class="section-label">专业技能</span>
+            <div style="flex:1; height:1px; background:linear-gradient(to right, rgba(0,0,0,0.06), transparent);"></div>
+            <span style="font-size:11px; font-weight:600; color:var(--text-3);">12 项</span>
+          </div>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:14px;">
+            <div class="glass" style="padding:18px; cursor:default;"><div class="g-inner"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span style="font-size:13px; font-weight:600;">React</span><span style="font-size:11px; font-weight:600; color:var(--blue);">85</span></div><div class="progress-track"><div class="progress-fill" data-w="85"></div></div></div></div>
+            <div class="glass" style="padding:18px; cursor:default;"><div class="g-inner"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span style="font-size:13px; font-weight:600;">TypeScript</span><span style="font-size:11px; font-weight:600; color:var(--blue);">78</span></div><div class="progress-track"><div class="progress-fill" data-w="78"></div></div></div></div>
+            <div class="glass" style="padding:18px; cursor:default;"><div class="g-inner"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span style="font-size:13px; font-weight:600;">Python</span><span style="font-size:11px; font-weight:600; color:var(--blue);">72</span></div><div class="progress-track"><div class="progress-fill" data-w="72"></div></div></div></div>
+          </div>
+          <div style="display:grid; grid-template-columns:3fr 3fr 2fr; gap:14px; margin-top:14px;">
+            <div class="glass" style="padding:18px; cursor:default;"><div class="g-inner"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span style="font-size:13px; font-weight:600;">Node.js</span><span style="font-size:11px; font-weight:600; color:var(--text-2);">68</span></div><div class="progress-track"><div class="progress-fill" data-w="68"></div></div></div></div>
+            <div class="glass" style="padding:18px; cursor:default;"><div class="g-inner"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span style="font-size:13px; font-weight:600;">SQL</span><span style="font-size:11px; font-weight:600; color:var(--text-2);">65</span></div><div class="progress-track"><div class="progress-fill" data-w="65"></div></div></div></div>
+            <div class="glass" style="padding:18px; cursor:default;"><div class="g-inner"><div style="display:flex; justify-content:space-between; margin-bottom:10px;"><span style="font-size:13px; font-weight:600;">Docker</span><span style="font-size:11px; font-weight:600; color:var(--text-3);">45</span></div><div class="progress-track"><div class="progress-fill muted" data-w="45"></div></div></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RIGHT — aligned with left column top ═══ -->
+      <div style="display:flex; flex-direction:column; gap:20px;">
+
+        <!-- KPI — light glass, blue number emphasis -->
+        <div class="glass fade-up" style="--d:140ms; padding:26px;">
+          <div class="g-inner">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+              <span style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.08em; color:var(--text-3);">综合竞争力</span>
+              <div style="width:7px; height:7px; border-radius:50%; background:#34d399; box-shadow:0 0 6px rgba(52,211,153,0.5);"></div>
+            </div>
+            <div style="display:flex; align-items:baseline; gap:6px; margin-bottom:20px;">
+              <span id="kpi-num" style="font-size:48px; font-weight:800; letter-spacing:-0.04em; line-height:1; color:var(--blue);">0</span>
+              <span style="font-size:13px; color:var(--text-3); font-weight:500;">/ 100</span>
+            </div>
+            <div style="padding-top:16px; border-top:1px solid rgba(0,0,0,0.05);">
+              <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:8px;">
+                <span style="color:var(--text-3);">画像完整度</span>
+                <span style="color:var(--text-1); font-weight:600;">72%</span>
+              </div>
+              <div class="progress-track"><div class="progress-fill" data-w="72"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- AI diagnosis — compact, with show-more hint -->
+        <div class="glass fade-up" style="--d:220ms; padding:22px;">
+          <div class="g-inner">
+            <div style="display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--blue); margin-bottom:10px;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              AI 诊断
+            </div>
+            <p style="font-size:13px; font-weight:500; color:var(--text-2); line-height:1.7; margin-bottom:12px;">
+              基础扎实，建议聚焦 React + TypeScript 深度，补充系统设计知识。
+            </p>
+            <a href="#" style="font-size:12px; font-weight:600; color:var(--blue); text-decoration:none; display:inline-flex; align-items:center; gap:4px; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+              查看完整报告 &rarr;
+            </a>
+          </div>
+        </div>
+
+        <!-- SJT CTA — glass blue button, not solid -->
+        <div class="glass fade-up" style="--d:300ms; padding:22px;">
+          <div class="g-inner" style="display:flex; align-items:center; gap:16px;">
+            <div style="width:40px; height:40px; border-radius:12px; background:rgba(37,99,235,0.06); display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13px; font-weight:600; margin-bottom:2px;">软技能测评</div>
+              <div style="font-size:12px; color:var(--text-3); line-height:1.5;">情景判断题，评估协作能力</div>
+            </div>
+            <button class="btn btn-cta" style="flex-shrink:0;">开始</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  document.querySelectorAll('.progress-fill[data-w]').forEach(b => {
+    const w = b.getAttribute('data-w');
+    b.style.width = '0%';
+    setTimeout(() => { b.style.width = w + '%'; }, 500);
+  });
+  const kpi = document.getElementById('kpi-num');
+  let n = 0;
+  function tick() { n++; kpi.textContent = n; if (n < 67) requestAnimationFrame(tick); }
+  setTimeout(tick, 400);
+</script>
+</body>
+</html>

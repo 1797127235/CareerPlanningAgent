@@ -1,0 +1,193 @@
+{
+  "communities": [
+    {
+      "community_id": 0,
+      "label": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+      "summary": "涵盖销售与市场/其他等领域；核心技术栈: 团队协作, 沟通能力, 责任心, 学习能力, 办公软件；共 10 个岗位方向。",
+      "members": [
+        "11-1021.00",
+        "13-1071.00",
+        "41-3091.00",
+        "APP推广",
+        "BD经理",
+        "咨询顾问",
+        "大客户代表",
+        "游戏推广",
+        "猎头顾问",
+        "项目招投标"
+      ],
+      "size": 10
+    },
+    {
+      "community_id": 1,
+      "label": "数据分析社区（以Physical Scientists, All Other为代表）",
+      "summary": "涵盖其他/数据分析/算法与AI等领域；核心技术栈: 团队协作, 责任心, 沟通能力, 学习能力, 办公软件；共 7 个岗位方向。",
+      "members": [
+        "19-2099.00",
+        "产品专员/助理",
+        "内容审核",
+        "培训师",
+        "档案管理",
+        "统计员",
+        "资料管理"
+      ],
+      "size": 7
+    },
+    {
+      "community_id": 2,
+      "label": "质量保证社区（以Software Quality Assurance Analysts and Testers为代表）",
+      "summary": "涵盖质量保证/其他等领域；核心技术栈: 团队协作, 沟通能力, 测试用例, 测试计划, 责任心；共 5 个岗位方向。",
+      "members": [
+        "15-1253.00",
+        "17-2072.00",
+        "质检员",
+        "质量管理/测试",
+        "风电工程师"
+      ],
+      "size": 5
+    },
+    {
+      "community_id": 3,
+      "label": "管理社区（以管培生/储备干部为代表）",
+      "summary": "涵盖管理/其他等领域；核心技术栈: 沟通能力, 责任心, 抗压能力, 团队协作, 学习能力；共 5 个岗位方向。",
+      "members": [
+        "储备干部",
+        "储备经理人",
+        "总助/CEO助理/董事长助理",
+        "管培生/储备干部",
+        "项目经理/主管"
+      ],
+      "size": 5
+    },
+    {
+      "community_id": 4,
+      "label": "交付与技术支持社区（以Computer User Support Specialists为代表）",
+      "summary": "涵盖交付与技术支持等领域；核心技术栈: 沟通能力, 责任心, 团队协作, 普通话, 学习能力；共 4 个岗位方向。",
+      "members": [
+        "15-1232.00",
+        "售后客服",
+        "电话客服",
+        "网络客服"
+      ],
+      "size": 4
+    },
+    {
+      "community_id": 5,
+      "label": "其他社区（以律师为代表）",
+      "summary": "涵盖其他等领域；核心技术栈: 团队协作, 责任心, 沟通能力, 学习能力, 抗压能力；共 4 个岗位方向。",
+      "members": [
+        "23-1011.00",
+        "律师",
+        "律师助理",
+        "知识产权/专利代理"
+      ],
+      "size": 4
+    },
+    {
+      "community_id": 6,
+      "label": "软件研发社区（以Software Developers为代表）",
+      "summary": "涵盖软件研发等领域；核心技术栈: 团队协作, C++, C, Python, Java；共 3 个岗位方向。",
+      "members": [
+        "15-1254.00",
+        "C/C++",
+        "Java"
+      ],
+      "size": 3
+    },
+    {
+      "community_id": 7,
+      "label": "其他社区（以英语翻译为代表）",
+      "summary": "涵盖其他等领域；核心技术栈: 团队协作, 责任心, 沟通能力, 日语, 日语口语；共 2 个岗位方向。",
+      "members": [
+        "日语翻译",
+        "英语翻译"
+      ],
+      "size": 2
+    }
+  ],
+  "node_to_community": {
+    "11-1021.00": 0,
+    "13-1071.00": 0,
+    "41-3091.00": 0,
+    "APP推广": 0,
+    "BD经理": 0,
+    "咨询顾问": 0,
+    "大客户代表": 0,
+    "游戏推广": 0,
+    "猎头顾问": 0,
+    "项目招投标": 0,
+    "19-2099.00": 1,
+    "产品专员/助理": 1,
+    "内容审核": 1,
+    "培训师": 1,
+    "档案管理": 1,
+    "统计员": 1,
+    "资料管理": 1,
+    "15-1253.00": 2,
+    "17-2072.00": 2,
+    "质检员": 2,
+    "质量管理/测试": 2,
+    "风电工程师": 2,
+    "储备干部": 3,
+    "储备经理人": 3,
+    "总助/CEO助理/董事长助理": 3,
+    "管培生/储备干部": 3,
+    "项目经理/主管": 3,
+    "15-1232.00": 4,
+    "售后客服": 4,
+    "电话客服": 4,
+    "网络客服": 4,
+    "23-1011.00": 5,
+    "律师": 5,
+    "律师助理": 5,
+    "知识产权/专利代理": 5,
+    "15-1254.00": 6,
+    "C/C++": 6,
+    "Java": 6,
+    "日语翻译": 7,
+    "英语翻译": 7
+  },
+  "node_to_label": {
+    "11-1021.00": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "13-1071.00": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "41-3091.00": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "APP推广": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "BD经理": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "咨询顾问": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "大客户代表": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "游戏推广": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "猎头顾问": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "项目招投标": "销售与市场社区（以Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel为代表）",
+    "19-2099.00": "数据分析社区（以Physical Scientists, All Other为代表）",
+    "产品专员/助理": "数据分析社区（以Physical Scientists, All Other为代表）",
+    "内容审核": "数据分析社区（以Physical Scientists, All Other为代表）",
+    "培训师": "数据分析社区（以Physical Scientists, All Other为代表）",
+    "档案管理": "数据分析社区（以Physical Scientists, All Other为代表）",
+    "统计员": "数据分析社区（以Physical Scientists, All Other为代表）",
+    "资料管理": "数据分析社区（以Physical Scientists, All Other为代表）",
+    "15-1253.00": "质量保证社区（以Software Quality Assurance Analysts and Testers为代表）",
+    "17-2072.00": "质量保证社区（以Software Quality Assurance Analysts and Testers为代表）",
+    "质检员": "质量保证社区（以Software Quality Assurance Analysts and Testers为代表）",
+    "质量管理/测试": "质量保证社区（以Software Quality Assurance Analysts and Testers为代表）",
+    "风电工程师": "质量保证社区（以Software Quality Assurance Analysts and Testers为代表）",
+    "储备干部": "管理社区（以管培生/储备干部为代表）",
+    "储备经理人": "管理社区（以管培生/储备干部为代表）",
+    "总助/CEO助理/董事长助理": "管理社区（以管培生/储备干部为代表）",
+    "管培生/储备干部": "管理社区（以管培生/储备干部为代表）",
+    "项目经理/主管": "管理社区（以管培生/储备干部为代表）",
+    "15-1232.00": "交付与技术支持社区（以Computer User Support Specialists为代表）",
+    "售后客服": "交付与技术支持社区（以Computer User Support Specialists为代表）",
+    "电话客服": "交付与技术支持社区（以Computer User Support Specialists为代表）",
+    "网络客服": "交付与技术支持社区（以Computer User Support Specialists为代表）",
+    "23-1011.00": "其他社区（以律师为代表）",
+    "律师": "其他社区（以律师为代表）",
+    "律师助理": "其他社区（以律师为代表）",
+    "知识产权/专利代理": "其他社区（以律师为代表）",
+    "15-1254.00": "软件研发社区（以Software Developers为代表）",
+    "C/C++": "软件研发社区（以Software Developers为代表）",
+    "Java": "软件研发社区（以Software Developers为代表）",
+    "日语翻译": "其他社区（以英语翻译为代表）",
+    "英语翻译": "其他社区（以英语翻译为代表）"
+  },
+  "total_communities": 8
+}

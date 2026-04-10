@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案C — 时间线学习路径 + 折叠分组</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>* { font-family: 'Inter', system-ui, sans-serif; }</style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+<div class="max-w-[760px] mx-auto pt-8 px-4 pb-12">
+  <!-- Back -->
+  <a href="#" class="inline-flex items-center gap-1 text-slate-500 hover:text-slate-800 text-sm font-medium mb-6">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    返回画像
+  </a>
+
+  <!-- Header — minimal -->
+  <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-8">
+    <div class="flex items-start justify-between">
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-[11px] font-semibold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">起步岗位</span>
+          <span class="text-[11px] font-semibold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">杠杆区</span>
+        </div>
+        <h1 class="text-[26px] font-bold text-slate-900 mb-1">Rust 工程师</h1>
+        <p class="text-[13px] text-slate-500 max-w-md">你的 C++ 系统编程基础可以迁移，重点攻克 Rust 所有权模型和异步编程</p>
+      </div>
+      <!-- Mini ring -->
+      <div class="flex flex-col items-center">
+        <div class="relative w-16 h-16">
+          <svg class="w-16 h-16 -rotate-90" viewBox="0 0 36 36">
+            <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#e2e8f0" stroke-width="3"/>
+            <path d="M18 2.0845a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2563eb" stroke-width="3" stroke-dasharray="22, 100" stroke-linecap="round"/>
+          </svg>
+          <div class="absolute inset-0 flex items-center justify-center">
+            <span class="text-[16px] font-black text-blue-600">22%</span>
+          </div>
+        </div>
+        <span class="text-[10px] text-slate-400 mt-1">5/23 模块</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: 你的优势 (mastered as horizontal scroll) -->
+  <div class="mb-8">
+    <h2 class="text-[12px] font-bold text-emerald-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+      你的优势 · 已掌握 5 项
+    </h2>
+    <div class="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+      <div class="shrink-0 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 min-w-[160px]">
+        <div class="text-[13px] font-semibold text-emerald-800">并发编程</div>
+        <div class="text-[11px] text-emerald-600/70 mt-0.5">多线程 + 内存池经验</div>
+      </div>
+      <div class="shrink-0 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 min-w-[160px]">
+        <div class="text-[13px] font-semibold text-emerald-800">网络编程</div>
+        <div class="text-[11px] text-emerald-600/70 mt-0.5">Socket + 高性能网络库</div>
+      </div>
+      <div class="shrink-0 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 min-w-[160px]">
+        <div class="text-[13px] font-semibold text-emerald-800">系统编程</div>
+        <div class="text-[11px] text-emerald-600/70 mt-0.5">Linux + C/C++ + RAII</div>
+      </div>
+      <div class="shrink-0 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 min-w-[160px]">
+        <div class="text-[13px] font-semibold text-emerald-800">数据库</div>
+        <div class="text-[11px] text-emerald-600/70 mt-0.5">MySQL 基础</div>
+      </div>
+      <div class="shrink-0 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 min-w-[160px]">
+        <div class="text-[13px] font-semibold text-emerald-800">性能调优</div>
+        <div class="text-[11px] text-emerald-600/70 mt-0.5">网络库性能优化</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section: 学习路线图 — Timeline -->
+  <div class="mb-8">
+    <h2 class="text-[12px] font-bold text-slate-600 uppercase tracking-wider mb-4 flex items-center gap-1.5">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+      学习路线图
+    </h2>
+
+    <!-- Phase 1 -->
+    <div class="relative pl-8 pb-8 border-l-2 border-amber-300 ml-3">
+      <div class="absolute -left-[11px] top-0 w-5 h-5 bg-amber-500 rounded-full flex items-center justify-center">
+        <span class="text-[10px] font-bold text-white">1</span>
+      </div>
+      <div class="mb-1">
+        <span class="text-[13px] font-bold text-amber-700">第一阶段：核心语法</span>
+        <span class="text-[11px] text-slate-400 ml-2">必须先掌握</span>
+      </div>
+      <div class="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></div>
+          <span class="text-[13px] text-slate-700 font-medium">Lifetimes & Borrow Checker</span>
+          <span class="text-[10px] text-slate-400 ml-auto">所有权核心</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></div>
+          <span class="text-[13px] text-slate-700 font-medium">Traits & Generics</span>
+          <span class="text-[10px] text-slate-400 ml-auto">类型系统</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0"></div>
+          <span class="text-[13px] text-slate-700 font-medium">Error Handling</span>
+          <span class="text-[10px] text-slate-400 ml-auto">Result/Option</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 2 -->
+    <div class="relative pl-8 pb-8 border-l-2 border-blue-300 ml-3">
+      <div class="absolute -left-[11px] top-0 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+        <span class="text-[10px] font-bold text-white">2</span>
+      </div>
+      <div class="mb-1">
+        <span class="text-[13px] font-bold text-blue-700">第二阶段：工程实践</span>
+        <span class="text-[11px] text-slate-400 ml-2">能写项目</span>
+      </div>
+      <div class="bg-white border border-slate-100 rounded-xl p-3 space-y-2">
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></div>
+          <span class="text-[13px] text-slate-700 font-medium">Modules & Crates</span>
+          <span class="text-[10px] text-slate-400 ml-auto">Cargo 生态</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></div>
+          <span class="text-[13px] text-slate-700 font-medium">Testing</span>
+          <span class="text-[10px] text-slate-400 ml-auto">测试框架</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></div>
+          <span class="text-[13px] text-slate-700 font-medium">Macros & Metaprogramming</span>
+          <span class="text-[10px] text-slate-400 ml-auto">宏系统</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0"></div>
+          <span class="text-[13px] text-slate-700 font-medium">Asynchronous Programming</span>
+          <span class="text-[10px] text-slate-400 ml-auto">async/tokio</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 3 -->
+    <div class="relative pl-8 pb-4 border-l-2 border-slate-200 ml-3">
+      <div class="absolute -left-[11px] top-0 w-5 h-5 bg-slate-300 rounded-full flex items-center justify-center">
+        <span class="text-[10px] font-bold text-white">3</span>
+      </div>
+      <div class="mb-1">
+        <span class="text-[13px] font-bold text-slate-500">第三阶段：拓展方向</span>
+        <span class="text-[11px] text-slate-400 ml-2">按兴趣选择</span>
+      </div>
+      <div class="flex flex-wrap gap-1.5 mt-2">
+        <span class="text-[11px] bg-slate-50 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg">Web Development</span>
+        <span class="text-[11px] bg-slate-50 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg">Serialization</span>
+        <span class="text-[11px] bg-slate-50 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg">Cryptography</span>
+        <span class="text-[11px] bg-slate-50 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg">CLI Utilities</span>
+        <span class="text-[11px] bg-slate-50 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg">Debugging</span>
+        <span class="text-[11px] bg-slate-50 border border-slate-200 text-slate-500 px-2.5 py-1 rounded-lg">rustdoc</span>
+        <span class="text-[11px] bg-slate-50/50 border border-slate-100 text-slate-400 px-2.5 py-1 rounded-lg">Game Dev</span>
+        <span class="text-[11px] bg-slate-50/50 border border-slate-100 text-slate-400 px-2.5 py-1 rounded-lg">GUI</span>
+        <span class="text-[11px] bg-slate-50/50 border border-slate-100 text-slate-400 px-2.5 py-1 rounded-lg">WASM</span>
+        <span class="text-[11px] bg-slate-50/50 border border-slate-100 text-slate-400 px-2.5 py-1 rounded-lg">Introduction</span>
+        <span class="text-[11px] bg-slate-50/50 border border-slate-100 text-slate-400 px-2.5 py-1 rounded-lg">Language Basics</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="flex gap-3 pt-6 border-t border-slate-200">
+    <a href="#" class="flex-1 bg-white border border-slate-300 text-slate-700 text-[14px] font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors cursor-pointer">
+      去图谱查看该岗位
+    </a>
+    <a href="#" class="flex-1 bg-blue-600 text-white text-[14px] font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors cursor-pointer">
+      从第一阶段开始学习
+    </a>
+  </div>
+</div>
+</body>
+</html>

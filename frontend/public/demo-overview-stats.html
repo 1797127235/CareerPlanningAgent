@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>成长档案总览 — 3 个方案</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', 'PingFang SC', system-ui, sans-serif;
+      background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 50%, #fce7f3 100%);
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+    .glass {
+      background: rgba(255,255,255,0.58);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.65);
+    }
+    .demo-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="max-w-[900px] mx-auto space-y-10">
+
+  <h1 style="font-size:18px;font-weight:800;color:#1e293b;margin-bottom:4px;">成长档案总览 — 3 个方案</h1>
+  <p style="font-size:12px;color:#64748b;margin-bottom:32px;">点击选你喜欢的，告诉我方案编号</p>
+
+  <!-- ═══ 方案 A：圆环 Ring ═══ -->
+  <div>
+    <div class="demo-label">方案 A — 圆环 · 和项目卡片同语言</div>
+    <div class="glass rounded-[20px] p-6" style="box-shadow: 0 4px 24px rgba(0,0,0,0.06);">
+
+      <!-- Status header -->
+      <div class="rounded-[14px] p-4 mb-5"
+        style="background:linear-gradient(135deg,rgba(37,99,235,0.07),rgba(124,58,237,0.05));">
+        <p style="font-size:13px;font-weight:600;color:#1e293b;line-height:1.6;">
+          本月完成了 1 个项目，开了个好头，继续冲 C++ 工程师。
+        </p>
+        <div class="flex items-center gap-2 mt-2.5">
+          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:rgba(37,99,235,0.1);color:#2563eb;">目标：C++ 工程师</span>
+          <span style="font-size:10px;color:#94a3b8;">本月 3 条记录</span>
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:5px;background:rgba(22,163,74,0.08);color:#16a34a;">↑3.0% 准备度</span>
+        </div>
+      </div>
+
+      <!-- 3 rings -->
+      <div class="grid grid-cols-3 gap-4">
+        <!-- 项目 -->
+        <div class="flex flex-col items-center gap-2 py-3 rounded-[16px]"
+          style="background:rgba(22,163,74,0.05);border:1px solid rgba(22,163,74,0.12);">
+          <div class="relative" style="width:72px;height:72px;">
+            <svg width="72" height="72" viewBox="0 0 72 72" style="transform:rotate(-90deg)">
+              <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(22,163,74,0.12)" stroke-width="5"/>
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#16a34a" stroke-width="5"
+                stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="150.8"/>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span style="font-size:22px;font-weight:900;color:#16a34a;line-height:1;">1</span>
+              <span style="font-size:9px;color:#6b7280;margin-top:1px;">个</span>
+            </div>
+          </div>
+          <p style="font-size:11px;font-weight:700;color:#374151;">本月项目</p>
+        </div>
+
+        <!-- 面试 -->
+        <div class="flex flex-col items-center gap-2 py-3 rounded-[16px]"
+          style="background:rgba(37,99,235,0.05);border:1px solid rgba(37,99,235,0.12);">
+          <div class="relative" style="width:72px;height:72px;">
+            <svg width="72" height="72" viewBox="0 0 72 72" style="transform:rotate(-90deg)">
+              <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(37,99,235,0.12)" stroke-width="5"/>
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#2563eb" stroke-width="5"
+                stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="125.7"/>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span style="font-size:22px;font-weight:900;color:#2563eb;line-height:1;">1</span>
+              <span style="font-size:9px;color:#6b7280;margin-top:1px;">场</span>
+            </div>
+          </div>
+          <p style="font-size:11px;font-weight:700;color:#374151;">本月面试</p>
+        </div>
+
+        <!-- 学习 -->
+        <div class="flex flex-col items-center gap-2 py-3 rounded-[16px]"
+          style="background:rgba(124,58,237,0.05);border:1px solid rgba(124,58,237,0.12);">
+          <div class="relative" style="width:72px;height:72px;">
+            <svg width="72" height="72" viewBox="0 0 72 72" style="transform:rotate(-90deg)">
+              <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(124,58,237,0.12)" stroke-width="5"/>
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#7c3aed" stroke-width="5"
+                stroke-linecap="round" stroke-dasharray="188.5" stroke-dashoffset="62.8"/>
+            </svg>
+            <div class="absolute inset-0 flex flex-col items-center justify-center">
+              <span style="font-size:22px;font-weight:900;color:#7c3aed;line-height:1;">3</span>
+              <span style="font-size:9px;color:#6b7280;margin-top:1px;">次</span>
+            </div>
+          </div>
+          <p style="font-size:11px;font-weight:700;color:#374151;">本月学习</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══ 方案 B：大数字卡片 ═══ -->
+  <div>
+    <div class="demo-label">方案 B — 大数字卡片 · 颜色渐变顶边</div>
+    <div class="glass rounded-[20px] p-6" style="box-shadow: 0 4px 24px rgba(0,0,0,0.06);">
+
+      <div class="rounded-[14px] p-4 mb-5"
+        style="background:linear-gradient(135deg,rgba(37,99,235,0.07),rgba(124,58,237,0.05));">
+        <p style="font-size:13px;font-weight:600;color:#1e293b;line-height:1.6;">
+          本月完成了 1 个项目，开了个好头，继续冲 C++ 工程师。
+        </p>
+        <div class="flex items-center gap-2 mt-2.5">
+          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:rgba(37,99,235,0.1);color:#2563eb;">目标：C++ 工程师</span>
+          <span style="font-size:10px;color:#94a3b8;">本月 3 条记录</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-3">
+        <!-- 项目 -->
+        <div class="rounded-[16px] overflow-hidden" style="box-shadow:0 2px 12px rgba(22,163,74,0.12);">
+          <div style="height:4px;background:linear-gradient(90deg,#16a34a,#22c55e);"></div>
+          <div class="p-4" style="background:rgba(255,255,255,0.7);">
+            <p style="font-size:36px;font-weight:900;color:#16a34a;line-height:1;">1</p>
+            <p style="font-size:10px;font-weight:600;color:#6b7280;margin-top:4px;">本月项目</p>
+            <div style="height:3px;border-radius:99px;background:rgba(0,0,0,0.06);margin-top:10px;">
+              <div style="height:100%;width:20%;background:#16a34a;border-radius:99px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 面试 -->
+        <div class="rounded-[16px] overflow-hidden" style="box-shadow:0 2px 12px rgba(37,99,235,0.12);">
+          <div style="height:4px;background:linear-gradient(90deg,#2563eb,#60a5fa);"></div>
+          <div class="p-4" style="background:rgba(255,255,255,0.7);">
+            <p style="font-size:36px;font-weight:900;color:#2563eb;line-height:1;">1</p>
+            <p style="font-size:10px;font-weight:600;color:#6b7280;margin-top:4px;">本月面试</p>
+            <div style="height:3px;border-radius:99px;background:rgba(0,0,0,0.06);margin-top:10px;">
+              <div style="height:100%;width:20%;background:#2563eb;border-radius:99px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 学习 -->
+        <div class="rounded-[16px] overflow-hidden" style="box-shadow:0 2px 12px rgba(124,58,237,0.12);">
+          <div style="height:4px;background:linear-gradient(90deg,#7c3aed,#a78bfa);"></div>
+          <div class="p-4" style="background:rgba(255,255,255,0.7);">
+            <p style="font-size:36px;font-weight:900;color:#7c3aed;line-height:1;">3</p>
+            <p style="font-size:10px;font-weight:600;color:#6b7280;margin-top:4px;">本月学习</p>
+            <div style="height:3px;border-radius:99px;background:rgba(0,0,0,0.06);margin-top:10px;">
+              <div style="height:100%;width:60%;background:#7c3aed;border-radius:99px;"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══ 方案 C：横向大号活动块 ═══ -->
+  <div>
+    <div class="demo-label">方案 C — 横向积累条 · 一眼看出比重</div>
+    <div class="glass rounded-[20px] p-6" style="box-shadow: 0 4px 24px rgba(0,0,0,0.06);">
+
+      <div class="rounded-[14px] p-4 mb-5"
+        style="background:linear-gradient(135deg,rgba(37,99,235,0.07),rgba(124,58,237,0.05));">
+        <p style="font-size:13px;font-weight:600;color:#1e293b;line-height:1.6;">
+          本月完成了 1 个项目，开了个好头，继续冲 C++ 工程师。
+        </p>
+        <div class="flex items-center gap-2 mt-2.5">
+          <span style="font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;background:rgba(37,99,235,0.1);color:#2563eb;">目标：C++ 工程师</span>
+          <span style="font-size:10px;color:#94a3b8;">本月 3 条记录</span>
+        </div>
+      </div>
+
+      <!-- Stacked proportion bar -->
+      <div class="mb-4">
+        <div class="flex rounded-full overflow-hidden" style="height:10px;">
+          <!-- 项目 -->
+          <div style="width:20%;background:linear-gradient(90deg,#16a34a,#22c55e);"></div>
+          <!-- 面试 -->
+          <div style="width:20%;background:linear-gradient(90deg,#2563eb,#60a5fa);margin-left:2px;"></div>
+          <!-- 学习 -->
+          <div style="width:60%;background:linear-gradient(90deg,#7c3aed,#a78bfa);margin-left:2px;"></div>
+        </div>
+        <div class="flex items-center gap-4 mt-2">
+          <span style="font-size:9px;color:#6b7280;display:flex;align-items:center;gap:4px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:#16a34a;display:inline-block;"></span>项目
+          </span>
+          <span style="font-size:9px;color:#6b7280;display:flex;align-items:center;gap:4px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:#2563eb;display:inline-block;"></span>面试
+          </span>
+          <span style="font-size:9px;color:#6b7280;display:flex;align-items:center;gap:4px;">
+            <span style="width:8px;height:8px;border-radius:2px;background:#7c3aed;display:inline-block;"></span>学习
+          </span>
+        </div>
+      </div>
+
+      <!-- 3 big numbers row -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="rounded-[14px] p-4 flex items-center gap-3"
+          style="background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.1);">
+          <span style="font-size:32px;font-weight:900;color:#16a34a;line-height:1;">1</span>
+          <div>
+            <p style="font-size:10px;font-weight:700;color:#374151;">项目</p>
+            <p style="font-size:9px;color:#94a3b8;margin-top:1px;">本月完成</p>
+          </div>
+        </div>
+        <div class="rounded-[14px] p-4 flex items-center gap-3"
+          style="background:rgba(37,99,235,0.06);border:1px solid rgba(37,99,235,0.1);">
+          <span style="font-size:32px;font-weight:900;color:#2563eb;line-height:1;">1</span>
+          <div>
+            <p style="font-size:10px;font-weight:700;color:#374151;">面试</p>
+            <p style="font-size:9px;color:#94a3b8;margin-top:1px;">本月记录</p>
+          </div>
+        </div>
+        <div class="rounded-[14px] p-4 flex items-center gap-3"
+          style="background:rgba(124,58,237,0.06);border:1px solid rgba(124,58,237,0.1);">
+          <span style="font-size:32px;font-weight:900;color:#7c3aed;line-height:1;">3</span>
+          <div>
+            <p style="font-size:10px;font-weight:700;color:#374151;">学习</p>
+            <p style="font-size:9px;color:#94a3b8;margin-top:1px;">本月完成</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

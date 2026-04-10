@@ -1,0 +1,96 @@
+# 官方招聘网站配置
+# domain:        社招官网
+# campus_domain: 校招专用域名（优先使用，面向应届生）
+# aliases:       触发该公司专属搜索的关键词
+# 增删公司：直接编辑此文件，无需改代码
+
+sites:
+  bytedance:
+    domain: jobs.bytedance.com
+    campus_domain: jobs.bytedance.com/campus
+    label: 字节跳动
+    aliases: [字节, bytedance, 抖音, 飞书, tiktok]
+
+  tencent:
+    domain: careers.tencent.com
+    campus_domain: join.qq.com
+    label: 腾讯
+    aliases: [腾讯, tencent, 微信, 游戏, qq]
+
+  alibaba:
+    domain: talent.alibaba.com
+    campus_domain: campus.alibaba.com
+    label: 阿里巴巴
+    aliases: [阿里, alibaba, 淘宝, 天猫, 蚂蚁, 支付宝]
+
+  meituan:
+    domain: zhaopin.meituan.com
+    campus_domain: campus.meituan.com
+    label: 美团
+    aliases: [美团, meituan]
+
+  huawei:
+    domain: career.huawei.com
+    campus_domain: career.huawei.com
+    label: 华为
+    aliases: [华为, huawei]
+
+  baidu:
+    domain: talent.baidu.com
+    campus_domain: talent.baidu.com
+    label: 百度
+    aliases: [百度, baidu]
+
+  jd:
+    domain: zhaopin.jd.com
+    campus_domain: campus.jd.com
+    label: 京东
+    aliases: [京东, jingdong]
+
+  netease:
+    domain: hr.163.com
+    campus_domain: campus.163.com
+    label: 网易
+    aliases: [网易, netease, "163"]
+
+  didi:
+    domain: talent.didiglobal.com
+    campus_domain: campus.didiglobal.com
+    label: 滴滴
+    aliases: [滴滴, didi]
+
+  xiaomi:
+    domain: jobs.xiaomi.com
+    campus_domain: campus.xiaomi.com
+    label: 小米
+    aliases: [小米, xiaomi]
+
+  kuaishou:
+    domain: talent.kuaishou.com
+    campus_domain: campus.kuaishou.com
+    label: 快手
+    aliases: [快手, kuaishou]
+
+  bilibili:
+    domain: jobs.bilibili.com
+    campus_domain: jobs.bilibili.com
+    label: B站
+    aliases: [b站, bilibili, 哔哩]
+
+  mihoyo:
+    domain: jobs.mihoyo.com
+    campus_domain: jobs.mihoyo.com
+    label: 米哈游
+    aliases: [米哈游, mihoyo, 原神, 崩坏]
+
+  xhs:
+    domain: job.xiaohongshu.com
+    campus_domain: job.xiaohongshu.com
+    label: 小红书
+    aliases: [小红书, xhs, rednote]
+
+  pinduoduo:
+    domain: careers.pinduoduo.com
+    campus_domain: careers.pinduoduo.com
+    label: 拼多多
+    aliases: [拼多多, pdd, pinduoduo, temu]

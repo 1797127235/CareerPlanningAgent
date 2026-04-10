@@ -1,0 +1,507 @@
+﻿node_id,skill_tag,question,question_type,difficulty,answer_key
+,MySQL,MySQL 索引有哪些类别？,technical,easy,按数据结构分：B+tree、Hash、Full-text；按物理存储分：聚簇、二级；按字段特性分：主键、唯一、普通、前缀；按字段个数分：单列、联合。
+,MySQL,哈希索引和有序数组的优缺点及适用场景分别是什么？,technical,medium,哈希：无序，插入快，适合等值查询，不适合区间。有序数组：等值和区间查询好，但增删慢，适合静态存储引擎。
+,MySQL,为什么数据库索引通常使用 B+ 树而不是二叉搜索树？,technical,medium,二叉树高度高导致磁盘 IO 多。B+ 树是 N 叉树，降低树高，减少磁盘读取次数，提高查询效率。
+,MySQL,聚簇索引和二级索引在叶子节点存储内容上有什么区别？,technical,medium,聚簇索引叶子节点存实际数据，一张表只有一个。二级索引叶子节点存主键值，查询需回表。
+,MySQL,什么是覆盖索引？它如何提升查询性能？,technical,easy,查询数据在二级索引叶子节点找到，无需回表。减少树的搜索次数，显著提升查询性能。
+,MySQL,联合索引的最左匹配原则是什么？,technical,medium,查询条件必须从索引最左边开始匹配，不能跳过中间列。遇到范围查询后，后续字段无法利用索引。
+,MySQL,什么是索引下推优化（Index Condition Pushdown）？,technical,hard,MySQL 5.6 引入，联合索引遍历中先判断包含字段条件，过滤不满足记录，减少回表次数。
+,MySQL,建立联合索引时，字段顺序应如何根据区分度排列？,technical,medium,根据索引区分度，把区分度大的字段排在前面，以提高过滤效率。
+,MySQL,在实际开发中，建立索引有哪些注意事项？,technical,easy,不是越多越好，降低 insert/update 效率。数据量小的表不需建。不经常使用的列不要建。
+,MySQL,索引的优缺点是什么？,technical,medium,优点：加快检索速度，保证唯一性。缺点：占用空间大，增删改时维护成本高，降低 SQL 执行效率。
+,MySQL,什么时候需要创建索引？,technical,easy,频繁查询的列、大表、有唯一性要求的列（主键/外键）、用于排序和分组的列。
+,MySQL,什么时候不需要创建索引？,technical,easy,小表、经常更新的字段、很少查询的字段、重复数据多的字段（如性别）。
+,MySQL,索引优化有哪些常用方法？,technical,medium,前缀索引优化、覆盖索引优化、主键自增、避免过多索引。
+,MySQL,索引在哪些情况下会失效？,technical,hard,模糊匹配（%abc）、索引列上使用函数/表达式、OR 条件不匹配最左原则、数据分布不均、隐式类型转换。
+,MySQL,为什么使用 B+ 树作为索引结构？,technical,medium,非叶节点只存索引，更矮胖减少 I/O；叶子节点链表连接利于范围查询；插入删除效率更高。
+,MySQL,什么是事务？MyISAM 引擎是否支持事务？,technical,easy,事务是不可分割的工作单元。MyISAM 不支持事务，被 InnoDB 取代。
+,MySQL,事务的四大特性 ACID 分别是什么？如何保证？,technical,medium,原子性（undo log）、一致性（持久 + 原子 + 隔离）、隔离性（MVCC/锁）、持久性（redo log）。
+,MySQL,并行事务会出现哪些问题？,technical,medium,脏读（读未提交数据）、不可重复读（前后读取不一致）、幻读（记录数量不一致）。
+,MySQL,SQL 标准定义的四个隔离级别是什么？MySQL 默认是哪个？,technical,medium,读未提交、读提交、可重复读、串行化。InnoDB 默认是可重复读。
+,MySQL,MySQL InnoDB 是如何解决幻读问题的？,technical,hard,针对快照读（普通 select 语句），是通过 MVCC 方式解决幻读。
+,MySQL,MySQL 是如何解决幻读问题的？,technical,medium,通过 next-key lock（记录锁 + 间隙锁）方式解决。当执行 select ... for update 语句时，会加上 next-key lock，如果有其他事务在锁范围内插入，会被阻止。
+,MySQL,MySQL 事务隔离级别具体是如何实现的？,technical,medium,读未提交直接读取最新数据；串行化加读写锁；读提交和可重复读通过 Read View 实现。读提交每次 select 生成新 Read View，可重复读启动事务时生成一个 Read View。
+,MySQL,Read View 在 MVCC 中是如何工作的？,technical,hard,事务启动创建 Read View，包含活跃事务 ID 列表、最小/最大 ID 等。读取数据时比较记录 trx_id 与 Read View 中的值：小于 min_trx_id 可见；大于等于 max_trx_id 不可见；介于之间判断是否在 m_ids 列表中。
+,MySQL,MySQL 读已提交隔离级别是怎么实现的？,technical,medium,使用 MVCC 实现。每个事务读取数据时看到数据的版本，已提交事务产生版本，未提交不可见。写操作创建新版本而非直接修改原始数据，确保事务不看到未提交更改。
+,MySQL,MySQL 事务的启动方式有哪些？,technical,easy,显式启动（begin/start transaction）；关闭线程自提交（set autocommit=0）。建议默认使用 set autocommit=1，避免长连接导致长事务。
+,MySQL,如何避免长事务对业务的影响？,technical,medium,应用端：检查 autocommit 设置，去除只读事务，控制语句执行时间。数据库端：监控 innodbtrx 表，设置阈值报警或 kill，使用 pt-kill 工具，调整 undo tablespace 配置。
+,MySQL,MySQL 中常见的锁种类有哪些？,technical,medium,包括全局锁（如 flush tables with read lock）、表级锁（表锁、元数据锁 MDL、意向锁）。锁用于解决并发下的脏读、不可重复读、幻读等问题，实现不同隔离级别。
+,MySQL,MySQL 全局锁的作用和使用场景是什么？,technical,easy,对整个数据库实例加锁。典型场景是全库逻辑备份。命令是 flush tables with read lock，阻塞数据更新、定义及更新类事务提交。
+,MySQL,MySQL 表锁的特点和语法是什么？,technical,easy,特点：锁住整张表，开销小，加锁快，并发度最低。语法：lock tables … read/write。可用 unlock tables 释放，断开连接自动释放。
+,MySQL,MySQL 元数据锁（MDL）的作用和工作机制是什么？,technical,medium,保证读写正确性，防止结构变更影响查询。访问表时自动加上。增删改查加读锁，结构变更加写锁。事务中语句结束不立即释放，直到事务提交后释放。
+,MySQL,MySQL 中的意向锁是什么？,technical,medium,意向锁是表级锁，表示事务打算在资源上获得共享或排他锁。分为意向共享锁和意向排他锁。目的是快速判断表里是否有记录被加锁，不会和行级锁冲突，只与表级锁冲突。
+,MySQL,MySQL 中 AUTO-INC 锁的作用及缺陷是什么？,technical,medium,作用：保证主键自增值连续递增。缺陷：大量插入时阻塞其他事务，影响性能。改进：InnoDB 使用轻量级锁，插入赋值后立即释放，无需等待语句结束。
+,MySQL,InnoDB 存储引擎的行锁有哪些类型？,technical,medium,包括 Record Lock（记录锁）、Gap Lock（间隙锁）和 Next-Key Lock（临键锁）。Record 锁单条记录；Gap 锁范围不包含记录本身，解决幻读；Next-Key 是两者组合，保护记录并阻止新记录插入。
+,MySQL,MySQL 可重复读隔离级别下的加锁规则是什么？,technical,hard,基本单位是 Next-Key Lock（前开后闭区间）。查找过程中访问到的对象才会加锁。索引等值查询唯一索引退化为行锁，不满足条件时退化为间隙锁。唯一索引范围查询有 Bug（8.0 已修复）。
+,MySQL,共享锁和排他锁的区别是什么？,technical,easy,共享锁（S 锁）允许读取但不修改，多个事务可共存。排他锁（X 锁）只允许锁定事务使用，禁止其他事务查询或修改。更新操作自动加排他锁。两者均可作用于行或表。
+,MySQL,什么是乐观锁？,technical,easy,认为对同一数据的并发操作是小概率事件，不采用数据库自身锁机制。通常通过版本号或时间戳实现，减少锁开销，提高并发度。
+,MySQL,什么是悲观锁？,technical,easy,对数据被其他事务修改持保守态度，通过数据库自身锁机制实现，保证数据操作的排它性。
+,MySQL,乐观锁和悲观锁的适用场景分别是什么？,technical,medium,乐观锁适合读多写少场景，无死锁但无法阻止库外操作；悲观锁适合写多场景，有排它性防止冲突，但并发访问性较差。
+,MySQL,Innodb 使用表锁还是行锁？,technical,easy,绝大部分情况应该使用行锁。
+,MySQL,什么情况下 Innodb 会使用表锁？,technical,medium,1. 表比较大，事务需要更新全部或大部分数据；2. 事务涉及多个表，较复杂可能引起死锁造成大量回滚。
+,MySQL,MySQL 中主要有哪些日志类型及其作用？,technical,medium,1. undo log：Innodb 生成，用于事务回滚和 MVCC；2. redo log：Innodb 生成，用于持久性和故障恢复；3. binlog：Server 层生成，用于备份和主从复制。
+,MySQL,什么是 undo log？,technical,medium,记录事务更新前的数据状态，用于事务回滚和 MVCC。包含操作类型、旧值、位置、事务 ID 等，通过 roll_pointer 串成版本链。
+,MySQL,什么是 redo log？,technical,easy,物理日志，记录数据页做了什么修改。事务提交时先持久化到磁盘，用于掉电等故障恢复，保证持久性。
+,MySQL,redo log 和 undo log 有什么区别？,technical,medium,1. 记录内容：redo 记更新后值，undo 记更新前值；2. 崩溃处理：提交前崩溃用 undo 回滚，提交后崩溃用 redo 恢复。
+,MySQL,什么是 binlog？,technical,easy,Server 层生成的归档日志，记录所有表结构变更和数据修改（不含查询），用于备份恢复和主从复制。
+,MySQL,redo log 和 binlog 有什么区别？,technical,hard,1. 对象：binlog Server 层通用，redo log Innodb 引擎；2. 格式：redo 物理日志，binlog 有 Statement/Row/Mixed；3. 写入：binlog 追加，redo 循环写；4. 用途：binlog 主从/备份，redo 故障恢复。
+,MySQL,为什么需要两阶段提交？,technical,hard,保证 redo log 和 binlog 逻辑一致。若只刷一个导致宕机，会造成主库与从库数据不一致。
+,MySQL,两阶段提交的流程是什么？,technical,hard,分为 Prepare 和 Commit 阶段。MySQL 开启 XA 事务，binlog 为协调者，存储引擎为参与者。Commit 语句触发，redo log 写入拆分为 prepare 和 commit，中间穿插写 binlog。
+,MySQL,MySQL 支持哪些存储引擎？,technical,easy,可通过 SHOW ENGINES 命令查看。常用有 InnoDB（默认，支持事务、行锁）、MyISAM（不支持事务、表级锁）、Memory（内存存储，重启丢失）。
+,MySQL,InnoDB 与 MyISAM 的主要区别及适用场景是什么？,technical,medium,区别：InnoDB 支持事务/ACID/行锁/外键/崩溃恢复；MyISAM 不支持事务/表级锁/无外键。场景：InnoDB 适合高并发写、需数据一致性；MyISAM 适合读多写少。
+,MySQL,什么是幻读？,technical,medium,同一事务中前后两次查询同一范围，第二次看到了第一次没看到的行。通常发生在可重复读隔离级别下的当前读场景，专指新插入的行。
+,MySQL,幻读会带来哪些问题？,technical,easy,主要破坏行锁语义，导致并发控制失效；同时破坏了数据的一致性，使得事务内的多次查询结果不一致。
+,MySQL,MySQL 如何避免幻读问题？,technical,hard,存储引擎采用加间隙锁（Gap Lock）的方式。在可重复读级别下，使用 next-key lock（行锁 + 间隙锁）锁定索引记录及间隙，阻塞新插入操作。
+,MySQL,为什么会出现幻读现象？,technical,medium,因为普通的行锁只能锁定存在的行，无法对新插入的操作进行限定。如果只加行锁，其他事务可以插入符合查询条件的新行，导致当前事务再次查询时看到新数据。
+,MySQL,什么是间隙锁？它是如何解决幻读的？引入了什么问题？,technical,hard,间隙锁锁定行与行之间的间隙，阻塞新插入。解决幻读但降低了并发度，可能导致死锁（不同线程给同一间隙加锁互相等待）。
+,MySQL,SELECT ... FOR UPDATE 的使用场景是什么？,technical,medium,用于长事务或需要防止高并发数据出错时。开启事务后对数据进行加锁（当前读），防止其他事务修改，确保数据一致性（如库存扣减）。
+,MySQL,InnoDB 事务隔离级别的一致性视图是如何实现的？,technical,hard,基于快照读。事务启动时拍快照（基于整个库），事务内修改对其他事务不可见。根据发生时间处理 DDL 冲突（报错或锁住）。
+,MySQL,MySQL 事务是如何实现 MVCC 的？,technical,hard,每个事务有唯一 ID。启动时找到已提交最大事务 ID。更新时将旧值写入 undo log，并在数据页修改值。通过一致性视图判断版本可见性。
+,MySQL,MySQL 事务提交的两阶段提交流程是什么？,technical,hard,准备阶段：写 redo log 并持久化，状态设为 prepare。提交阶段：写 binlog 并持久化，调用引擎提交接口，redo log 状态设为 commit。确保 binlog 成功即视为成功。
+,MySQL,唯一索引和非唯一索引的范围查询在加锁优化上有何区别？,technical,hard,唯一索引等值查询退化为行锁，范围查询也遵循特定优化。非唯一索引范围查询会访问不满足条件的第一个值，不会退化，加锁范围更大。
+,MySQL,LIMIT 语句在执行过程中加锁有什么特点？,technical,medium,遍历到满足条件的指定数量数据后，后续不再加 next-key lock。这会影响锁的范围和性能，需注意死锁风险。
+,MySQL,MVCC 中事务如何判断对数据的读取权限（可见性）？,technical,medium,比较 up_limit_id 与 transaction id。若 up_limit_id >= transaction id 则可见；若 < 则去 undo log 查找，必须 up_limit_id > transaction id 才返回数据。
+,MySQL,什么是当前读？,technical,medium,先读后写，只能读当前的值。会更新事务内的 up_limit_id 为该事务的 transaction id。利用 record lock+gap lock 实现。
+,MySQL,隐藏列中的 DB_ROW_ID 有什么作用？DB_ROLL_PTR 在回滚和提交时是如何变化的？,technical,hard,DB_ROW_ID 存储行 ID。DB_ROLL_PTR 指向 undo log 版本链。回滚时保留旧版本，提交后由 purge 线程清理，不立即物理删除。
+,MySQL,为什么 RR 隔离级别能实现可重复读而 RC 不能？,technical,medium,RR 快照读不更新 up_limit_id，且用锁；RC 每次快照读更新 up_limit_id 为最新已提交事务 id，导致同一事务内读到不同版本。
+,MySQL,应该如何选择普通索引还是唯一索引？,technical,easy,查询上唯一索引命中即停，普通继续，性能差距微乎其微。更新上唯一索引不能使用 change buffer。建议尽可能使用普通索引。
+,MySQL,char 和 varchar 有什么区别？,technical,easy,char 固定长度，不足补空字节；varchar 变长，存储实际数据加长度信息。Compact 格式下 varchar 额外存储长度字节。
+,MySQL,MySQL 抖动是什么意思？,technical,easy,运行不稳定，后台刷脏页等任务占用 IO 或内存资源，导致 SQL 执行效率明显变慢，业务感知到性能波动。
+,MySQL,MySQL 抖动会带来什么问题？,technical,easy,系统不稳定，性能突然下降，对业务端体验非常不友好，影响正常交易或服务响应。
+,MySQL,如何让 MySQL 避免抖动？,technical,medium,设置合理的 innodb_io_capacity 参数，平时多关注脏页比例，不要让脏页比例经常接近 75%。
+,MySQL,什么是脏页？,technical,easy,当内存数据页跟磁盘数据页内容不一致的时候，称这个内存页为脏页。
+,MySQL,什么是干净页？,technical,easy,内存数据写入到磁盘后，内存和磁盘上的数据页的内容就一致了，称为干净页。
+,MySQL,脏页是怎么产生的？,technical,medium,使用了 WAL 技术，把数据库的随机写转化为顺序写，先写 redo log，延迟刷盘，副作用就是会产生脏页。
+,MySQL,什么是随机写？为什么随机写耗性能？,technical,medium,这次写磁盘的扇区和上次无关，需重新定位位置。机械运动慢，即使非机械也耗时，是成本最高的操作之一。
+,MySQL,什么是顺序写？,technical,easy,这次写磁盘的扇区就在上一次的下一个位置，不需要重新定位写磁盘的位置，速度很快。
+,MySQL,WAL 技术如何将随机写转化为顺序写？,technical,medium,先写 redo log 是顺序写的，等合适时候再写磁盘，间接将随机写变成了顺序写，提高了性能。
+,MySQL,为什么删除了一半数据，表文件大小没变化？,technical,easy,delete 只是标记记录位置或数据页为“可复用”，属于逻辑删除，物理空间未实际释放，表文件大小不变。
+,MySQL,表的数据信息存在哪里？,technical,easy,存储在数据文件/数据页中，具体取决于存储引擎，如 InnoDB 存储在表空间的数据文件中。
+,MySQL,innodb_file_per_table 参数的作用是什么？,technical,medium,控制表数据是否单独存储在.ibd 文件中。建议开启，便于管理。关闭时存储在共享表空间，删除表后空间不释放。
+,MySQL,表的结构信息存在哪里？,technical,easy,MySQL 8.0 前存在.frm 文件；8.0 后允许存在系统数据表中（如数据字典），不再依赖.frm 文件。
+,MySQL,删除表数据后，如何让表文件大小变小？,technical,medium,重建表消除空洞。使用 alter table t engine=InnoDB 或 optimize table t。truncate table t 等同于 drop+create。
+,MySQL,什么是空洞？它是如何产生的？,technical,medium,被标记可复用但未使用的存储空间。产生于 delete 删除、插入引起页分裂、修改操作（先删后插）。
+,MySQL,Count(*) 执行慢怎么办？,technical,hard,InnoDB 需逐行扫描累积，无法像 MyISAM 直接返回。要么忍受，要么应用层手动记录总数。
+,MySQL,Count() 函数的语义是什么？,technical,medium,聚合函数，对结果集逐行判断。若参数非 NULL 则累计值加 1，否则不加。InnoDB 需读取数据行判断。
+,MySQL,Count(字段)、Count(主键 id)、Count(1)、Count(*) 在 InnoDB 中的计数原理有何区别？,technical,hard,Count(字段): 判空累加；Count(pk): 遍历取 id 累加；Count(1): 遍历不取值放 1 累加；Count(*): 专门优化不取值，专取行数。Server 层决定返回值。
+,MySQL,Order by 子句是如何工作的？,technical,hard,分配 sort_buffer 内存排序。内存不足用磁盘临时文件。可选全字段排序或 rowid 排序（需回表）。建索引可避免排序。
+,MySQL,如何正确地显示随机消息（随机查询优化）？,technical,hard,避免 order by rand()。可用随机 ID 法：生成介于主键最小和最大值之间的随机数，取不小于该随机数的主键 ID 对应的行。
+,MySQL,为什么 SQL 语句逻辑相同，性能却差异巨大？,technical,medium,主要因索引失效。1. 字段函数操作破坏有序性；2. 隐式类型转换（如字符串转数字）；3. 隐式字符编码转换。这些会导致优化器放弃树搜索，转为全表扫描。
+,MySQL,为什么我只查一行的语句，也执行这么慢？,technical,medium,原因有四：1. 数据库本身资源不足被堵；2. SQL 被锁（表锁/行锁）；3. 索引使用不当未走索引；4. 数据特点导致一致性读需多次回滚读取当前事务值。
+,MySQL,为什么临时表可以重名？,technical,easy,用户临时表是线程可见的，互不干扰。线程退出时自动删除，无需收尾。在 row 模式下 binlog 不记录，避免主备不一致。注意区分内存临时表。
+,MySQL,group-by 的使用原则是什么？,technical,medium,1. 无排序要求加 order by null；2. 尽量用索引，explain 检查无 Using temporary/filesort；3. 小数据量用内存临时表；4. 大数据量用 SQL_BIG_RESULT 提示直接排序。
+,MySQL,一张表可以存储多少条信息？,technical,hard,取决于 B+ 树高度和页大小。InnoDB 默认页 16KB，存约 16 条记录。非叶节点存指针，高 3 层可存约 6700 万条。一般索引高度在 3 左右。
+,MySQL,"有一个联合索引 (A,B,C)，select * from test where a,c 会不会使用索引？",technical,medium,不会。违反最左前缀原则。B+ 树按 A->B->C 排序，跳过 B 后 C 的值不再连续，无法区间查找，只能全表扫描或效率极低。
+,MySQL,MySQL 为什么要进行分库分表？,technical,easy,解决单库瓶颈（磁盘空间、I/O、处理能力）和单表瓶颈（CRUD 困难、索引膨胀、查询超时）。通过切分提升并发能力和系统稳定性。
+,MySQL,什么是垂直分表及其拆分原则？,technical,easy,基于列字段拆分大表。原则：1. 不常用字段单独放；2. 大字段（text/blob）拆到附表；3. 业务组合查询列放一起。减少 IO 浪费。
+,MySQL,什么是垂直分库及其适用场景？,technical,medium,按业务模块拆分数据库。适用于高并发、单机资源（CPU/内存/连接数）瓶颈场景。能解耦业务，方便微服务改造和管理。
+,MySQL,什么是水平分表？,technical,easy,将一个大表的数据按行拆分到多个结构相同的表中。每个表只有部分数据，合起来是全部数据。用于解决单表数据量过大导致的查询慢问题。
+,MySQL,什么是水平分库？,technical,medium,将同一张表的数据按规则拆分到不同数据库服务器，结构相同数据不同，粒度比分表大，解决单库资源瓶颈。
+,MySQL,分库分表的常见切分规则有哪些？,technical,easy,包括 Range（范围）、Hash 取模、地理区域划分、时间范围切分等，需根据业务场景选择合适的分片键和策略。
+,MySQL,什么是垂直分表和垂直分库？,technical,medium,垂直分表是将一个表的字段拆分到多个表；垂直分库是根据业务相关性将表放到不同数据库服务器，避免资源竞争。
+,MySQL,单表数据量建议控制在多少以内？,technical,easy,常规建议单表在 1000 万以内，推荐百万级别，优先进行 SQL 和索引优化，结合缓存等方案，不宜过早分库分表。
+,MySQL,分库分表后主要面临哪些问题？,technical,hard,包括跨节点 Join 关联查询困难、分布式事务一致性、排序分页复杂、全局主键冲突、二次扩容及技术选型问题。
+,MySQL,分库分表后如何解决全局主键重复问题？,technical,medium,不能使用自增 ID，通常采用雪花算法、UUID 或数据库号加自增 ID 组合等方式生成唯一全局主键。
+,MySQL,分库分表后如何处理分布式事务问题？,technical,hard,涉及跨库事务，需引入分布式事务解决方案（如 TCC、Seata 等）或最终一致性方案来保证数据一致性。
+,MySQL,分库分表后如何实现数据的排序和分页？,technical,hard,需在各个分片节点分别排序，汇总后再排序；非分片字段排序更复杂，会增加 CPU/IO 损耗，需特殊处理。
+,MySQL,海量数据排序的基本思路是什么？,technical,medium,分割段阶段使用内部排序生成顺串，合并阶段进行多路归并，利用败者树减少比较次数以降低 I/O 开销。
+,MySQL,MySQL 主从复制的基本概念和工作模式是什么？,technical,easy,数据从主节点复制到从节点，默认异步复制，支持全库、特定库或表复制，用于备份和读写分离。
+,MySQL,MySQL 主从复制的主要用途有哪些？,technical,easy,主要用于数据实时备份与故障切换、实现读写分离降低主库压力、以及通过增加节点进行架构扩展。
+,MySQL,MySQL 主从复制涉及哪几个线程？各自作用是什么？,technical,medium,主节点有 Binlog Dump Thread 发送日志；从节点有 I/O Thread 接收日志存 Relay Log，SQL Thread 解析执行日志。
+,MySQL,MySQL 主从复制的基本流程是怎样的？,technical,medium,从节点 I/O 线程连接主节点请求日志，主节点返回日志内容，从节点存入 Relay Log，SQL 线程读取并执行以保证一致。
+,MySQL,MySQL 主从复制的流程是什么？,technical,medium,1. Master 写 binlog; 2. Slave I/O 线程读取 binlog 并更新 relay log，记录文件位置和文件名; 3. Slave SQL 线程解析 relay log 并在本地执行。
+,MySQL,MySQL 主从复制有哪些模式？,technical,easy,包括异步模式、半同步模式、全同步模式和 GTID 复制模式。
+,MySQL,MySQL 常见的高可用方案有哪些？,technical,medium,基于主从复制（Keepalived）、基于 Galera 协议、基于 NDB 协议、基于中间件/Proxy、基于共享存储、基于主机高可用。
+,MySQL,MySQL 数据库架构升级的路径是怎样的？,technical,medium,演进路径为：单机 -> 主从（读写分离） -> 双主（解决写瓶颈） -> 分库分表（解决并发和 IO 瓶颈）。
+,MySQL,单表数据量大且持续增长导致性能慢，如何优化？,technical,hard,先软优化（参数调优、SQL 改写、索引优化），再硬优化（硬件升级），最后考虑分库分表。避免盲目分库分表，优先缓存、读写分离。
+,MySQL,MySQL 分库分表能解决哪些问题？,technical,medium,解决连接数过多、单表海量数据查询性能、单台数据库并发压力、磁盘 IO、网络 IO 及 CPU 瓶颈。
+,MySQL,排它锁和共享锁是什么，有什么区别？,technical,easy,排它锁（X 锁）独占，防修改；共享锁（S 锁）允许多读，防写。区别在于是否允许其他事务同时持有及操作权限不同。
+,MySQL,MySQL 的行级锁有哪些，作用是什么？,technical,medium,Record Lock（记录锁）、Gap Lock（间隙锁，解决幻读）、Next-Key Lock（临键锁，Record+Gap）。
+,MySQL,数据库悲观锁和乐观锁的原理和使用场景有哪些？,technical,medium,乐观锁（版本号/时间戳，适合读多写少）；悲观锁（数据库锁机制，适合写多读少，防止冲突但并发低）。
+,MySQL,MySQL 的架构组件主要包含哪些？,technical,medium,主要包括连接器（建立连接、权限管理）、查询缓存（8.0 已删除）、分析器（词法语法分析）、执行器（预处理、优化、执行）、存储引擎等。
+,MySQL,SQL 语句的执行过程分为哪几个阶段？,technical,medium,分为预处理阶段（检查表字段、扩展*）、优化阶段（选择成本最小的执行计划）、执行阶段（根据计划读取记录返回给客户端）。
+,MySQL,事务的四⼤特性有哪些？,technical,medium,ACID。原子性（全做或全回滚）、一致性（状态正确）、隔离性（并发独立）、持久性（提交后永久保存）。
+,MySQL,数据库的事务隔离级别有哪些？,technical,medium,读未提交、读已提交、可重复读、序列化。隔离性递增，逐步解决脏读、不可重复读和幻读问题。
+,MySQL,为什么 MySQL 索引使用 B+ 树？,technical,hard,非叶节点仅存索引，树更矮胖减少 I/O；叶子节点链表连接利于范围查询；插入删除效率较高。
+,MySQL,你对关系范式有哪些了解？,technical,medium,1NF（列原子性）、2NF（依赖主键）、3NF（消除传递依赖）。旨在减少冗余、提高一致性、避免操作异常。
+,MySQL,可以对数据库表做哪些优化？,technical,medium,合理分表、建立索引、避免 Select *、选合适数据类型、少用 NULL、控制单表字段数。
+,MySQL,MongoDB 和 MySQL 有哪些区别？,technical,medium,模型（文档 vs 关系）、查询（API vs SQL）、模式（动态 vs 静态）、扩展性（横向分片 vs 主从复制）及应用场景不同。
+,MySQL,什么是慢查询？原因是什么？可以怎么优化？,technical,medium,超过超时时间的查询。原因：SQL 复杂、数据量大、缺索引、设计差、资源不足。优化：Explain、加索引、调结构。
+,MySQL,Redis 是什么？有哪些特点？,technical,easy,开源基于内存的键值数据库。特点：基于内存读写快、支持持久化（RDB/AOF）、多种数据结构、原子性操作、支持分布式集群、内存淘汰机制。
+,MySQL,为什么要使用 Redis 而不仅仅依赖 MySQL？,technical,medium,Redis 高性能高并发，读写极快，适合缓存高频数据，减轻 MySQL 压力。数据结构丰富灵活，支持复杂功能。两者常配合使用，Redis 处理高速访问，MySQL 负责持久化。
+,MySQL,Redis 是单线程的吗？,technical,medium,网络请求模块单线程，但程序包含后台线程。2.6 版有 AOF 刷盘等后台线程，4.0 增加 lazyfree 线程。6.0 后网络 I/O 多线程，但命令执行仍为单线程。
+,MySQL,Redis 单线程为什么还这么快？,technical,medium,1. 基于内存存储，速度远快于磁盘。2. 非阻塞单线程，无上下文切换和锁竞争开销。3. 高效数据结构（如 SDS）。4. I/O 多路复用机制，单线程处理多连接。
+,MySQL,Redis 常见的五种数据类型及其应用场景分别是什么？,technical,medium,String(缓存/计数/锁)、List(队列/点赞顺序)、Set(去重/交集)、Hash(对象存储)、Zset(有序列表)。底层结构根据数据量动态选择（如压缩列表或哈希表）。
+,MySQL,String 类型的底层实现及典型应用场景是什么？,technical,easy,底层为 SDS。场景：缓存对象 JSON、计数（原子性）、分布式锁（SETNX）、共享 Session。常用命令 get/set/del。
+,MySQL,List 类型的底层数据结构演变及应用场景是什么？,technical,hard,早期压缩列表/双向链表，3.2 后统一为 quicklist，7.0 废弃压缩列表用 listpack。场景：朋友圈点赞顺序、消息队列（Lpush/Rpop）。
+,MySQL,Set 类型的底层实现及典型应用场景是什么？,technical,medium,底层整数集合或哈希表。场景：点赞（文章 ID 存用户 ID）、共同关注（求交集）、抽奖活动（自动去重）。
+,MySQL,Hash 类型的底层实现及适用场景是什么？,technical,easy,底层压缩列表或哈希表。适合存储对象属性，节省内存。常用于存储用户信息、商品详情等结构化数据。
+,MySQL,Redis Hash 类型的应用场景是什么？,technical,easy,适合存储频繁变化的属性，如购物车（用户 id 为 key，商品 id 为 field，数量为 value）。
+,MySQL,Redis Zset 类型的底层数据结构是什么？,technical,medium,由压缩列表或跳表实现。
+,MySQL,Redis Zset 的典型应用场景有哪些？,technical,easy,需展示最新列表、排行榜场景，如成绩排名、游戏积分、商品销量排名等。
+,MySQL,Redis 跳表的查找过程是怎样的？,technical,hard,从最高层开始遍历，比较权重和 SDS 数据，满足条件访问下一节点，否则沿 level 指针下移。
+,MySQL,Redis 新增的四种数据类型及其用途分别是什么？,technical,medium,"BitMap(二值统计), HyperLogLog(基数统计), GEO(地理位置), Stream(消息队列)。"
+,MySQL,Redis GEO 类型的底层实现原理是什么？,technical,hard,底层由 Zset 实现，使用 GeoHash 编码将经纬度转换为 Zset 元素权重分数。
+,MySQL,Redis 中 SDS 相比 C 字符串有什么优势？,technical,medium,可存二进制，头部保长度 O(1) 获取，支持动态扩容，不受空字符限制。
+,MySQL,Redis 双端链表的优缺点是什么？,technical,medium,优：两端插入删除 O(1)。缺：内存不连续 CPU 缓存差，节点开销大。
+,MySQL,什么是压缩列表的连锁更新问题？,technical,hard,元素变多或变大导致内存重分配，影响后续节点性能。Quicklist/Listpack 规避了此问题。
+,MySQL,Redis 哈希表如何解决哈希冲突？,technical,easy,采用拉链法，将相同哈希值的数据串起来形成链表。
+,MySQL,跳表为什么能实现 O(logN) 的查找复杂度？,technical,medium,在链表基础上改进为多层有序链表，通过多层索引快速定位。
+,MySQL,Quicklist 和 Listpack 是如何解决压缩列表问题的？,technical,hard,Quicklist 是双向链表 + 压缩列表；Listpack 只记当前节点长度，避免连锁更新。
+,MySQL,Redis 有哪几种数据持久化方式？,technical,easy,AOF 日志、RDB 快照、混合持久化（Redis 4.0 新增）。
+,MySQL,Redis 的 AOF 日志机制是什么？,technical,medium,写后日志，每执行写操作命令追加写入文件，重启时读取构建数据库。
+,MySQL,Redis 为什么使用写后日志而不是写前日志？,technical,medium,避免记录错误命令，命令执行后才记录，不阻塞当前写操作。
+,MySQL,Redis 的 AOF 写回策略有哪些？,technical,easy,三种策略：Always（每次同步写回，高可靠）、Everysec（每秒写回，平衡性能与可靠性）、No（操作系统控制写回时机，高性能但可能丢数据）。选择取决于对性能和可靠性的权衡。
+,MySQL,Redis 中 AOF 的重写机制是什么？,technical,medium,扫描所有键值对生成写操作命令写入新文件，完成后替换旧文件。由后台子进程完成，避免阻塞主线程。核心是“一处拷贝，两处日志”以减少 IO 开销。
+,MySQL,Redis AOF 重写的触发时机有哪些？,technical,medium,1. bgrewriteaof 命令执行；2. 主从复制完成 RDB 加载；3. 设置为待调度；4. 文件大小比例或绝对值超出阈值。注意不能有正在运行的 RDB 或 AOF 重写子进程。
+,MySQL,Redis 中 save 和 bgsave 命令的区别是什么？,technical,easy,save 在主线程执行，会阻塞主线程；bgsave 创建子进程执行，不阻塞主线程。生产环境推荐使用 bgsave 以避免影响业务性能。
+,MySQL,Redis 混合持久化的原理和优缺点是什么？,technical,hard,原理：重写时将共享内存以 RDB 格式写入，增量命令以 AOF 格式追加。优点：重启快且数据丢失少。缺点：可读性差，兼容性低（需 Redis 4.0+）。
+,MySQL,Redis 如何实现高可用？,technical,medium,通过主从复制实现读写分离和数据副本一致。写操作先到主库，然后主库将写操作同步给从库，保证数据一致性并提供读扩展能力。
+,MySQL,Redis 主从全量复制的过程是怎样的？,technical,medium,1. 从库建连并通知同步；2. 主库返回 runID 和 offset；3. 主库发送期间新收到的写命令给从库。确保数据在同步期间的完整性。
+,MySQL,Redis 主从复制中的增量复制是如何工作的？,technical,medium,基于主从复制偏移量，当主从断开重连时，主库将断点后的写命令发送给从库进行同步，减少数据传输量，提高效率。
+,Redis,Redis 从库宕机重连后如何进行数据同步？,technical,medium,从库发送 psync 命令及当前 offset。主库判断差值与 repl_backlog_buffer 大小。若差值过大则全量复制；若差值在 buffer 内则进行增量复制，发送差值范围内的写命令。
+,Redis,Redis 主从同步有哪些模式？,technical,easy,主要有三种模式：全量复制（初次同步）、基于长连接的命令传播（正常运行）、增量复制（断线重连）。具体取决于 master_repl_offset 和 slave_repl_offset 的差值是否超过 repl_backlog_buffer。
+,Redis,Redis 主从全量同步为什么使用 RDB 而不是 AOF？,technical,medium,1. RDB 是压缩二进制文件，体积小；AOF 记录每次写操作，文件大且冗余。2. AOF 刷盘策略影响性能；RDB 仅在定时备份或全量同步时触发，对性能影响小。
+,Redis,Redis 哨兵模式的作用是什么？,technical,easy,监控主从是否正常，出现问题通知相关人员，实现自动主从切换（故障转移），并提供统一配置管理获取主从地址，解决手动恢复问题。
+,Redis,Redis 为什么要使用切片集群方案？,technical,easy,当单台服务器无法承载大数据量时，将数据分布在不同服务器上，降低对单主节点的依赖，提高读写性能和系统可用性。
+,Redis,什么是 Redis 主从复制？,technical,easy,将一个 Redis 服务器的数据复制到其他服务器。主节点可读写，写操作自动同步给从节点；从节点一般只读，执行同步过来的写命令。
+,Redis,Redis 主从复制的同步过程是怎样的？,technical,medium,1.建立连接；2.主节点创建 RDB 快照；3.发送 RDB 文件和 AOF 缓冲区内容；4.从节点载入 RDB 并执行 AOF 命令；5.转入增量复制阶段；6.维持心跳和命令传播。
+,Redis,Redis 哨兵机制是什么？,technical,easy,用于监控和管理 Redis 实例，实现自动故障转移和高可用性。由一组独立进程组成，定期检查状态，主节点宕机时选举新主节点。
+,Redis,如何避免 Redis 主从数据不一致？,technical,medium,1.持久化和复制配置（启用 RDB/AOF）；2.保证网络稳定性（同机房，低延迟）；3.监控和报警（监测复制延迟、连接状态）。
+,Redis,Redis 哨兵机制的工作原理是什么？,technical,medium,1.监控所有实例健康；2.故障检测（主不可用）；3.故障转移（选举新主，通知从节点更新）；4.自动恢复（主节点可用后重新加入）。
+,Redis,Redis 切片集群的工作原理是什么？,technical,hard,1.数据分片（16384 个槽）；2.节点间 Gossip 通信；3.数据分布（CRC16 哈希定槽）；4.故障检测与槽重分配；5.客户端路由（直接计算槽发送请求）；6.数据复制（主从异步）。
+,Redis,什么是 Redis 集群脑裂？,technical,hard,主节点网络异常与从节点失联，但与客户端正常。客户端继续向主节点写入数据，导致主从数据不一致。需通过 quorum 机制等防止误判。
+,Redis,集群脑裂导致数据丢失的原因及解决方案是什么？,technical,medium,原因：主节点失联但网络未断，哨兵选举新主，旧主恢复后降级，期间写入旧主的数据丢失。解决：设置从节点阈值 N 和 ACK 延迟 T，当不满足条件时禁止主节点写数据，防止脑裂产生双主。
+,Redis,Redis 的过期删除策略有哪些？,technical,easy,包括定时删除（CPU 占用高）、惰性删除（浪费内存）和定期删除（随机抽查）。Redis 采用惰性删除 + 定期删除的组合策略，平衡 CPU 使用和内存浪费。
+,Redis,Redis 实际采用的过期删除策略是什么，具体流程如何？,technical,medium,采用惰性删除 + 定期删除。惰性删除在访问 key 时检查过期；定期删除每隔 10s 随机抽 20 个 key 检查，若过期占比超 25% 则继续删除，否则停止等待下一轮。
+,Redis,Redis 常见的内存淘汰策略有哪些？,technical,medium,包括 NoEviction、VolatileTTL、VolatitleLRU/LFU/Random、AllKeysLRU/LFU/Random 等。可通过 config get maxmemory-policy 命令查看当前策略配置。
+,Redis,Redis 中的 LRU 算法和 LFU 算法有什么区别？,technical,medium,LRU 基于最近访问时间，近似实现为随机采样淘汰最久未用；LFU 基于使用频率，维护计数淘汰最少访问对象。LRU 关注近期热度，LFU 关注长期热度。
+,Redis,什么是缓存雪崩，如何避免？,technical,medium,大量缓存同时失效或 Redis 宕机导致 DB 压力剧增。解决：过期时间加随机数、互斥锁重建缓存、后台更新、服务熔断限流、构建高可靠集群。
+,Redis,什么是缓存击穿？,technical,easy,热点 key 过期时，大量并发请求查询该缓存不存在的数据，导致请求直接访问数据库，增加数据库压力。
+,Redis,什么是缓存穿透？,technical,medium,访问的数据既不在缓存也不在数据库，导致请求直接查询数据库增加负载。原因包括业务误删数据或恶意攻击构造不存在的 Key。解决办法：对非法请求限流、在缓存中设置空值、使用布隆过滤器快速判断数据是否存在。
+,Redis,如何保证数据库和缓存的一致性？,technical,hard,常用 Cache Aside 策略：写时先更新数据库再删除缓存。若对命中率要求高可采用更新缓存方案，但需通过分布式锁或短过期时间解决并发不一致问题。确保删除成功可使用重试机制、消息队列或订阅 Binlog。
+,Redis,如何保证删除缓存操作一定能成功？,technical,hard,1. 重试机制：失败后从消息队列重读数据再次删除；2. 引入消息队列：异步处理删除任务；3. 订阅 Binlog：模拟 MySQL 从节点解析日志，获取操作数据后执行删除，确保最终一致性。
+,Redis,什么是 Redis，具有哪些特点？,technical,easy,"基于内存的键值存储数据库，读写速度极快。支持多种数据结构（String, Hash, List 等），提供分布式特性。常用于缓存、消息队列、分布式锁及键值存储，具有高可扩展性和可用性。"
+,Redis,Redis 为什么快？,technical,medium,"1. 基于内存操作，减少磁盘 IO；2. 设计了高效的专用数据结构（如 SDS, 跳表）；3. 单线程模型避免上下文切换和资源竞争；4. 采用 I/O 多路复用机制同时监听多个 Socket。"
+,Redis,为什么 Redis 是单线程？,technical,medium,网络请求模块使用单线程处理，减少上下文切换开销和资源竞争导致的锁问题。官方认为 CPU 不是瓶颈（瓶颈在内存或带宽），单线程易实现且性能足够，无需复杂的多线程同步。
+,Redis,Redis 为什么又要引入多线程呢？,technical,medium,Redis 6.0 引入多线程主要是为了解决网络 I/O 模块带来的 CPU 耗时问题。多线程用于处理网络 I/O，充分利用 CPU 资源，减少网络 I/O 阻塞带来的性能损耗，性能提升至少一倍以上。
+,Redis,Redis 有哪些常见数据类型？,technical,easy,五种常见类型：String（字符串）、Hash（哈希）、List（列表）、Set（集合）、Zset（有序集合）。后续版本新增 BitMap、HyperLogLog、GEO、Stream 四种特殊类型，分别用于位运算、基数估算、地理位置和消息队列。
+,Redis,Redis 数据类型的常见应用场景有哪些？,technical,medium,String 用于缓存对象、计数、分布式锁；Hash 用于对象存储、购物车；List 用于消息队列；Set 用于去重、交集计算（点赞、抽奖）；Zset 用于排行榜。BitMap 用于签到状态，HLL 用于 UV 统计，GEO 用于地理位置，Stream 用于高级消息队列。
+,Redis,Redis 底层使用了什么数据结构？,technical,hard,1. SDS：简单动态字符串，存储二进制安全数据；2. 双端链表：实现 List；3. 压缩列表：元素少时节省内存；4. 哈希表：实现 Hash 类型；5. 整数集合：存储整数值；6. 跳表：实现 Sorted Set，查找复杂度 O(logN)。
+,Redis,Redis与MySQL的区别是什么？,technical,medium,Redis基于键值对，存内存，用命令集，高性能低延迟，适合读多写少。MySQL是关系型，存磁盘，用SQL，支持复杂查询和事务，适合大规模数据集。
+,Redis,Redis与Memcached有什么区别？,technical,medium,Redis支持多种数据结构，有持久性，通常更快（单线程）。Memcached仅简单键值，重启丢数据，多线程。Redis适合丰富功能及高可用场景。
+,Redis,Redis为什么不使用红黑树，而使用跳表？,technical,hard,1. 跳表实现简单，易调试。2. 范围查询支持好，符合有序集合特性。3. 插入删除性能较好，尤其在有序集合场景下。
+,Redis,Redis如何实现分布式锁？,technical,medium,使用SETNX命令，key不存在则加锁。设置unique_value防误删，解锁时校验。设置过期时间（EX/PX）防死锁。
+,Redis,Redis持久化机制有哪些？,technical,medium,1. AOF日志：追加写操作命令。2. RDB快照：二进制写入磁盘。3. 混合持久化：Redis 4.0新增，集成两者优点。
+,Redis,AOF的三种写回策略是什么？,technical,easy,Always（每次同步）、Everysec（每秒同步）、No（系统决定）。可靠性从高到低，性能从低到高。
+,Redis,什么是Redis事务？,technical,medium,一组命令有序执行，不被打断。用MULTI/EXEC。命令入队等待EXEC执行。支持WATCH监视，键被修改则取消事务。
+,Redis,缓存中的热点数据和冷数据是什么？,technical,easy,热数据指访问次数较多，冷数据指访问很少或不访问。只有热数据在缓存中才有价值。
+,Redis,Redis集群模式有哪些？,technical,medium,1. 主从复制：数据复制到从节点。2. 哨兵：监控状态，自动故障转移。3. 切片集群：数据分布，降低单点依赖。
+,Redis,Redis的哨兵是用来做什么的？,technical,easy,监控Redis实例状态，发现主节点故障并自动进行故障转移。监控连接状态、持久性问题等。
+,Redis,主从模式的同步过程是怎样的？,technical,hard,1. 连接协商：交换runID和进度。2. 全量同步：主发RDB快照，从加载。3. 增量同步：主记写命令，从执行PSYNC。
+,Redis,Redis哨兵的工作原理是什么？,technical,hard,1. 判断存活：定期PING，无响应视为主观下线。2. 选出新主：协调选举从节点升级为主，通知其他切换。
+,Redis,Redis 哨兵模式下主从切换的具体流程是什么？,technical,medium,1. 选择候选从服务器（通常选复制偏移量最大的）。2. 计算投票（考量偏移量、连接质量、优先级）。3. 达成共识（多数哨兵同意）。4. 更新配置信息（通知其他哨兵和客户端）。5. 通知客户端新主节点位置。
+,Redis,什么是缓存雪崩、击穿和穿透？分别如何解决？,technical,medium,雪崩：大量缓存同时失效。解法：分散过期时间或永不过期。击穿：热点 key 过期导致高并发查库。解法：互斥锁或逻辑过期。穿透：查询不存在的数据。解法：布隆过滤器或参数合法性校验。
+,Redis,在实际应用中 Redis 通常有哪些使用场景？,technical,easy,1. 缓存层：存储频繁访问数据，提高访问速度。2. 消息队列：通过发布订阅模式传递消息。3. 数据存储：存储会话数据、计数器等。
+,Redis,什么是单例模式？有哪些常见实现方式？,technical,medium,确保一个类只有一个实例并提供全局访问点。关键点：私有构造函数、私有静态变量、公有静态方法。常见实现包括懒汉式（延迟加载，线程不安全）和饿汉式（加载即创建，线程安全）。
+,Redis,单例模式有哪些常见的实现方式？,technical,easy,主要有五种：饿汉式、懒汉式（线程安全）、双重检查锁（DCL）、静态内部类、枚举类。
+,Redis,饿汉式和懒汉式单例有什么区别？,technical,easy,饿汉式在类加载时就实例化，线程安全但可能浪费资源；懒汉式延迟到使用时才实例化，节约资源但需处理线程安全问题。
+,Redis,线程安全的懒汉式单例有什么缺点？,technical,medium,虽然解决了线程安全问题，但性能较低。因为每次调用 get 方法都要加锁，即使实例已创建，后续线程仍需等待锁释放，造成阻塞。
+,Redis,双重检查锁（DCL）是如何解决线程安全和性能问题的？,technical,medium,通过两次 null 检查和 synchronized 锁。第一次检查避免不必要的锁开销，第二次检查保证线程安全。仅首次实例化时加锁，提升性能。
+,Redis,为什么双重检查锁中需要使用 volatile 关键字？,technical,hard,防止指令重排。new 对象过程涉及分配内存、初始化、赋值，重排可能导致线程获取未初始化对象。volatile 禁止重排，保证可见性和有序性。
+,Redis,静态内部类如何实现线程安全的单例？,technical,medium,利用 JVM 类加载机制。外部类加载时内部类不加载，调用 getInstance 时触发内部类加载并初始化实例。JVM 保证初始化只执行一次且线程安全。
+,Redis,枚举类实现单例有什么优势？,technical,medium,写法简单，天然线程安全。最重要的是能防止反射攻击和反序列化调用，确保在任何情况下都只有一个实例。
+,Redis,如何防止反序列化破坏单例模式？,technical,medium,重写 readResolve() 方法。在反序列化过程中，该方法返回已有的 singleton 实例，从而避免创建新的对象实例。
+,Redis,单例模式通常适用于哪些应用场景？,technical,easy,适用于资源共享场景，如数据库连接池、线程池等。用于控制对特定资源的访问，避免重复创建和浪费系统资源。
+,Redis,什么是单例模式？其核心特点是什么？,technical,easy,确保一个类只有一个实例，并提供全局访问点。常用于配置信息、日志记录器、线程池等场景。避免数据不致性和内存浪费，提高性能。
+,Redis,单例模式的适用场景有哪些？,technical,easy,1. 频繁实例化然后销毁的对象；2. 实例化耗费时间或资源多的对象（如数据库连接池）；3. 控制资源通信（如线程池）。
+,Redis,什么是工厂模式？它主要分为哪几种类型？,technical,medium,一种创建型设计模式，封装对象创建逻辑，不对客户端暴露创建细节。通常分为简单工厂、工厂方法和抽象工厂三类。
+,Redis,简单工厂模式与工厂方法模式有什么区别？,technical,medium,简单工厂由一个类负责创建多个产品，新增产品需修改工厂类，违反开闭原则。工厂方法将工厂变为抽象接口，具体创建交给子类，通过多态解决分支，更符合开闭原则。
+,Redis,抽象工厂模式的作用及与工厂方法模式有何不同？,technical,hard,抽象工厂提供创建一系列相关对象的接口。工厂方法每厂只产一类产品，抽象工厂统一生产一族产品。新增产品族方便，但新增产品等级结构改动大。
+,Redis,工厂模式的主要应用场景有哪些？,technical,medium,1. 不知道所需具体类时；2. 希望子类指定创建对象时；3. 委托子类代理时。例如：根据数据库类型创建连接、根据文件类型选择解析器等。
+,Redis,什么是观察者模式？其主要构成有哪些？,technical,medium,定义一对多依赖关系，主题状态变化时通知所有观察者。主要构成包括主题（Subject）、观察者（Observer）、具体主题和具体观察者。
+,Redis,观察者模式的优缺点分别是什么？,technical,medium,优点：解除耦合，双方依赖抽象。缺点：调试复杂，Java中消息通知顺序执行，一个观察者卡顿会影响整体效率，常采用异步实现。
+,Redis,观察者模式的使用场景有哪些？,technical,medium,1.事件处理（如 GUI 按钮点击）；2.发布订阅模型（消息队列、事件总线）；3.MVC 架构中模型与视图通信；4.异步任务完成通知。
+,Redis,什么是代理模式？,technical,easy,代理模式是一种结构型设计模式，主要目的是在访问某个对象时引入代理对象，通过代理控制对原始对象的访问。用于实现懒加载、控制访问、监控对象等场景。
+,Redis,代理模式的主要角色有哪些？,technical,medium,1.抽象主题（Subject）：定义代理和真实对象的共同接口；2.真实主题（Real Subject）：实际执行业务逻辑的对象；3.代理（Proxy）：包含真实主题引用，控制访问并负责实例创建或删除。
+,Redis,代理模式的常见应用场景有哪些？,technical,medium,1.远程代理：隐藏不同地址空间对象；2.虚拟代理：按需创建大对象（如图片懒加载）；3.安全代理：控制访问权限；4.智能指引：附加内务处理（如引用计数、内存装入）。
+,Redis,什么是策略模式？,technical,easy,策略模式是一种行为设计模式，定义了一系列算法并单独封装，使它们可以互相替换。算法独立于客户端变化，对外接口一致，仅内部实现不同。
+,Redis,策略模式的主要构成部分有哪些？,technical,medium,1.策略接口（Strategy）：定义算法抽象；2.具体策略类（ConcreteStrategy）：实现具体算法；3.环境类（Context）：操作策略上下文，持有策略接口引用并设置具体策略。
+,Redis,策略模式的优缺点是什么？,technical,medium,优点：避免多重条件转移语句，降低复杂度，代码易维护。缺点：客户端必须知道所有策略类并自行决定使用哪一个，适用场景受限。
+,Redis,什么是装饰模式（Decorator Pattern）？,technical,easy,装饰模式是一种结构型设计模式，允许在不改变原始类接口的情况下，动态地添加功能或责任。通过创建装饰类包裹原始类实例，提供额外功能，比生成子类更灵活。
+,Redis,装饰模式的主要角色有哪些？,technical,medium,1. 组件接口：定义共同接口；2. 具体组件：实现接口，被装饰对象；3. 装饰器：持有组件引用，实现接口，通常是抽象类；4. 具体装饰器：继承装饰器，实现具体逻辑。
+,Redis,装饰模式在什么情况下使用？,technical,medium,当需要执行特殊行为时，客户代码可以在运行时根据需要有选择地、按顺序地使用装饰功能包装对象。将每个要装饰的功能放在单独的类中，进行动态包装。
+,Redis,装饰模式与生成子类相比有什么优势？,technical,medium,装饰模式比生成子类更为灵活。它允许动态地添加功能，而不需要修改原始类或创建大量子类，避免了继承带来的高耦合和静态扩展限制。
+,Redis,代码示例中如何体现策略模式的使用？,technical,medium,通过 cart.setPricingStrategy() 设置不同的策略（如九折、满减），调用 checkout() 计算价格。策略模式将算法封装起来，使它们可以互相替换，独立于用户使用。
+,Redis,23 种设计模式分为哪几类？,technical,easy,分为三大类：1. 创建型模式（工厂方法、抽象工厂、原型、单例、构建器）；2. 结构型模式（适配器、桥接、组合、装饰、外观、享元、代理）；3. 行为型模式（职责链、命令、解释器等）。
+,Redis,什么是单例模式（Singleton）？,technical,easy,保证一个类只有一个实例，并提供一个访问它的全局访问点。常用于全局配置、数据库连接池等场景，确保资源唯一性。
+,Redis,什么是工厂方法模式（Factory Method）？,technical,medium,定义一个创建对象的接口，但由子类决定需要实例化哪一个类。使得子类实例化的过程推迟，解耦了客户端与具体产品类的依赖。
+,Redis,什么是抽象工厂模式（Abstract Factory）？,technical,medium,提供一个接口，可以创建一系列相关或相互依赖的对象，而无需指定他们具体的类。用于创建产品族，保证产品的一致性。
+,Redis,什么是适配器模式（Adapter）？,technical,easy,将一个类的接口转换成用户希望得到的另一个接口。使原本不相容的接口得以协同工作，速记关键字：转换接口。
+,Redis,什么是代理模式（Proxy）？,technical,medium,为其他对象提供一种代理以控制这个对象的访问。常用于权限控制、日志记录、延迟加载等场景，不暴露真实对象细节。
+,Redis,什么是观察者模式（Observer）？,technical,medium,定义对象间的一种一对多的依赖关系，当一个对象的状态发生改变时，所有依赖于它的对象都得到通知并自动更新。用于事件驱动系统。
+,Redis,什么是策略模式（Strategy）？,technical,medium,定义一系列算法，把它们一个个封装起来，并且使它们之间可互相替换，从而让算法可以独立于使用它的用户而变化。避免大量的 if-else 判断。
+,Redis,什么是模板方法模式（Template Method）？,technical,medium,定义一个操作中的算法框架，而将一些步骤延迟到子类中，使得子类可以不改变一个算法的结构即可重新定义算法的某些特定步骤。
+,Redis,什么是单一职责原则（Single Responsibility）？,technical,easy,在设计类的时候要尽量缩小粒度，使功能明确、单一，不要做多余的事情。遵循高内聚、低耦合的原则，一个类只负责一项职责。
+,Redis,什么是开闭原则（Open/Closed）？,technical,medium,软件实体（类、模块、函数等）应该对扩展开放，对修改关闭。意味着可以通过扩展来添加新功能，而不必修改现有代码。
+,Redis,什么是里氏替换原则（Liskov Substitution）？,technical,medium,子类型必须能够替换掉它们的基类型。程序中如果有基类和子类，可以用子类对象替换基类对象，而程序的行为仍然是正确的。
+,Redis,什么是接口隔离原则（Interface Segregation）？,technical,medium,不应该强迫一个类实现它不需要的接口。一个类不应该对它用不到的方法负责。提倡使用多个专门的接口，而不是一个总的大接口。
+,Redis,什么是依赖倒置原则（Dependency Inversion）？,technical,medium,高层模块不应该依赖于低层模块，而是应该依赖于抽象。抽象不应该依赖于具体实现，具体实现应该依赖于抽象。例如 Java 数据库接口。
+,Redis,为什么组合优于继承？,technical,hard,继承耦合度高，基类固定；组合耦合度低，通过组合类的指针传入不同类。优先使用组合（contains a）而非继承（is a）来达到目的，避免高耦合。
+,Redis,组合与继承的区别是什么？,technical,medium,继承暴露实现细节，破坏封装性，是白箱复用；组合通过成员对象接口交互，是黑箱复用。组合降低耦合度，系统更灵活，可运行时动态引用，但需管理较多对象。
+,Redis,什么是迪米特法则？,technical,medium,指一个对象应当对其他对象有尽可能少的了解，即“不和陌生人说话”。要求优先考虑不变类、降低访问权限、谨慎使用序列化。优点是降低耦合，缺点是过多使用会产生大量中介类。
+,Redis,请手写单例设计模式，常见的实现方式有哪些？,technical,medium,常见四种：1.饿汉式（类加载时创建）；2.懒汉式（双重检查锁定，线程安全）；3.静态内部类（延迟加载且线程安全）；4.枚举单例（防止反射和序列化攻击）。
+,Redis,你在实际开发中用过哪些设计模式？,technical,easy,1.单例模式（数据库连接、日志管理）；2.工厂模式（创建复杂对象、实现类选择）；3.观察者模式（界面与数据模型通信、事件处理）。
+,Redis,设计模式有哪些基本原则需要遵守？,technical,medium,包括单一职责、开闭原则、里氏替换、接口隔离等。核心是高内聚低耦合，对扩展开发对修改关闭，子类完全替换父类不改变行为，建立单一接口而非庞大接口。
+,Redis,什么是单一职责原则？,technical,easy,在设计类时要尽量缩小粒度，使功能明确单一，不做多余事情。目的是高内聚低耦合，虽然类较小精悍，但可通过结构性模式组合复用。
+,Redis,什么是开闭原则？,technical,medium,一个类应该对扩展开发，对修改关闭。关键做好封装，隐藏内部实现细节，提供足够接口，外部代码通过接口扩展功能而不侵入类内部。
+,Redis,什么是里氏替换原则？,technical,medium,子类能够完全替换父类，不会改变父类定义的行为。例如基类鸟类有飞行方法，所有子类都应能飞，若不能则应使用接口代替继承。
+,Redis,什么是接口隔离原则？,technical,easy,不应该强迫客户依赖于它们不需要的接口。应建立单一接口，不要建立庞大接口，尽量细化，接口中的方法要建少。
+,操作系统,MMU 如何通过页表实现虚拟页的访问控制？,technical,medium,MMU 每次读取页表中的一个页表条目 (PTE)，通过在 PTE 中添加标志位（如读写执行权限），来控制对虚拟页的访问权限。
+,操作系统,什么是用户态和内核态？它们的区别是什么？,technical,medium,用户态进程不能执行特权指令，不能直接访问内核空间；内核态进程可执行任何指令并访问所有内存。通过控制寄存器的模式位区分，用户态需通过系统调用访问内核。
+,操作系统,操作系统中的上下文切换涉及哪些内容？,technical,medium,"涉及保存和恢复各种寄存器、TLB、程序计数器、用户栈、内核栈以及内核中的数据结构（如 task_struct, mm_struct）。"
+,操作系统,为什么需要虚拟内存？,technical,medium,1. 结合磁盘和内存优势，提供大容量高速存储。2. 提供独立内存空间，简化链接装载，支持共享。3. 隔离进程访问权限，提高安全性。
+,操作系统,什么是文件？,technical,easy,文件是操作系统提供的一种抽象机制，用于在磁盘上保存信息并方便以后读取，使用户无需了解存储细节。
+,操作系统,常见的文件结构有哪些？,technical,easy,1. 字节结构（最大灵活度）。2. 记录序列（固定长度记录）。3. 树结构（按键字段排序，支持快速查找）。
+,操作系统,常见的文件类型有哪些？,technical,easy,包括普通文件、目录、字符特殊文件（如终端）、块特殊文件（如磁盘设备）。
+,操作系统,文件的访问方式有哪些？,technical,easy,1. 顺序访问：按顺序读取全部字节。2. 随机访问：可以以任何次序读取字节或记录。
+,操作系统,常见的文件系统操作（系统调用）有哪些？,technical,easy,"create(创建), delete(删除), open(打开), close(关闭), read(读取), write(写入), append(追加), seek(定位), get/set attributes(获取/设置属性), rename(重命名)。"
+,操作系统,目录系统的类型及路径名是如何分类的？,technical,medium,目录系统分为一级目录系统和层级目录系统。路径名分为绝对路径名（从根目录开始）和相对路径名（相对于当前工作目录）。
+,操作系统,文件在磁盘上的连续分配方式有什么特点？,technical,medium,将文件作为一连串连续数据块存储。优势是实现简单（只需记录首块地址和块数），且操作性能较好（适合顺序访问）。
+,操作系统,文件分配方式有哪些？,technical,medium,主要有连续分配、链表分配、索引分配（如 FAT 和 i 节点）。连续分配只需一次寻找；链表分配可充分利用磁盘块但指针占用空间；FAT 将指针放内存；i 节点记录属性和地址。
+,操作系统,什么是文件分配表（FAT）？,technical,easy,将每个磁盘块的指针字放在内存的一个表中。解决了链表分配需要从多个磁盘获取拼接信息的开销问题，提高了系统的运行效率。
+,操作系统,i 节点的作用是什么？,technical,medium,给每个文件赋予一个数据结构，列出文件属性和文件的磁盘地址。将属性存放在 i 节点而非目录项中，使目录项更短，节省空间。
+,操作系统,目录的实现方式有哪些？,technical,easy,简单目录（包含固定大小的目录项，有磁盘地址和属性）；采用 i 节点的系统（把文件属性存放在 i 节点中而不是目录项中，目录项会更短）。
+,操作系统,文件共享是如何实现的？,technical,medium,通过链接（link）联系。这样文件系统本身就是一个有向无环图（DAG），而不是一棵树，允许多个用户共享同一文件。
+,操作系统,日志结构文件系统（LFS）和日志文件系统有什么区别？,technical,hard,LFS 因与文件系统不匹配未被广泛应用；日志文件系统保存操作日志以便崩溃恢复，如 NTFS、ext3 等实际应用中广泛使用。
+,操作系统,虚拟文件系统（VFS）的作用是什么？,technical,medium,将多个文件系统整合到一个统一的结构中，对用户和进程不可见。例如 Linux 支持多种文件系统挂载，对外呈现单一层级。
+,操作系统,如何记录空闲块？,technical,medium,磁盘块链表（存放空闲表）、位图（1 表示空闲，0 表示已分配）、磁盘配额（限制用户拥有文件和块的最大数量）。
+,操作系统,文件系统一致性问题的原因是什么？,technical,medium,修改过的磁盘块未全部写回前系统崩溃，特别是 i 节点、目录块或空闲表块未写回时，会导致文件系统处于不一致状态。
+,操作系统,如何提高文件系统性能？,technical,medium,使用高速缓存（block/buffer cache）、块提取读（提前写入高速缓存）、减少磁盘臂运动（顺序访问块放在一起）。
+,操作系统,磁盘碎片整理的作用是什么？,technical,easy,移动文件使它们相邻，并把所有的空闲空间放在一个或多个大的连续区域内，以提高访问效率。
+,操作系统,磁盘 IO 过程包括哪些步骤？,technical,easy,寻道（将磁头移动到指定磁道）、旋转（将磁头旋转到磁道中的指定扇区）、传输（对指定扇区进行磁盘数据 IO 读写）。
+,操作系统,为什么要对磁盘进行盘块号抽象？,technical,medium,用户直接使用 C/H/S 不友好，通过一层抽象，用户只用盘块号，由系统根据 block 计算出 C/H/S，简化访问流程。
+,操作系统,常见的磁盘调度算法有哪些？,technical,medium,FCFS（公平但慢）、SSTF（寻道时间短但有饥饿风险）、SCAN（电梯算法，不会造成饥饿，双向扫描）。
+,操作系统,什么是生磁盘和熟磁盘？,technical,easy,生磁盘是根据盘块号来使用磁盘；熟磁盘是根据文件来使用磁盘，引入了更高一层次的抽象概念，方便普通用户使用。
+,操作系统,常见的文件实现方式有哪些？,technical,easy,主要有三种：1. 顺序结构：连续存放，FCB 记录起始块号；2. 链式结构：指针链接，利于增删；3. 索引结构。
+,操作系统,顺序结构存储文件的优缺点是什么？,technical,easy,优点：查找快，通过 FCB 和偏移计算盘块号。缺点：不利于修改，增删代价大，易产生外部碎片。
+,操作系统,链式结构存储文件的优缺点是什么？,technical,easy,优点：利于文件的增删操作。缺点：不利于随机查询，需遍历链表，无法直接定位。
+,操作系统,操作系统中如何让外设动起来？,technical,medium,1. CPU 向外设控制器发送指令（out 指令）；2. 形成文件视图统一指令形式；3. 利用中断通知 CPU 处理完成。
+,操作系统,键盘是如何工作的？,technical,medium,通过中断处理扫描码获取对应 ASCII 码，将 ASCII 码加入缓冲队列 read_que 中，等待上层程序调用。
+,操作系统,什么是 IO 多路复用？,technical,easy,单个线程或进程中处理多个输入输出操作的机制。允许单个进程同时监视多个文件描述符，就绪时立即响应。
+,操作系统,select、poll 和 epoll 的区别和联系是什么？,technical,hard,均为 I/O 多路复用技术。select 有 FD 数量限制且需遍历；poll 无数量限制但仍需轮询；epoll 事件驱动，高效，仅 Linux 可用。
+,操作系统,select 的主要限制有哪些？,technical,medium,1. FD 数量限制（通常 1024）；2. 效率低（需遍历集合）；3. 非实时性（每次调用需重新设置集合）。
+,操作系统,epoll 的主要优点是什么？,technical,medium,1. 高效：事件驱动，无需遍历；2. 可扩展：支持任意数量 FD；3. 实时性：内核事件表记录，无需重复设置。
+,操作系统,Linux 内存管理的段包括哪些？,technical,easy,包括文本段（TEXT）、已初始化数据段（DATA）、未初始化数据段（BSS）、堆段、文件映射段、栈段。
+,操作系统,栈段的增长方向是怎样的？,technical,easy,栈区从高地址位向低地址位增长，大小一般固定（如 8MB），系统提供参数可自定义大小。
+,操作系统,32 位处理器的 Linux 虚拟内存空间是多少？,technical,easy,每个进程认为拥有 4G 空间，实际上在虚拟内存对应的物理内存上，可能只对应一点点物理内存。
+,操作系统,如何处理虚拟地址和物理地址的关系？,technical,medium,采用分页机制，通过页表映射。由硬件 MMU 和软件内存管理模块共同完成两次映射：先映射到虚拟内存空间，再映射到物理内存空间。
+,操作系统,内存分页主要解决了哪些问题？,technical,easy,1. 解决内存碎片问题（以页为单位释放）；2. 提高交换效率（按需加载少量页）；3. 支持虚拟内存，无需一次性加载程序。
+,操作系统,当进程访问的虚拟地址在页表中查不到时会发生什么？,technical,medium,系统产生缺页异常，进入内核空间分配物理内存、更新进程页表，最后返回用户空间恢复进程运行。
+,操作系统,分页虚拟地址和物理地址是如何映射的？,technical,medium,虚拟地址分为页号和页内偏移。页号作为页表索引，找到物理页基地址，与页内偏移组合形成物理内存地址。
+,操作系统,简单分页存在哪些空间上的缺陷？,technical,hard,页表过大。例如 32 位单进程需 4MB 页表，多进程占用更多内存。不分级页表项数巨大，多级页表可减少页表项数量。
+,操作系统,段页式内存管理的地址变换过程是怎样的？,technical,hard,1. 访问段表得页表起始地址；2. 访问页表得物理页号；3. 物理页号与页内位移组合得物理地址。共三次访问。
+,操作系统,Linux 信号的定义及常用信号有哪些？,technical,easy,"信号是通知进程状态改变或系统异常的信息。常用信号：SIGHUP(终端挂起), SIGPIPE(写关闭通道), SIGURG(紧急数据)。"
+,操作系统,Linux 设计中的多任务和 SMP 对称多处理有何特点？,technical,medium,多任务指多个任务并发或并行执行。SMP 指每个 CPU 地位平等、权限相同，共享内存，均可访问完整资源。
+,操作系统,Linux 中 ELF 格式和宏内核的特征是什么？,technical,medium,ELF 是可执行文件存储格式。宏内核特征是所有模块（调度、内存等）运行在内核态，Linux 内核是拥有最高权限的完整可执行程序。
+,操作系统,操作系统中常见的五种 I/O 模型分别是什么？,technical,medium,阻塞式 I/O、非阻塞式 I/O、I/O 复用（select/poll）、信号驱动式 I/O、异步 I/O（POSIX aio）。
+,操作系统,阻塞式 I/O 的工作原理及优缺点是什么？,technical,easy,进程等待条件满足（如数据准备好），不满足则一直阻塞。优点：CPU 资源让出；缺点：耗时，适合低并发低时效场景。
+,操作系统,非阻塞式 I/O 的工作原理及缺点是什么？,technical,medium,交互未达目的直接返回，通过轮询查看数据是否就绪。缺点：往往耗费大量 CPU 时间。
+,操作系统,I/O 复用（select/poll）的工作原理是什么？,technical,medium,阻塞在 select/poll 调用上，监听多个描述符。任意一个就绪则返回，用户进程再调用 recvfrom 拷贝数据。优点：等待多个描述符就绪。
+,操作系统,信号驱动式 I/O 的工作流程是怎样的？,technical,hard,安装信号处理函数，立即返回。数据准备好后内核产生 SIGIO 信号，主循环接收通知后读取数据。优点：等待期间进程不被阻塞。
+,操作系统,异步 I/O 和信号驱动 I/O 的区别是什么？,technical,medium,信号驱动 I/O 由内核通知何时可以启动 I/O 操作；异步 I/O 由内核通知 I/O 操作何时完成。异步 I/O 中，内核收到 aio_read 后立刻返回，等待数据准备好后直接拷贝到用户空间再通知进程。
+,操作系统,同步 I/O 和异步 I/O 的主要区别是什么？,technical,easy,同步 I/O 会导致请求进程阻塞，直到 I/O 操作完成；异步 I/O 不会导致请求进程阻塞，进程发起请求后立即去做其他事情，由内核在操作完成后通知。
+,操作系统,Linux 下常见的 I/O 复用模型有哪些？,technical,easy,主要包括 select、poll 和 epoll。它们是内核提供给用户态的多路复用系统调用，允许进程通过一个系统调用函数从内核中获取多个事件。
+,操作系统,select、poll 和 epoll 的实现原理及区别是什么？,technical,medium,select 和 poll 采用轮询方式检查就绪事件，复杂度 O(N)，有 fd 数量限制；epoll 采用回调方式，使用红黑树跟踪 fd，只返回就绪 fd，复杂度 O(1)，无 fd 数量限制，且支持 ET/LT 模式。
+,操作系统,epoll 的边缘触发（ET）和水平触发（LT）模式有什么区别？,technical,medium,ET 模式下，当 Socket 描述符上有可读事件发生时，服务器只会苏醒一次，需一次性读取完数据；LT 模式下，只要缓冲区有数据，服务器会不断苏醒通知，直到数据被读完。
+,操作系统,如何在基本网络通信模型基础上提升服务器自身服务响应？,technical,medium,1. 多进程：父进程 fork 子进程处理业务，需注意僵尸进程和 IPC。2. I/O 复用：使用 select/poll/epoll 同时服务多个请求。3. 多线程：共享资源，切换开销小，需注意线程安全和通信。
+,操作系统,Linux 中的软链接和硬链接有什么区别？,technical,easy,软链接是包含目标路径的独立文件，可跨文件系统，目标删除则失效；硬链接指向相同 inode，同文件系统，目标删除不影响链接，只有所有链接删除才释放数据块。
+,操作系统,什么是中断和异常？,technical,medium,两者都会导致处理器暂停当前任务并转向执行特定处理程序。中断由外部硬件事件触发（如时钟、I/O）；异常通常由内部指令或错误触发。处理后处理器返回被打断的任务继续执行。
+,操作系统,用户态和内核态的区别是什么？,technical,medium,用户态受限，不可直接访问硬件或核心部分；内核态是特权级别，可执行特权指令、访问硬件资源、管理系统资源。
+,操作系统,在什么场景下会发生内核态和用户态的切换？,technical,medium,系统调用（用户请求服务）、异常（程序错误或 CPU 自动切换）、中断（外部设备信号触发）。
+,操作系统,并行和并发是什么？,technical,easy,并行是同一时刻执行多个任务（多处理单元）；并发是相同时间段内交替执行多个任务（时间片轮转）。
+,操作系统,什么是内部碎片和外部碎片？,technical,medium,内部碎片是分配给进程的内存块中未被使用的部分；外部碎片是内存中存在大量未使用的小空闲块，无法分配给大进程。
+,操作系统,僵尸进程和孤儿进程的区别是什么？,technical,medium,孤儿进程：父进程退出，子进程被 init 收养；僵尸进程：子进程退出但父进程未回收状态信息，描述符保留。
+,操作系统,信号和信号量有什么区别？,technical,medium,信号用于通知异步事件发生；信号量用于进程间通信处理同步互斥机制，协调线程使用公共资源。
+,操作系统,常用的 Linux 命令有哪些？,technical,easy,"ls, cd, pwd, touch, mkdir, rm, cp, mv, cat, vi, grep, find, chmod, chown, ps, kill, df, tar, ping, ssh, apt/yum 等常用命令。"
+,操作系统,Linux 中如何查看一个进程？,technical,easy,使用 ps 命令列出进程，配合 grep 过滤；或使用 pgrep/pidof 通过进程名查找 PID。
+,操作系统,如何杀死一个进程？,technical,easy,使用 kill 命令发送信号终止进程；killall 根据进程名杀死所有匹配进程。杀父进程不会自动杀子进程。
+,操作系统,什么是局部性原理？,technical,medium,程序倾向于多次访问相同数据（时间局部性）或附近数据（空间局部性），利用此原理可提高缓存命中率。
+,操作系统,进程和线程的区别是什么？,technical,medium,进程是资源分配单位，独立内存，开销大；线程是调度最小单位，共享内存，开销小。进程隔离性好，线程通信方便。
+,操作系统,进程的状态有哪些？,technical,easy,三种基本状态：运行（在 CPU 上）、就绪（获资源等 CPU）、阻塞（等待 I/O 等资源）。
+,操作系统,什么是异常？,technical,medium,由计算机系统内部事件触发的事件（如非法操作码、地址越界），不能被屏蔽，会暂停正常流程转到异常处理程序。
+,操作系统,进程有哪五种状态？,technical,easy,创建、就绪、执行、阻塞、终止。创建需申请 PCB；就绪已分配资源等待 CPU；执行被调度运行；阻塞等待事件；终止结束或出错。
+,操作系统,进程之间有哪些通信方式？,technical,medium,管道（半双工，父子进程）、命名管道（无亲缘关系）、信号量（同步锁）、消息队列（内核链表）、信号（通知事件）、共享内存（最快，需配合信号量）、Socket（网络通信）。
+,操作系统,常见的线程同步机制有哪些？,technical,medium,互斥锁（保护临界区）、条件变量（线程间通信，常与互斥锁配合）、读写锁（多读单写）、信号量（控制访问共享资源）。
+,操作系统,介绍一下你知道的锁类型？,technical,medium,基础锁：互斥锁（独占访问）、自旋锁（忙等待）。其他：读写锁（多读单写）、悲观锁（高冲突概率上锁）、乐观锁（先修改后检查冲突）。
+,操作系统,产生死锁的必要条件是什么？,technical,hard,互斥条件、请求保持条件、不可剥夺条件、环路等待条件。四者同时满足才会发生死锁。
+,操作系统,如何预防或解除死锁？,technical,hard,破坏任一条件即可。如一次性申请所有资源（破坏请求保持）、允许资源剥夺（破坏不可剥夺）、按序申请资源（破坏循环等待）。
+,操作系统,常见的进程调度算法有哪些？,technical,medium,批处理：先来先服务、最短作业优先、最短剩余时间优先。交互式：时间片轮转、优先级调度、多级队列、最短进程优先。
+,操作系统,分段和分页的主要区别是什么？,technical,medium,分段：逻辑单位，长度动态变化，有内外碎片。分页：物理单位，长度固定，由操作系统定义，物理内存分帧。
+,操作系统,什么是内部碎片？,technical,easy,页面内部的未使用空间。
+,操作系统,什么是外部碎片？,technical,easy,由于页面长度固定，不同页面之间的未使用空间无法利用，导致的外部碎片。
+,操作系统,逻辑地址由哪两部分组成？,technical,easy,页号和页内偏移。
+,操作系统,LRU 页面置换算法的原理是什么？,technical,medium,选择最长时间没有被使用的页面进行切换，基于局部性原理，认为最近被使用过的很可能还会被使用。
+,操作系统,FIFO 页面置换算法的优缺点是什么？,technical,medium,优点：简单，维护队列即可。缺点：可能淘汰常用页面，存在 Belady 异常（分配内存增加切换次数反而增加）。
+,操作系统,为什么最佳页面置换算法 (OPT) 无法在实际系统中实现？,technical,medium,需要预知未来页面访问情况，但程序访问是动态的，无法预知下次访问前的等待时间。
+,操作系统,时钟页面置换算法的工作原理是什么？,technical,medium,页面保存在环形链表中，含访问位。缺页中断时顺时针遍历，访问位为 1 改 0，为 0 则置换。
+,操作系统,最不常用算法 (LFU) 是如何工作的？,technical,medium,记录每个页面访问次数，缺页时将访问次数最少的页面置换出去，需统计额外开销。
+,操作系统,IO 多路复用有哪些常见的实现方式？,technical,medium,select、poll、epoll 等系统调用。
+,操作系统,select 机制的优缺点是什么？,technical,medium,可监视多个文件描述符状态，但效率随监视数量增加而降低。
+,操作系统,poll 与 select 相比有什么改进？,technical,medium,使用轮询方式，避免了 select 中文件描述符数量有限的问题，但大量描述符下性能仍不足。
+,操作系统,epoll 相比 select 和 poll 的优势是什么？,technical,medium,Linux 特有，使用事件通知，只在就绪时通知，无需轮询，处理大量文件描述符更高效。
+,操作系统,什么是主键？,technical,easy,唯一标识表中每一行数据的列，值不能重复且不能为 NULL，用于保证数据唯一性和查找。
+,操作系统,主键、外键和索引有什么区别？,technical,medium,主键唯一非空；外键建立表关系；索引用于快速查询。主键外键通常关联索引，但索引不一定是主键或外键。
+,操作系统,什么是笛卡尔积？,technical,easy,一个表的每一条记录与另一个表中每一条记录的组合结果。
+,操作系统,内连接和外连接的区别是什么？,technical,medium,内连接只返回匹配记录；外连接即使不匹配也保留驱动表记录，未匹配字段填 null。
+,操作系统,SQL 中 where 和 on 在连接查询中的区别是什么？,technical,hard,内连接等价；外连接中 on 过滤条件不影响驱动表记录保留，where 会过滤掉不符合条件的驱动表记录。
+,操作系统,执行一次 SELECT 语句经历了哪些流程？,technical,medium,Server 层（连接器、查询缓存、解析、优化）和存储引擎层（数据存取）。
+,操作系统,MySQL 连接器的作用是什么？,technical,medium,管理客户端连接、获取权限、权限验证。支持长连接和短连接，默认清理空闲连接。
+,操作系统,MySQL 查询缓存的现状如何？,technical,medium,命中直接返回结果，未命中执行并缓存。因频繁更新易不一致，MySQL 8.0 已移除该功能。
+,操作系统,SQL 的执行流程分为哪几个阶段？,technical,medium,分为预处理、优化、执行三个阶段。预处理判断表和字段是否存在；优化器确定执行方案（如索引选择、连接顺序）；执行器检查权限并执行语句。
+,操作系统,执行一次 update 语句发生了什么？,technical,medium,先连接数据库，更新导致查询缓存失效清空。然后经过分析器（词法语法解析）、优化器（优化）、执行器（执行更新）。涉及 redo log 和 binlog 两个日志模块。
+,操作系统,redo log 和 binlog 有什么不同？,technical,hard,引擎不同：redo log 是 InnoDB 特有，binlog 是 Server 层所有引擎通用。类型不同：redo log 是物理日志（页修改），binlog 是逻辑日志（原始语句）。写入方式：redo log 循环写空间固定，binlog 追加写可切换文件。
+,操作系统,MySQL 为什么要进行访问权限控制？,technical,easy,为了服务器安全，防止误操作。每个用户只应拥有必要的最小权限，避免高权限带来的危险。遵循最小权限原则，确保只有需要的数据具有适当的访问权。
+,操作系统,MySQL 中用户账号信息存储在哪里？,technical,easy,存储在名为 mysql 的系统数据库中的 user 表里。该表包含用户名、密码及操作权限等信息。可通过 select user from user 查看当前用户数量。
+,操作系统,MySQL 如何新增、修改和删除用户？,technical,medium,新增用 CREATE USER；修改用户名用 RENAME USER；修改密码用 SET PASSWORD；删除用 DROP USER。不建议直接操作 mysql 库的 user 表，以免伤害服务器。
+,操作系统,MySQL 如何进行用户权限控制（查看、授权、撤销）？,technical,medium,查看用 SHOW GRANTS FOR；授权用 GRANT [权限] ON [库].[表] TO [用户]；撤销用 REVOKE [权限] ON [库].[表] FROM [用户]。默认新建用户无权限。
+,操作系统,什么是索引？MySQL 查询主要有哪两种方式？,technical,easy,索引是为了提高查询效率，像书的目录。MySQL 查询方式主要是全表扫描（挨个找）和根据索引检索。
+,操作系统,如何创建和删除索引？,technical,easy,创建用 create index 索引名 on 表名 (列名)，支持多列构成组合索引；删除用 drop index 索引名 on 表名。
+,操作系统,怎么查看一个 SQL 语句是否使用了索引？,technical,easy,在 SQL 前加 explain 关键字。若 type=ALL 表示全表查询未用索引；若 type=RES 表示使用了索引。
+,计算机组成原理,什么是依赖倒置原则？,technical,medium,上层要避免依赖下层的实现细节，两者都应该依赖于抽象。例如 Java 操作数据库，Java 定义一组接口，由各个数据库去实现它，Java 不依赖于具体数据库，而是依赖于抽象接口。
+,计算机组成原理,什么是工厂模式？,technical,medium,提供了一种创建对象的接口，但由子类决定实例化的类是哪一个是。将复杂的对象创建过程封装在具体工厂类中，客户端只需关心使用工厂接口创建产品，适用于解耦和统一管理产品族。
+,计算机组成原理,什么是观察者模式？,technical,medium,定义了一种一对多的依赖关系，让多个观察者对象同时监听某一个主题对象。当主题对象状态发生变化时，会通知所有的观察者对象，使得它们能够自动更新。例如气象站数据变化通知显示器和日志器。
+,计算机组成原理,代理模式和适配器模式有什么区别？,technical,medium,目的不同：代理控制访问，适配器解决接口不兼容。角色不同：代理含抽象/真实/代理，适配器含目标/适配/被适配。场景不同：代理用于权限/延迟加载，适配器用于解决两个已有接口不兼容的情况。
+,计算机组成原理,什么是字符编码？,technical,easy,通过在字符和二进制编码之间嵌套一个数字编号来实现绑定。收录了很多字符并一一编号得到的对照表称为字符集。从二进制到字符称为解码，从字符到二进制称为编码。
+,计算机组成原理,Unicode 字符集解决了什么问题？,technical,easy,提供了统一的、很全的字符集，对所有的字符都能提供唯一的二进制编码，解决了同一个文件通过不同字符集进行解码呈现结果不同（即乱码）的问题。
+,计算机组成原理,固定长度编码有什么特点？,technical,easy,不管编号多大或多小，统一根据最长位数来，位数不够高位补零。优点是高效、快速进行编码和解码。
+,计算机组成原理,冯诺依曼模型的五大部件是什么？,technical,easy,内存、CPU、总线、输入设备、输出设备。
+,计算机组成原理,PC（程序计数器）的主要作用是什么？,technical,easy,PC 是存放下一条要执行指令地址的存储区域。处理器不断执行 PC 指向的指令并更新 PC 指向下一条指令。
+,计算机组成原理,CPU 位宽如何影响数据处理能力？,technical,medium,CPU 位宽指一次能处理多少字节数据。32 位一次算 4 字节，64 位一次算 8 字节。位宽越大，可计算数值范围越大。
+,计算机组成原理,CPU 内部常见的组件有哪些？,technical,easy,寄存器、控制单元、逻辑运算单元。寄存器临时存数据，控制单元控制工作，逻辑运算单元负责计算。
+,计算机组成原理,常见寄存器类型及其用途是什么？,technical,easy,通用寄存器放运算数据；程序计数器 PC 存下一条指令地址；指令寄存器存当前执行的指令。
+,计算机组成原理,总线主要分为哪三种类型？,technical,easy,地址总线（指定内存地址）、数据总线（读写数据）、控制总线（发送接收信号如中断）。
+,计算机组成原理,可变长度编码如何解决固定长度编码的浪费问题？,technical,medium,采用变长形式，小编号少占字节，大数据多占字节。通过类似 IPV4 分类编制的方式，在二进制中占用几位作为标识来划分边界，如 UTF-8 编码。
+,计算机组成原理,现代 CPU 流水线通常分为哪几个阶段？,technical,medium,取指令、译指（分析指令）、执行指令、数据回写。不同阶段由控制器或运算器完成。
+,计算机组成原理,理解编译系统对程序员有什么实际意义？,technical,medium,优化程序性能（如 switch 效率），理解链接错误（静态/动态库），避免安全漏洞（如缓冲区溢出）。
+,计算机组成原理,Linux 下运行可执行程序的基本流程是怎样的？,technical,hard,Shell 解析命令，加载文件到内存（利用 DMA），处理器执行 main 函数，结果经寄存器复制到显示设备。
+,计算机组成原理,DMA 技术在程序加载过程中起什么作用？,technical,medium,允许数据不经过处理器，直接从磁盘到达内存，减少 CPU 负担，提高加载效率。
+,计算机组成原理,控制器与适配器的主要区别是什么？,technical,easy,主要区别在于封装方式，功能都是在 IO 设备与 IO 总线之间传递数据。
+,计算机组成原理,如何设计一个高性能的系统？,technical,hard,缩短信息搬运时间，利用缓存减少IO，异步处理削峰，弹性扩展机器，分层拦截请求（前端静态化、网关限流、服务层缓存与队列、数据库防负数）。
+,计算机组成原理,秒杀系统的场景特点是什么？,technical,easy,访问请求数量远大于库存，瞬时流量激增，业务流程简单（下订单减库存），只有少部分用户成功。
+,计算机组成原理,秒杀系统的架构设计理念有哪些？,technical,medium,限流（限制大部分流量）、削峰（将瞬间高流量变平稳）、异步处理（提高并发）、内存缓存（提升效率）、可拓展性（弹性扩容）。
+,计算机组成原理,秒杀系统的前端优化方案有哪些？,technical,medium,页面静态化并配合CDN抗峰值，禁止重复提交（按钮置灰），用户限流（如IP限流，单时间段只允许一次请求）。
+,计算机组成原理,秒杀系统的后端核心实现流程是怎样的？,technical,hard,初始化商品到Redis，校验合法性，内存标识判断，Redis预减库存，布隆过滤器防重，发送MQ消息异步处理，业务端二次校验并真正减库存。
+,计算机组成原理,秒杀系统中数据库层需要注意哪些关键点？,technical,medium,上游拦截降低压力，防止负数订单（update where 库存>0），加用户id和商品id联合唯一索引防止重复下单。
+,计算机组成原理,如何设计一个本地缓存？,technical,medium,考虑数据结构（Map/复杂结构）、对象上限及清除策略（LRU/FIFO等）、过期时间、线程安全、简明接口、是否持久化及阻塞机制。
+,计算机组成原理,本地缓存通常使用什么数据结构存储？,technical,easy,最简单直接用 Map 存储，或者像 Redis 一样提供多种数据类型（哈希、列表、集合等），底层使用双端链表、压缩列表、跳跃表等数据结构。
+,计算机组成原理,本地缓存常见的数据清除策略有哪些？,technical,easy,LRU（最近最少使用）、FIFO（先进先出）、LFU（最近最不常用）、SOFT（软引用）、WEAK（弱引用）等。
+,计算机组成原理,本地缓存的线程安全问题如何解决？,technical,medium,本地缓存允许多线程同时访问，需自行保证线程安全，不应抛给使用者。常见如使用 Concurrent HashMap 或加锁机制，类似 Guava/Caffeine 的实现。
+,计算机组成原理,多线程环境下如何避免缓存空值导致的重复计算？,technical,medium,使用双重检查锁（DCL）。获取缓存为null时，加锁，再次检查，若仍空则计算并写入，最后释放锁。或使用Future/CompletableFuture处理异步加载，确保同一任务只执行一次。
+,计算机组成原理,如何设计一个RPC框架？,technical,hard,1.定义接口；2.选通信协议（TCP/HTTP）；3.选序列化（JSON/Protobuf）；4.实现远程调用与网络通信；5.服务注册发现（Zookeeper等）；6.负载均衡；7.安全加密；8.错误处理；9.性能优化；10.监控日志。
+,计算机组成原理,微信红包怎么设计？,technical,hard,核心是高并发和资金安全。1.库存扣减用Redis Lua脚本防超发；2.金额随机算法；3.数据库分库分表；4.消息队列削峰填谷；5.分布式事务保证数据一致性。
+,计算机组成原理,扫码登录怎么设计？,technical,medium,1.用户扫码获取唯一标识；2.服务端生成临时Token绑定设备；3.用户手机确认授权；4.轮询或WebSocket通知PC端登录成功；5.返回Session/Cookie。需考虑安全性与时效性。
+,计算机组成原理,扫码登录的流程是什么？,technical,medium,1.客户端生成二维码；2.服务端记录状态；3.移动端扫码请求；4.服务端推送确认页面；5.用户授权后回调；6.建立长连接或轮询获取登录态。
+,计算机网络,TCP 连接在空闲时通过什么机制断开？,technical,easy,TCP 保活机制。当连接空闲一段时间后，服务器发送探测报文，若多次无响应则断开连接。
+,计算机网络,TCP Fast Open 的主要作用是什么？,technical,easy,减少 TCP 连接建立的时延，允许在第一次握手时携带数据，部分绕过三次握手流程。
+,计算机网络,TCP 流量控制中发送窗口和 MSS 分别决定什么？,technical,easy,发送窗口决定一次能发送的字节数，MSS 决定这些字节要分多少包才能发送完。
+,计算机网络,Nagle 算法是如何避免大量 TCP 小数据报文的传输的？,technical,medium,合并小数据包，只有收到前一个包的 ACK 后才发送新的小包，除非有紧急数据，从而减少小包数量。
+,计算机网络,延迟确认与 Nagle 算法混合使用会导致什么问题？如何解决？,technical,medium,会导致时耗增长。解决方法：发送方关闭 Nagle 算法，或接收方关闭 TCP 延迟确认。
+,计算机网络,TCP 连接关闭有哪些方式？有什么区别？,technical,medium,RST 报文关闭（暴力，不走四次挥手）和 FIN 报文关闭（安全，走四次挥手流程）。
+,计算机网络,close 和 shutdown 函数有什么区别？,technical,medium,close 完全断开连接（读写都断），shutdown 可控制只关闭一个方向（半关闭），更优雅。
+,计算机网络,shutdown 函数的三个参数分别代表什么含义？,technical,medium,SHUT_RD 关闭读，SHUT_WR 关闭写（半关闭），SHUT_RDWR 关闭读写两个方向。
+,计算机网络,如何处理 FIN_WAIT1 状态连接过多的问题？,technical,hard,降低 tcp_orphan_retries 值，超过重传次数后直接发送 RST 强制关闭孤儿连接。
+,计算机网络,FIN_WAIT2 状态下的连接持续时间由什么控制？,technical,hard,由 tcp_fin_timeout 参数控制，默认 60 秒，超时未收 FIN 则直接关闭。
+,计算机网络,TIME_WAIT 状态存在的主要原因是什么？,technical,hard,1. 防止历史数据包导致数据错乱；2. 确保被动关闭方能正确关闭连接。
+,计算机网络,为什么 TIME_WAIT 状态需要等待 2MSL 的时间？,technical,hard,确保网络中旧数据包自然消失，并允许丢失的 ACK 重传，保证被动方正确关闭。
+,计算机网络,TIME_WAIT 时间过短会导致什么后果？,technical,hard,服务端可能一直处在 LAST-ACK 状态，新连接 SYN 会被服务端发送 RST 终止。
+,计算机网络,如何优化 TIME_WAIT 状态带来的资源占用问题？,technical,hard,开启 tcp_tw_reuse 参数复用端口，但仅适用于客户端发起的新连接。
+,计算机网络,开启 tcp_tw_reuse 功能后，如果四次挥手中的最后一次 ACK 在网络中丢失了，会发生什么？,technical,medium,被动方会重传 FIN 报文。若开启了 tcp_tw_reuse，且满足条件（如连接创建时间超过 1 秒），该连接可以被复用，无需等待 2MSL。
+,计算机网络,TCP 时间戳引入后带来了哪些好处？,technical,easy,1. 解决了 2MSL 问题，重复数据包因时间戳过期被自然丢弃；2. 防止序列号绕回，同样因为时间戳过期丢弃重复包。
+,计算机网络,如果连接双方同时关闭连接，会发生什么？,technical,medium,双方都进入 FIN_WAIT1 状态。收到对方 FIN 后进入 CLOSING 状态（替代 FIN_WAIT2）。回复 ACK 确认通道关闭后，进入 TIME_WAIT 状态，等待 2MSL 后自动关闭。
+,计算机网络,滑动窗口是如何影响传输速度的？,technical,medium,发送方根据接收方缓冲区大小（接收窗口）控制发送量。接收窗口随缓冲区空间变化，通知发送方调整，防止因接收方处理不过来导致丢包，从而维持效率。
+,计算机网络,如何确定 TCP 的最大传输速度？,technical,medium,受限于发送窗口、接收窗口以及网络设备传输能力。窗口大小由内核缓冲区大小决定，需与网络传输能力匹配，以达到缓冲区利用率最大化。
+,计算机网络,什么是带宽时延积（BDP），它与缓冲区有什么关系？,technical,hard,BDP=带宽×RTT，决定网络中飞行报文大小。发送缓冲区不应超过 BDP，否则超出部分无效且易丢包；小于 BDP 则无法发挥网络传输效率。
+,计算机网络,怎样调整 TCP 缓冲区的大小？,technical,medium,发送缓冲自动调节。接收缓冲需配置 tcp_moderate_rcvbuf=1 开启，根据系统空闲内存大小自动增大或减小缓冲区，平衡并发与效率。
+,计算机网络,Linux 是如何收发网络包的？,technical,hard,发送：应用调用 Socket->内核拷贝->协议栈封装->网卡驱动->DMA 发送。接收：网卡 DMA 到 Ring Buffer->协议栈解析->用户空间 read 读取。
+,计算机网络,TCP 窗口字段只有 2 个字节，如何解决高速网络下窗口不够用的问题？,technical,easy,通过 TCP 选项字段定义窗口扩大因子。将 16 位窗口扩大为 30 位（2^16 * 2^14），使最大窗口达到 1GB，适应高速网络需求。
+,计算机网络,Linux 内核中的 NAPI 机制是什么？它是如何工作的？,technical,medium,NAPI 是混合「中断和轮询」的方式。先由硬件中断唤醒软中断，然后轮询处理数据，直到无新数据才恢复中断。目的是降低网卡中断带来的性能开销。
+,计算机网络,网络包从网卡到达应用层的数据接收流程是怎样的？,technical,hard,网卡硬件中断 -> 软中断轮询 -> Ring Buffer 拷贝到 sk_buff -> 网络接口层检查合法性 -> 网络层路由判断 -> 传输层根据四元组找 Socket -> 应用层读取缓冲区。
+,计算机网络,OSI 七层参考模型包含哪七层？各层主要功能是什么？,technical,easy,物理层（比特流）、数据链路层（帧、MAC）、网络层（路由、IP）、传输层（端到端）、会话层（会话管理）、表示层（格式转换）、应用层（用户接口）。
+,计算机网络,TCP/IP 四层网络模型包括哪些层级？与 OSI 模型有何区别？,technical,medium,应用层、传输层、网际层、网络接口层。相比 OSI 七层，TCP/IP 更简洁实用，实际互联网通信主要使用 TCP/IP 模型。
+,计算机网络,五层网络体系结构是如何划分的？它综合了哪些模型？,technical,easy,应用层、运输层、网络层、数据链路层、物理层。它是综合了 OSI 模型和 TCP/IP 模型所得来的折中方案。
+,计算机网络,传输层中 TCP 和 UDP 的主要区别是什么？,technical,easy,TCP 面向连接、可靠传输；UDP 无连接、不提供可靠性，适用于实时音视频等场景。
+,计算机网络,什么是 TCP 粘包问题？如何解决 TCP 粘包问题？,technical,hard,TCP 是流协议，无消息边界。原因：缓冲区机制、Nagle 算法、MSS 限制。解决：1. 包头 + 包长 + 包体；2. 指定结束标识；3. 发送方关闭 Nagle 算法 (TCP_NODELAY)；4. 应用层按长度或格式循环读取。
+,计算机网络,TCP 为什么会产生粘包和拆包？,technical,medium,TCP 是流式传输，无消息边界。发送端缓冲区满会拆包，小数据合并发送会粘包。接收方读取不及时也会粘包。MSS 限制导致分片也可能引起拆包。
+,计算机网络,长连接和短连接有什么区别？,technical,easy,长连接：建立后不断开，多次收发报文。短连接：每次交易建立连接，完成后立即断开。短连接常用于一对多通讯，长连接用于持续通信场景。
+,计算机网络,UDP 会不会产生粘包问题？,technical,easy,不会。UDP 是面向消息传输的，有保护消息边界，接收方一次只接受一条独立的信息，不像 TCP 那样基于流传输且无边界保护。
+,计算机网络,HTTP 有哪些常用的请求方法？,technical,easy,"GET(获取资源), POST(发送数据), HEAD(仅返回头), PUT(更新/创建), DELETE(删除), TRACE(测试), PATCH(部分更新), CONNECT(代理), OPTIONS(获取支持列表)。"
+,计算机网络,GET 和 POST 请求的区别是什么？,technical,medium,GET 申请资源，不影响服务器，参数在 URL；POST 发送数据，影响服务器（创建/更新），参数在 Body。GET 通常幂等，POST 非幂等。
+,计算机网络,常见的 HTTP 请求头字段有哪些？,technical,easy,"Accept(MIME 类型), Accept-Encoding(编码方式), Authorization(身份验证), Host(目标主机), User-Agent(客户端标识), Control/Connection/Date 等控制字段。"
+,计算机网络,GET 和 POST 请求有什么区别？,technical,medium,GET 参数在 URL，数据量小，安全幂等，可缓存；POST 参数在 Body，无长度限制，不安全非幂等，默认不缓存。GET 一个 TCP 包，POST 两个 TCP 包。GET 仅 URL 编码，POST 支持多种编码。
+,计算机网络,HTTP 协议中的安全性和幂等性如何定义？,technical,medium,安全指请求不破坏服务器资源，幂等多次执行结果相同。GET 是安全且幂等的（只读）；POST 是不安全且非幂等的（会修改资源）。
+,计算机网络,常见的 HTTP 状态码有哪些？,technical,easy,200 成功，206 部分获取，301 永久重定向，302 临时重定向，304 未修改，400 语法错误，401 需认证，403 禁止访问，404 找不到资源，500 服务器内部错误，503 服务繁忙。
+,计算机网络,HTTP 缓存机制分为哪几种？,technical,medium,分为强制缓存和协商缓存。强制缓存命中直接返回（Expires/Cache-Control）；协商缓存需与服务器交互判断资源是否变化（ETag/Last-Modified），未变则返回 304。
+,计算机网络,HTTP 缓存机制主要解决了哪些问题？,technical,easy,减少不必要的网络传输，节约带宽；更快的加载页面；减少服务器负载，避免服务过载的情况出现。
+,计算机网络,HTTP 1.0 和 HTTP 1.1 的主要区别是什么？,technical,medium,1.1 支持长连接（Keep-Alive），1.0 短连接；1.1 引入更多缓存策略；支持管道化；增加 Host 字段；新增状态码；支持断点续传（Range 头域）。
+,计算机网络,HTTP 1.1 有什么特性？,technical,easy,"支持长连接、管道化传输；增强缓存控制（Cache-Control, ETag）；支持断点续传（Range）；必须包含 Host 字段以支持虚拟主机；新增多种状态码。"
+,计算机网络,GET 和 POST 请求产生的 TCP 数据包数量有何不同？,technical,medium,GET 通常产生一个 TCP 数据包（Header 和 Data 一并发送）；POST 通常产生两个 TCP 数据包（先 Header，服务器响应 100 continue，再 Data）。
+,计算机网络,GET 和 POST 请求支持的编码方式有何不同？,technical,easy,GET 只能进行 URL 编码（application/x-www-form-urlencoded）；POST 支持多种编码方式，包括 application/x-www-form-urlencoded 或 multipart/form-data（用于二进制数据）。
+,计算机网络,HTTP/1.1 的主要特性有哪些？,technical,medium,1. 长连接（Keep-Alive）；2. 管线化（Pipelining）；3. 新增方法（PUT/DELETE 等）；4. 新增错误码；5. 增强缓存字段；6. Range 头域支持分块传输；7. Host 字段支持虚拟主机。
+,计算机网络,HTTP/1.1 和 HTTP/1.0 有什么区别？,technical,medium,1. 连接：1.1 长连接，1.0 短连接；2. 缓存：1.1 引入 Entity tag 等更多策略；3. 管道化：1.1 支持并行请求；4. Host 字段：1.1 支持虚拟主机；5. 状态码：1.1 新增 24 个；6. 带宽：1.1 支持 Range 头断点续传。
+,计算机网络,HTTP/2.0 和 HTTP/1.1 有什么区别？,technical,medium,1. 格式：2.0 二进制，1.X 文本；2. 多路复用：2.0 单连接多请求，1.X 串行；3. Header 压缩：2.0 减少冗余；4. 服务端推送：2.0 可主动推送资源，提升速度。
+,计算机网络,HTTPS 和 HTTP 有什么区别？,technical,easy,1. 安全：HTTPS 加密，HTTP 明文；2. 握手：HTTPS 需 SSL/TLS 握手，HTTP 直接传输；3. 端口：HTTPS 443，HTTP 80；4. 证书：HTTPS 需 CA 证书验证身份。
+,计算机网络,SSL/TLS 是什么？,technical,easy,SSL 是安全套接字层，TLS 是传输层安全协议。HTTPS 基于 TLS/SSL。通过加密防窃听、身份验证确保可信、消息摘要保证数据完整性来确保安全通信。
+,计算机网络,什么是对称加密和非对称加密？,technical,medium,对称加密使用相同密钥加解密，速度快但密钥安全要求高。非对称加密使用公钥加密、私钥解密，支持数字签名，安全性高但速度慢。
+,计算机网络,HTTPS 是如何建立连接的？,technical,hard,1. 客户端请求；2. 服务器返回证书；3. 客户端验证证书；4. 客户端生成会话密钥并用公钥加密发送；5. 服务器用私钥解密；6. 双方使用会话密钥对称加密通信。
+,计算机网络,URL 和 URI 是什么？,technical,easy,URI 是统一资源标识符，通用术语。URL 是 URI 的特殊形式，提供资源位置。URL 包含协议、域名/IP 等部分，用于定位和获取资源。
+,计算机网络,URL 通常由哪些部分组成？,technical,easy,包括协议、域名、端口、路径、查询参数、片段标识。例如在 https://www.example.com:8080/path/resource?param=value#section 中，协议是 HTTPS，域名是 www.example.com，端口是 8080，路径是/path/resource，查询参数是 param=value，片段标识是 section。
+,计算机网络,DNS 是什么？,technical,easy,DNS 是域名系统（Domain Name System）的缩写，作用于 TCP/IP 网络，主要服务是将主机名和域名（如 www.baidu.com）转换为 IP 地址（如 128.13.45.56）。
+,计算机网络,DNS 的解析过程是什么？,technical,medium,1.查浏览器缓存；2.查本地 Host 文件；3.查本地 DNS 服务器；4.若未命中则查根 DNS 服务器；5.查顶级域 DNS 服务器；6.查权威 DNS 服务器；7.返回 IP 给浏览器并缓存；8.浏览器发起连接。
+,计算机网络,DNS 递归查询和迭代查询有什么区别？,technical,medium,递归查询：客户端只发一次请求，等待完整结果，上层服务器自行查询下级并返回最终结果，适合普通用户。迭代查询：客户端需多次向不同服务器查询，每次获取下一级地址，直到找到结果，适合 DNS 服务器间通信。
+,计算机网络,TCP 和 UDP 的概念和特点分别是什么？,technical,medium,TCP：面向连接、可靠、基于字节流，有流量和拥塞控制，保证有序传输。UDP：无连接、不可靠、基于数据包，速度快，不保证顺序和可靠性，适合实时传输。
+,计算机网络,TCP 与 UDP 的主要区别有哪些？,technical,medium,1.连接：TCP 面向连接，UDP 无连接。2.可靠性：TCP 可靠，UDP 不可靠。3.控制：TCP 有流量拥塞控制，UDP 无。4.首部：TCP 20 字节，UDP 8 字节。5.传输：TCP 字节流，UDP 数据报。6.分片：TCP 在传输层，UDP 在 IP 层。
+,计算机网络,TCP 和 UDP 分别在什么场景下使用？,technical,easy,TCP：适用于对可靠性要求较高的场景，如文件传输、电子邮件、网页浏览。UDP：适用于对实时性要求高、可容忍少量丢包的场景，如实时游戏、流媒体音视频传输。
+,计算机网络,TCP 连接如何确保可靠性？,technical,medium,校验和、序列号、确认应答、超时重传、连接管理、流量控制、拥塞控制。通过序列号和 ACK 跟踪传输，超时未收到确认则重传，滑动窗口防止接收方溢出，动态调整发送速率适应网络状况。
+,计算机网络,怎么用 UDP 实现可靠传输？,technical,hard,在应用层实现。关键点：(1) 提供超时重传机制避免丢包；(2) 提供确认序列号进行排序和去重。本端定义首部包含时间戳计算 RTO，采用停等或滑动窗口发送；对端接收后排序并丢弃重复包。常见协议有 RUDP、RTP、UDT。
+,计算机网络,TCP 三次握手的过程是什么？,technical,medium,1. SYN: 客户端发 SYN 包给服务器，指定初始序列号。2. SYN+ACK: 服务器回复 SYN+ACK 包，接受请求并指定自己的序列号及确认客户端序列号。3. ACK: 客户端回复 ACK 包，确认服务器序列号加一。此时连接建立。
+,计算机网络,TCP 四次挥手的过程是什么？,technical,medium,1. FIN: 客户端发 FIN 报文表示不再发送数据。2. ACK: 服务器回复 ACK 确认终止请求。3. FIN: 服务器发 FIN 报文表示也不再发送数据。4. ACK: 客户端回复 ACK 确认收到，关闭连接。因 TCP 全双工，双方需分别通知停止传输。
+,计算机网络,HTTP Keep-Alive 是什么？,technical,easy,是一种 HTTP 协议机制，也称 HTTP 长连接。完成请求响应后不立即关闭连接，保持打开状态以便继续发送请求，减少建连和关连开销，提高性能和效率。HTTP 1.1 默认开启。
+,计算机网络,HTTP Keep-Alive 的优缺点是什么？,technical,easy,优点：减少连接建立关闭开销，提高并发性能，共享头部信息。缺点：长时间占用服务器资源，高并发下需设置超时时间平衡资源利用和性能。
+,计算机网络,TCP Keep-Alive 是什么？,technical,medium,是在操作系统和网络协议栈级别实现的，通过发送特定的探测数据包来维护连接的活跃性。定期发送空探测包，若收到 ACK 则连接正常；若超时未收到确认，则认为连接断开并触发关闭，从而释放资源。
+,计算机网络,TCP Keep-Alive 和 HTTP Keep-Alive 是一个东西吗？,technical,medium,不是同一个概念。HTTP Keep-Alive 是应用层协议机制，用于保持 HTTP 连接复用。TCP Keep-Alive 是操作系统/协议栈级别实现的，通过发送探测包检测连接是否空闲或断开，主要用于维护底层连接活跃性。
+,计算机网络,HTTP 短连接和长连接有什么区别？,technical,medium,短连接每次请求需经历建立 TCP、请求、响应、释放连接全过程。长连接通过 HTTP Keep-Alive 复用同一 TCP 连接发送多个请求/应答，避免连接建立和释放的开销。
+,计算机网络,TCP 的 Keepalive 机制是什么？,technical,medium,由 TCP 层（内核态）实现，用于检测空闲连接状态。通过定时任务倒计时，超时后发送探测报文给对端，判断对端是否存活。
+,计算机网络,CDN 是什么？,technical,easy,全称为内容分发网络（Content Delivery Network）。通过将内容存储在分布式的服务器上，使用户从距离较近的服务器获取内容，减少传输时间和距离，提高速度、减少延迟。
+,计算机网络,CDN 的工作流程是怎样的？,technical,medium,1. 用户输入域名，DNS 解析返回最近 CDN 节点 IP。2. 请求路由到最近节点，动态分发。3. 检查缓存，有则直接返回，无则回源获取并缓存。
+,计算机网络,CDN 是如何加速的？,technical,medium,1. 就近访问减少延迟。2. 内容缓存静态资源。3. 前置缓存热门内容。4. 智能负载均衡。5. 压缩技术。6. 并行下载支持多路复用。
+,计算机网络,Cookie 和 Session 是什么？,technical,easy,都用于管理用户状态和身份。Cookie 通过在客户端（浏览器）记录信息确定身份；Session 通过在服务器端记录信息确定身份。
+,计算机网络,Cookie 的工作原理是什么？,technical,medium,"服务器通过 HTTP 响应头 ""Set-Cookie"" 设置 Cookie，浏览器存储并在后续请求中自动携带。服务器读取 Cookie 值判断用户状态或偏好。可设置过期时间。"
+,计算机网络,Session 的工作原理是什么？,technical,medium,基于会话标识符（Session ID）操作。首次访问创建唯一 Session ID（通常存于 Cookie），对应服务器存储空间。交互时通过 ID 存取数据，设超时时间自动过期。
+,计算机网络,Cookie 和 Session 有什么区别？,technical,medium,1. 存储位置：Cookie 在浏览器，Session 在服务器。2. 容量：Cookie 小（KB），Session 大。3. 安全性：Cookie 易篡改，Session 更安全。4. 传输：Cookie 自动发送，Session ID 需传递。
+,计算机网络,TCP 重传机制是怎么实现的？,technical,hard,1. 序号与确认号：发送方维护窗口，等待确认。2. 超时检测：为每个数据段设定时器，超时未收到确认则触发重传，认为数据丢失或损坏。
+,计算机网络,TCP 流量控制是怎么实现的？,technical,medium,利用滑动窗口机制。接收方通过 TCP 报文中的窗口字段告知发送方当前可接收窗口大小（缓冲区剩余空间）。发送方根据该大小动态调整发送速率，防止溢出。
+,计算机网络,TCP 拥塞控制是怎么实现的？,technical,hard,包括慢启动（指数增长）、拥塞避免（线性增长）、快速重传（连续重复 ACK 触发重传）、快速恢复（不回到慢启动，减半阈值）。目的是防止网络过载。
+,计算机网络,TCP 超时重传机制是怎样的？,technical,medium,发送方在超时时间内没收到确认认为数据丢失，重新发送。若仅一个段丢失只重传该段；多段丢失用复杂算法决定。快速重传策略下，接收方连续收到相同确认号时发送冗余确认触发重传。
+,计算机网络,什么是单点登录（SSO）？,technical,easy,允许用户一次登录后访问多个关联应用或服务，无需再次输入凭据。优点包括降低密码重用风险、方便用户体验、简化应用开发（将认证授权责任交给 SSO 系统）。
+,计算机网络,HTTP 请求的过程是什么？,technical,medium,输入 URL -> 查缓存 -> DNS 解析 -> TCP 三次握手 -> 发送 HTTP 请求 -> 服务器处理返回数据 -> 浏览器渲染（DOM/CSS/JS） -> 关闭连接（四次挥手）。
+,计算机网络,HTTP 有哪些优化方案？,technical,medium,TCP 复用、HTTP 复用、内容缓存、文本压缩、SSL 加速、TCP 缓冲。旨在提高服务端响应时间和处理效率，减少带宽占用。
+,计算机网络,浏览器地址栏输入 URL 回车后涉及到的流程是什么？,technical,hard,查各级 DNS 缓存（浏览器/OS/路由器/ISP）-> 发起 DNS 查询（ARP 解析网关/DNS 服务器，UDP 53 端口）-> 递归/迭代查询 -> TCP 连接 -> HTTP 交互 -> 渲染展示 -> 断开连接。
+,计算机网络,DNS 解析的具体过程是怎样的？,technical,medium,先查本地缓存（浏览器/OS/路由器/ISP），若无则向本地 DNS 服务器发送 UDP 请求（端口 53）。若不在同一子网需 ARP 查询默认网关。未找到则进行递归查询直到获取 IP。
+,计算机网络,TCP 数据包封装的具体步骤是什么？,technical,easy,1. 应用层数据添加 TCP 首部；2. 传输层数据添加 IP 首部；3. 网络层数据添加以太网首部并在介质中传输。
+,计算机网络,浏览器与目标服务器建立 TCP 连接的流程是怎样的？,technical,medium,先进行 DNS 和 ARP 查询获取 IP 和 MAC 地址，然后经过三次握手建立 TCP 连接。若使用 HTTPS 需重定向至 443 端口并协商加密。
+,计算机网络,HTTP 协议和 HTTPS 协议在连接建立上有何区别？,technical,medium,HTTP 直接返回结果；HTTPS 会返回 3 开头重定向消息，端口变为 443，沟通认证加密算法，检查 CA 证书，采用 SSL 加密传输。
+,计算机网络,浏览器发送请求的两种主要方式及其含义是什么？,technical,easy,1. GET 请求：要求目标服务器提供输入的网页；2. POST 请求：表示填写的是表单。
+,计算机网络,HTTP 响应包一般包含哪些内容？,technical,easy,包含请求的网页、状态码、压缩类型、如何缓存的页面以及设置的 cookie。
+,计算机网络,浏览器显示 HTML 页面的主要流程是什么？,technical,medium,1. 渲染 HTML 框架（涉及 Ajax）；2. 检查标记发送 GET 请求获取其他元素（图像/CSS/JS）；3. 利用缓存减少请求；4. 显示页面。
+,计算机网络,SYN 攻击的原理是什么？常见的防御方式有哪些？,technical,hard,原理：伪造 IP 发送 SYN，服务端分配资源回复 ACK+SYN 却收不到回应，导致半连接队列被占满。防御：修改队列大小、调整超时重传、启动 syn cookie。
+,计算机网络,TCP 保活机制的概念和工作原理是什么？,technical,medium,概念：无活动时定时发送探测报文。机制：对端正常响应重置时间；崩溃则重置连接；不可达则达到探测次数后关闭连接。
+,计算机网络,TCP 为什么需要流量控制？它是如何实现的？,technical,medium,原因：防止双方网速不同导致接收方处理不过来或缓冲区溢出。实现：通过接收窗口 win 变量控制发送速率，win=0 时发送方停止发送。
+,计算机网络,什么是操作系统？它有哪些核心特征？,technical,easy,定义：介于硬件和应用之间的系统软件，管理资源。特征：并发（同一时间间隔）、共享（资源共用）、虚拟（物理变逻辑）、异步（速度不可预知）。
+,计算机网络,操作系统的并发与并行有什么区别？,technical,easy,并发指的是同一时间间隔内发生多个事件；并行指的是同一时刻发生多个事件。
+,计算机网络,操作系统的主要功能有哪些？,technical,medium,1. 资源分配与回收（CPU/内存等）；2. 为应用程序提供服务（系统调用）；3. 管理应用程序生命周期；4. 内核功能（调度、内存、通信等）。
+,计算机网络,操作系统在计算机系统中扮演什么角色？,technical,easy,1. 管理者：管理 CPU、内存、外存、IO 及安全性；2. 魔术师：虚拟化资源，让进程感觉独占 CPU 和内存。
+,计算机网络,用户程序与操作系统之间是如何交互的？,technical,easy,相互调用关系。用户程序运行在操作系统之上，使用其服务并被监控，进程结束后由操作系统回收资源。
+,计算机网络,进程的概念是什么？,technical,easy,进程是具有独立功能的程序在一个数据集合上运行的过程，是系统进行资源分配和调度的一个独立单位。它是运行中的程序，由静态文件加载到内存后由 CPU 执行指令形成。
+,计算机网络,进程控制块（PCB）包含哪些信息？,technical,medium,PCB 是进程存在的唯一标识，描述进程基本情况和运行状态。包括：进程描述信息（ID）、控制管理信息（状态、优先级）、资源分配清单（内存、文件、I/O）、CPU 相关信息（寄存器值）。通常通过链表组织。
+,计算机网络,并发与并行有什么区别？,technical,easy,并发指单个处理核在很短时间内分别执行多个进程；并行指多个处理核同时执行多个进程。并发涉及 CPU 切换，需记录当前进程状态以备恢复执行。

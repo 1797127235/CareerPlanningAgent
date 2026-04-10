@@ -1,0 +1,624 @@
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import {
+  Target, Brain, Upload, PenLine, RefreshCw, AlertTriangle, Check, ArrowUpRight
+} from 'lucide-react'
+
+import { useAuth } from '@/hooks/useAuth'
+import { useProfileData } from '@/hooks/useProfileData'
+import { useResumeUpload } from '@/hooks/useResumeUpload'
+import { fetchRecommendations, type Recommendation } from '@/api/recommendations'
+import { setCareerGoal } from '@/api/graph'
+import { rawFetch } from '@/api/client'
+
+import { PreferencesCard } from '@/components/profile/PreferencesCard'
+import {
+  ProfileSkeleton,
+  ProfileEmptyState,
+  SkillsCard,
+  KnowledgeCard,
+  EducationCard,
+  ProjectsCard,
+  SoftSkillsCard,
+  SjtCtaCard,
+  UploadProgress,
+  ManualProfileForm,
+} from '@/components/profile'
+import { ScoreRing } from '@/components/shared/ScoreRing'
+import { GrowthPathMap } from '@/components/GrowthPathMap'
+import { cardVariants } from '@/components/profile/constants'
+
+const ZONE_STYLE: Record<string, string> = {
+  safe:       'bg-emerald-50 text-emerald-700',
+  thrive:     'bg-blue-50 text-blue-700',
+  leverage:   'bg-blue-50 text-blue-700',
+  transition: 'bg-amber-50 text-amber-700',
+  danger:     'bg-red-50 text-red-700',
+}
+const ZONE_TEXT: Record<string, string> = {
+  safe: '安全区', thrive: '成长区', leverage: '杠杆区', transition: '过渡区', danger: '风险区',
+}
+
+
+function SectionHeader({ title, count }: { title: string; count?: string }) {
+  return (
+    <div className="flex items-center gap-2 mb-3 mt-1">
+      <h2 className="text-[15px] font-bold text-slate-800">{title}</h2>
+      {count && (
+        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">
+          {count}
+        </span>
+      )}
+    </div>
+  )
+}
+
+function RecommendationCard({
+  rec,
+  onExplore,
+}: {
+  rec: Recommendation
+  onExplore: (r: Recommendation) => void
+  }) {
+  const zoneStyle = ZONE_STYLE[rec.zone] || 'bg-slate-100 text-slate-600'
+  const zoneText = ZONE_TEXT[rec.zone] || rec.zone
+  const rp = rec.replacement_pressure ?? 50
+  const rpColor = rp < 30 ? 'bg-emerald-400' : rp < 55 ? 'bg-amber-400' : 'bg-rose-400'
+  const rpLabel = rp < 30 ? 'AI安全' : rp < 55 ? 'AI中等' : 'AI风险'
+
+  return (
+    <div
+      onClick={() => onExplore(rec)}
+      className="glass p-3.5 cursor-pointer hover:shadow-[0_4px_20px_rgba(0,0,0,0.06)] transition-all"
+    >
+      <div className="g-inner">
+        <div className="flex items-center justify-between mb-1.5">
+          <h3 className="text-[14px] font-bold text-slate-800 leading-tight truncate">
+            {rec.label}
+          </h3>
+          {rec.affinity_pct > 0 && (
+            <span className="text-[18px] font-black text-blue-600 leading-none shrink-0 ml-2">
+              {Math.round(rec.affinity_pct)}<span className="text-[11px]">%</span>
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${zoneStyle}`}>{zoneText}</span>
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full text-white ${rpColor}`}>{rpLabel}</span>
+        </div>
+        <p className="text-[11px] text-slate-500 line-clamp-1">{rec.reason}</p>
+      </div>
+    </div>
+  )
+}
+
+export default function ProfilePage() {
+  const { token } = useAuth()
+  const { profile, loading, loadProfile, handleSaveEdit, savingEdit } = useProfileData(token)
+  const { fileInputRef, triggerFileDialog, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const [recs, setRecs] = useState<Recommendation[]>([])
+  const [recsLoading, setRecsLoading] = useState(true)
+  const [editing, setEditing] = useState(false)
+  const [showSjtInline, setShowSjtInline] = useState(false)
+  const [showChangeGoalConfirm, setShowChangeGoalConfirm] = useState(false)
+  const [learningProgress, setLearningProgress] = useState<{ pct: number; completed: number; total: number } | null>(null)
+
+  // Name prompt — shown after first upload when profile has no name
+  const [showNamePrompt, setShowNamePrompt] = useState(false)
+  const [pendingName, setPendingName] = useState('')
+  const namePromptShown = useRef(false)
+
+  const sjtRef = useRef<HTMLDivElement>(null)
+  const newSkillParam = searchParams.get('newSkill')
+
+  const hasProfile = (profile?.profile?.skills?.length ?? 0) > 0
+    || (profile?.profile?.experience_years ?? 0) > 0
+    || !!profile?.profile?.education?.school
+
+  // Load recommendations only when no goal is set
+  const goal = profile?.career_goals?.find((g: any) => g.is_primary) || profile?.career_goals?.[0]
+  const hasGoal = !!goal && !!goal.target_node_id
+  const profileUpdatedAt = profile?.updated_at
+
+  useEffect(() => {
+    if (hasProfile && !editing && !hasGoal) {
+      setRecsLoading(true)
+      fetchRecommendations(6)
+        .then(res => setRecs(res.recommendations || []))
+        .catch(console.error)
+        .finally(() => setRecsLoading(false))
+    } else if (hasGoal) {
+      setRecsLoading(false)
+    }
+  }, [hasProfile, editing, hasGoal, profileUpdatedAt])
+
+  // Fetch learning progress when goal exists
+  useEffect(() => {
+    if (hasGoal && goal) {
+      rawFetch<{ progress: { pct: number; completed: number; total: number } }>(
+        `/graph/learning-path/${goal.target_node_id}`
+      )
+        .then(res => setLearningProgress(res.progress))
+        .catch(() => setLearningProgress(null))
+    }
+  }, [hasGoal, goal?.target_node_id])
+
+  // Reset name prompt guard when profile is deleted/cleared
+  useEffect(() => {
+    if (!hasProfile) {
+      namePromptShown.current = false
+    }
+  }, [hasProfile])
+
+  // Name prompt — after profile + recs are loaded, if no name set yet
+  useEffect(() => {
+    if (
+      hasProfile &&
+      !loading &&
+      !recsLoading &&
+      !profile?.name &&
+      !namePromptShown.current &&
+      !showNamePrompt
+    ) {
+      namePromptShown.current = true
+      setPendingName('')
+      setShowNamePrompt(true)
+    }
+  }, [hasProfile, loading, recsLoading, profile?.name, showNamePrompt])
+
+  function handleNameConfirm() {
+    if (!pendingName.trim()) return
+    setShowNamePrompt(false)
+    // Save name in background — no need to block UI
+    rawFetch('/profiles/name', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: pendingName.trim() }),
+    })
+      .then(() => loadProfile())
+      .catch(console.error)
+  }
+
+  // Clear newSkill param after display
+  useEffect(() => {
+    if (newSkillParam) {
+      const timer = setTimeout(() => {
+        setSearchParams({}, { replace: true })
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [newSkillParam, setSearchParams])
+
+  const handleManualEntry = () => {
+    setEditing(true)
+  }
+
+  if (loading) return <ProfileSkeleton />
+  if (!hasProfile && !editing) return <ProfileEmptyState onUpload={triggerFileDialog} onManualEntry={handleManualEntry} />
+  if (!hasProfile && editing) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-8">
+        <div className="flex items-center gap-3 mb-6">
+          <button onClick={() => setEditing(false)} className="w-8 h-8 rounded-full bg-white border border-slate-200 flex items-center justify-center hover:bg-slate-50 cursor-pointer transition-colors">
+            <ArrowUpRight className="w-4 h-4 text-slate-500 rotate-[-135deg]" />
+          </button>
+          <h1 className="text-[18px] font-bold text-slate-800">手动创建画像</h1>
+        </div>
+        <ManualProfileForm
+          onSave={async (data) => {
+            await handleSaveEdit(data)
+            setEditing(false)
+          }}
+          onCancel={() => setEditing(false)}
+          saving={savingEdit}
+        />
+      </div>
+    )
+  }
+
+  const { name, updated_at, profile: prof, quality } = profile!
+
+  // Left Panel Data
+  const skills = prof.skills ?? []
+  const gapTotal = goal?.gap_skills?.length ?? 0
+
+  // Right Panel Data
+  const projects = prof.projects ?? []
+  const education = prof.education ?? {}
+  const experienceYears = prof.experience_years ?? 0
+  const knowledgeAreas = prof.knowledge_areas ?? []
+  const softSkills = prof.soft_skills
+
+  const sjtDims = ['communication', 'learning', 'collaboration', 'innovation', 'resilience'] as const
+  const DIM_LABEL: Record<string, string> = {
+    communication: '沟通', learning: '学习', collaboration: '协作', innovation: '创新', resilience: '抗压',
+  }
+  const hasSjtResults = !!(softSkills && (softSkills as Record<string, unknown>)?._version === 2
+    && sjtDims.some(d => (softSkills as Record<string, unknown>)?.[d] != null))
+
+  // Split recommendations: directions vs promotions
+  const directionRecs = recs.filter(r => r.channel !== 'promotion').sort((a, b) => b.affinity_pct - a.affinity_pct)
+  const promotionRecs = recs.filter(r => r.channel === 'promotion')
+
+  return (
+    <div className="max-w-[1000px] mx-auto px-4 py-6 flex gap-6 items-start">
+      
+      {/* 左栏 */}
+      <div className="w-[280px] shrink-0 sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div className="glass-static p-6">
+          <div className="g-inner flex flex-col gap-5">
+            {/* A. 身份区 */}
+            <div className="flex items-center gap-3">
+              <div 
+                className="w-11 h-11 rounded-xl flex items-center justify-center text-[16px] font-bold text-[var(--blue)]"
+                style={{ background: 'rgba(37,99,235,0.10)', border: '1px solid rgba(37,99,235,0.18)' }}
+              >
+                {name?.charAt(0) || 'U'}
+              </div>
+              <div>
+                <p className="text-[16px] font-semibold text-slate-800">{name}</p>
+                <p className="text-[11px] text-slate-400">更新于 {updated_at?.slice(0, 10)}</p>
+              </div>
+            </div>
+
+            {/* B. 核心指标 */}
+            {hasGoal ? (
+              <>
+                <div className="flex justify-center">
+                  <ScoreRing score={learningProgress?.pct ?? 0} label="学习进度" size={90} />
+                </div>
+                <div className="rounded-xl border border-white/30 bg-white/10 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-3.5 h-3.5 text-[var(--blue)]" />
+                    <span className="text-[13px] font-semibold text-slate-700 truncate">{goal!.target_label}</span>
+                  </div>
+                  <div className="text-[12px] text-slate-500 space-y-1">
+                    {gapTotal > 0 && (
+                      <p>差距技能 {gapTotal} 项待补</p>
+                    )}
+                    {learningProgress && (
+                      <p className="text-slate-400">{learningProgress.completed}/{learningProgress.total} 学习项已完成</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => navigate('/profile/learning')}
+                    className="mt-2 w-full text-[12px] font-semibold text-[var(--blue)] hover:text-blue-700 transition-colors cursor-pointer text-left"
+                  >
+                    查看学习路径 &rarr;
+                  </button>
+                </div>
+                {/* 更换目标 — 次要操作 */}
+                <button
+                  onClick={() => setShowChangeGoalConfirm(true)}
+                  className="flex items-center justify-center gap-1.5 py-2 text-[11px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" /> 更换目标方向
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-center">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <div className="w-[60px] h-[60px] rounded-full bg-emerald-50 border-2 border-emerald-200 flex items-center justify-center">
+                      <Check className="w-6 h-6 text-emerald-500" />
+                    </div>
+                    <span className="text-[12px] font-medium text-slate-500">画像已建立</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    // Scroll to recommendations section
+                    document.getElementById('recs-section')?.scrollIntoView({ behavior: 'smooth' })
+                  }}
+                  className="w-full py-3 rounded-xl btn-cta text-[13px] font-semibold cursor-pointer"
+                >
+                  选择目标方向
+                </button>
+              </>
+            )}
+
+            {/* D. 软技能迷你状态 */}
+            <button 
+              onClick={() => {
+                if (editing) setEditing(false)
+                setTimeout(() => sjtRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+              }}
+              className="rounded-xl border border-white/30 bg-white/10 p-3 text-left w-full hover:bg-white/20 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2 mb-1.5">
+                <Brain className="w-3.5 h-3.5 text-[var(--blue)]" />
+                <span className="text-[12px] font-semibold text-slate-600">
+                  {hasSjtResults ? '软技能：已评估' : '软技能：未评估'}
+                </span>
+              </div>
+              {hasSjtResults && (
+                <div className="flex flex-wrap gap-1.5">
+                  {sjtDims.map(d => {
+                    const dim = (softSkills as Record<string, { level?: string } | undefined>)?.[d]
+                    if (!dim?.level) return null
+                    return (
+                      <span key={d} className="text-[10px] text-slate-500 bg-white/40 px-1.5 py-0.5 rounded">
+                        {DIM_LABEL[d]}:{dim.level}
+                      </span>
+                    )
+                  })}
+                </div>
+              )}
+            </button>
+
+            {/* 上传进度 */}
+            {uploading && <UploadProgress step={uploadStep} />}
+            {uploadError && !uploading && (
+              <div className="px-3 py-2 bg-red-50 border border-red-200 text-[11px] text-red-700 rounded-xl">
+                {uploadError}
+              </div>
+            )}
+
+            {/* E. 操作按钮 */}
+            <div className="flex gap-2 pt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.38)' }}>
+              <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={onFileSelected} />
+              <label
+                onClick={triggerFileDialog}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-[#2563EB] text-white text-[12px] font-semibold cursor-pointer hover:bg-blue-700 transition-colors ${uploading ? 'opacity-60 pointer-events-none' : ''}`}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                {uploading ? '上传中...' : '补充画像'}
+              </label>
+              
+              <button 
+                onClick={() => setEditing(true)}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-[12px] font-semibold text-slate-600 btn-glass cursor-pointer"
+              >
+                <PenLine className="w-3.5 h-3.5" />
+                编辑画像
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 右栏 */}
+      <div className="flex-1 min-w-0">
+        {editing ? (
+          <ManualProfileForm
+            onSave={async (data) => {
+              await handleSaveEdit(data)
+              setEditing(false)
+            }}
+            onCancel={() => setEditing(false)}
+            saving={savingEdit}
+            initialData={{
+              name: name || '',
+              major: education.major || '',
+              skills: skills,
+              knowledge_areas: knowledgeAreas,
+              projects: projects,
+            }}
+          />
+        ) : (
+          <div className="space-y-8 pb-12">
+
+            {/* 区块 1：有目标 → 成长路径图  |  无目标 → 推荐方向 */}
+            {hasGoal ? (
+              <div className="glass-static p-6">
+                <div className="g-inner">
+                  <GrowthPathMap roleId={goal!.target_node_id} roleLabel={goal!.target_label} />
+                </div>
+              </div>
+            ) : recsLoading ? (
+              <div className="animate-pulse space-y-4">
+                <div className="h-4 bg-slate-200 rounded w-1/4"></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="h-32 bg-slate-200 rounded-xl"></div>
+                  <div className="h-32 bg-slate-200 rounded-xl"></div>
+                </div>
+              </div>
+            ) : (
+              <div id="recs-section">
+                {/* Guidance text — show top skills as trust anchor */}
+                {directionRecs.length > 0 && skills.length > 0 && (
+                  <p className="text-[13px] text-slate-500 mb-4 leading-relaxed">
+                    基于你的
+                    <span className="font-semibold text-slate-700">
+                      {' '}{skills.slice(0, 4).map(s => s.name).join('、')}{' '}
+                    </span>
+                    等技能背景，以下方向与你的经历最为契合。点击了解详情，不急着做决定。
+                  </p>
+                )}
+                {directionRecs.length > 0 && (
+                  <div className="mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Target className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">推荐方向</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {directionRecs.map(rec => (
+                        <RecommendationCard key={rec.role_id} rec={rec} onExplore={(r) => navigate(`/roles/${r.role_id}`)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {promotionRecs.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">晋升路径</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      {promotionRecs.map(rec => (
+                        <RecommendationCard key={rec.role_id} rec={rec} onExplore={(r) => navigate(`/roles/${r.role_id}`)} />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 区块 1.5：就业意愿 */}
+            <PreferencesCard
+              initialPreferences={profile?.profile?.preferences ?? null}
+              onSaved={() => loadProfile()}
+            />
+
+            {/* 区块 2：技能 + 项目 (双列) */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <SectionHeader title="技能" count={skills.length + '项'} />
+                <SkillsCard 
+                  skills={skills} 
+                  stagger={0.08} 
+                  cardVariants={cardVariants} 
+                />
+              </div>
+              <div>
+                <SectionHeader title="项目" count={projects.length + '项'} />
+                <ProjectsCard 
+                  projects={projects} 
+                  stagger={0.08} 
+                  cardVariants={cardVariants} 
+                />
+              </div>
+            </div>
+
+            {/* 区块 3：教育 + 软技能 (双列) */}
+            <div className="grid grid-cols-2 gap-4" ref={sjtRef}>
+              <div>
+                <SectionHeader title="教育 & 经验" />
+                <EducationCard 
+                  education={education} 
+                  experienceYears={experienceYears} 
+                  stagger={0.08} 
+                  cardVariants={cardVariants} 
+                />
+                
+                {knowledgeAreas.length > 0 && (
+                  <div className="mt-4">
+                    <SectionHeader title="知识领域" />
+                    <KnowledgeCard 
+                      knowledgeAreas={knowledgeAreas} 
+                      stagger={0.08} 
+                      cardVariants={cardVariants} 
+                    />
+                  </div>
+                )}
+              </div>
+              <div>
+                <SectionHeader title="软技能" />
+                {showSjtInline ? (
+                  <SjtCtaCard 
+                    onComplete={() => { 
+                      setShowSjtInline(false)
+                      loadProfile() 
+                    }} 
+                  />
+                ) : (
+                  <SoftSkillsCard
+                    softSkills={softSkills}
+                    onStartAssessment={() => setShowSjtInline(true)}
+                  />
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+      </div>
+
+      {/* Change goal confirmation modal */}
+      <AnimatePresence>
+        {showChangeGoalConfirm && goal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-[999] flex items-center justify-center p-4"
+            onClick={() => setShowChangeGoalConfirm(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-6 h-6 text-amber-500" />
+              </div>
+              <h3 className="text-[16px] font-bold text-slate-800 text-center mb-2">
+                确认更换目标方向？
+              </h3>
+              <div className="text-[13px] text-slate-500 space-y-1.5 mb-5">
+                <p>你在「{goal.target_label}」方向已完成 {learningProgress?.completed ?? 0}/{learningProgress?.total ?? 0} 个学习项。</p>
+                <p className="text-slate-400">更换目标后：</p>
+                <ul className="text-[12px] text-slate-400 space-y-1 pl-1">
+                  <li>✅ 已掌握的技能会保留在画像中</li>
+                  <li>🔄 差距分析将基于新目标重新计算</li>
+                  <li>📚 学习路径将切换到新方向</li>
+                </ul>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowChangeGoalConfirm(false)}
+                  className="flex-[2] py-2.5 rounded-xl text-[13px] font-bold btn-cta cursor-pointer"
+                >
+                  继续当前目标
+                </button>
+                <button
+                  onClick={async () => {
+                    // Clear goal — set is_primary=false by re-setting without a target
+                    // For now, navigate to recommendations to pick a new one
+                    setShowChangeGoalConfirm(false)
+                    // Clear the current goal from server
+                    await setCareerGoal({
+                      profile_id: profile!.id,
+                      target_node_id: '',
+                      target_label: '',
+                      target_zone: '',
+                      gap_skills: [],
+                      estimated_hours: 0,
+                      safety_gain: 0,
+                      salary_p50: 0,
+                    })
+                    await loadProfile()
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-[13px] font-medium text-slate-500 btn-glass cursor-pointer"
+                >
+                  确认更换
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Name prompt — shown after first upload, once profile + recs are loaded */}
+      {showNamePrompt && (
+        <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-[999] flex items-center justify-center p-6">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full" onClick={e => e.stopPropagation()}>
+            <h3 className="text-[16px] font-bold text-slate-800 mb-2">为你的画像命名</h3>
+            <p className="text-[12px] text-slate-400 mb-4">画像已建立完成，请确认或修改你的姓名</p>
+            <input
+              type="text"
+              value={pendingName}
+              onChange={e => setPendingName(e.target.value)}
+              className="w-full px-3 py-2 text-[14px] border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-200 mb-4"
+              placeholder="请输入姓名"
+              autoFocus
+              onKeyDown={e => e.key === 'Enter' && handleNameConfirm()}
+            />
+            <button
+              onClick={handleNameConfirm}
+              disabled={!pendingName.trim()}
+              className="w-full btn-cta py-2 text-[14px] font-semibold cursor-pointer disabled:opacity-50"
+            >
+              确认
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

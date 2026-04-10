@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Profile Demo v3 — Bento Grid</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#2563EB;--blue-d:#1d4ed8;
+  --green:#16a34a;--amber:#d97706;--red:#dc2626;
+  --t1:#0f172a;--t2:#334155;--t3:#94a3b8;
+  --r:18px;
+}
+body{
+  font-family:'Plus Jakarta Sans','Noto Sans SC',sans-serif;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+  background:#dde1e9;
+  background-image:
+    radial-gradient(ellipse 900px 600px at 10% 5%, rgba(59,130,246,.42),transparent),
+    radial-gradient(ellipse 700px 700px at 90% 90%, rgba(249,115,22,.36),transparent),
+    radial-gradient(ellipse 600px 500px at 5% 85%,  rgba(20,184,166,.30),transparent),
+    radial-gradient(ellipse 500px 400px at 75% 15%, rgba(139,92,246,.22),transparent);
+  background-attachment:fixed;
+}
+
+/* ── glass ── */
+.g{
+  background:rgba(255,255,255,.18);
+  backdrop-filter:blur(44px) saturate(200%) brightness(1.06);
+  -webkit-backdrop-filter:blur(44px) saturate(200%) brightness(1.06);
+  border-radius:var(--r);
+  border:1px solid rgba(255,255,255,.20);
+  border-top-color:rgba(255,255,255,.82);
+  border-left-color:rgba(255,255,255,.48);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.72),
+    0 8px 32px rgba(0,0,0,.08),
+    0 2px 6px rgba(0,0,0,.04);
+  position:relative;overflow:hidden;
+}
+.g::after{
+  content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(150deg,rgba(255,255,255,.22) 0%,transparent 55%);
+}
+.gi{position:relative;z-index:1}
+
+/* ── wrap ── */
+.wrap{max-width:1120px;margin:0 auto;padding:20px 18px 60px;display:flex;flex-direction:column;gap:12px;}
+
+/* ── toggle ── */
+.toggle{
+  display:flex;align-items:center;gap:10px;padding:10px 16px;
+  background:rgba(255,255,255,.22);backdrop-filter:blur(20px);
+  border:1px solid rgba(255,255,255,.45);border-radius:12px;font-size:12px;
+}
+.pill{display:flex;gap:3px;padding:3px;background:rgba(0,0,0,.07);border-radius:9px;}
+.pill button{
+  padding:5px 14px;border-radius:7px;border:none;background:transparent;
+  font:600 11px/1 inherit;color:var(--t3);cursor:pointer;transition:all .18s;
+}
+.pill button.on{background:#fff;color:var(--blue);box-shadow:0 1px 6px rgba(0,0,0,.10);}
+.tgl-r{margin-left:auto;font-size:11px;color:var(--t3);}
+
+/* ── HEADER: compact single row ── */
+.hdr{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 20px;
+}
+.av{
+  width:44px;height:44px;border-radius:13px;flex-shrink:0;
+  background:rgba(37,99,235,.10);
+  border:1.5px solid rgba(37,99,235,.22);border-top-color:rgba(255,255,255,.72);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.60);
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;font-weight:800;color:var(--blue);
+}
+.hdr-name{font-size:16px;font-weight:800;letter-spacing:-.025em;color:var(--t1);}
+.hdr-sub{font-size:10px;color:var(--t3);margin-top:2px;font-weight:500;}
+.hdr-stats{
+  display:flex;gap:16px;margin-left:16px;padding:8px 16px;
+  background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.42);
+  border-radius:11px;
+}
+.stat{text-align:center;}
+.stat-v{font-size:18px;font-weight:800;letter-spacing:-.03em;color:var(--t1);}
+.stat-l{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-top:1px;}
+.stat-sep{width:1px;background:rgba(255,255,255,.50);align-self:stretch;}
+.hdr-acts{margin-left:auto;display:flex;gap:7px;}
+.btn{
+  display:inline-flex;align-items:center;gap:5px;padding:8px 14px;border-radius:10px;
+  font:600 11px/1 inherit;cursor:pointer;border:none;transition:all .16s;
+}
+.btn-blue{background:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.28);}
+.btn-blue:hover{background:var(--blue-d);}
+.btn-ghost{
+  background:rgba(255,255,255,.26);color:var(--t2);
+  border:1px solid rgba(255,255,255,.55);border-top-color:rgba(255,255,255,.78);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.58);
+}
+.btn-ghost:hover{background:rgba(255,255,255,.42);}
+.btn-red{color:#dc2626;background:rgba(220,38,38,.07);border:1px solid rgba(220,38,38,.18);}
+.btn-red:hover{background:rgba(220,38,38,.13);}
+
+/* ══════════════════════════════════
+   MAIN BENTO GRID
+══════════════════════════════════ */
+.bento{
+  display:grid;
+  grid-template-columns:1fr 280px;
+  grid-template-rows:auto;
+  gap:12px;
+  align-items:start;
+}
+
+/* ─── CAREER card (left, full height of sidebar) ─── */
+.career-card{padding:22px 24px;display:flex;flex-direction:column;gap:16px;}
+
+.career-eyebrow{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.10em;color:var(--t3);}
+.career-title{font-size:18px;font-weight:800;letter-spacing:-.03em;color:var(--t1);margin-top:4px;}
+.career-hdr{display:flex;align-items:flex-start;justify-content:space-between;}
+.graph-link{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:6px 12px;border-radius:9px;font:700 11px/1 inherit;
+  color:var(--blue);background:rgba(37,99,235,.07);
+  border:1px solid rgba(37,99,235,.18);text-decoration:none;cursor:pointer;
+  flex-shrink:0;transition:background .15s;
+}
+.graph-link:hover{background:rgba(37,99,235,.14);}
+
+/* From node */
+.from-node{
+  display:flex;align-items:center;gap:12px;
+  padding:11px 15px;border-radius:13px;
+  background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.40);
+}
+.from-node-name{font-size:14px;font-weight:700;color:var(--t1);}
+.from-node-sub{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:3px;}
+.zpill{
+  display:inline-flex;align-items:center;gap:4px;margin-left:auto;flex-shrink:0;
+  padding:3px 10px;border-radius:100px;font-size:10px;font-weight:700;border:1px solid;
+}
+.zs{color:var(--green);background:rgba(22,163,74,.08);border-color:rgba(22,163,74,.22);}
+.zt{color:var(--amber);background:rgba(217,119,6,.08);border-color:rgba(217,119,6,.22);}
+.zdot{width:6px;height:6px;border-radius:50%;}
+.ds{background:var(--green);}.dt{background:var(--amber);}
+
+/* No-goal state */
+.no-goal{
+  display:flex;flex-direction:column;align-items:center;text-align:center;
+  padding:28px 16px;gap:14px;flex:1;
+}
+.no-goal-orb{
+  width:58px;height:58px;border-radius:18px;flex-shrink:0;
+  background:linear-gradient(135deg,rgba(37,99,235,.11),rgba(99,102,241,.07));
+  border:1px solid rgba(37,99,235,.20);border-top-color:rgba(255,255,255,.68);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 4px 16px rgba(37,99,235,.10);
+  display:flex;align-items:center;justify-content:center;color:var(--blue);
+}
+.no-goal h3{font-size:15px;font-weight:700;letter-spacing:-.02em;color:var(--t1);}
+.no-goal p{font-size:12px;color:var(--t3);line-height:1.65;max-width:300px;}
+.btn-explore{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:12px 26px;border-radius:12px;
+  background:var(--blue);color:#fff;
+  font:700 13px/1 inherit;border:none;cursor:pointer;
+  box-shadow:0 4px 16px rgba(37,99,235,.32);
+  transition:all .2s cubic-bezier(.23,1,.32,1);
+}
+.btn-explore:hover{background:var(--blue-d);transform:translateY(-1px);}
+
+/* Goal grid — bento inside bento */
+.goal-grid{
+  display:grid;
+  grid-template-columns:1.8fr 1fr 1fr;
+  gap:10px;
+}
+.gc{
+  border-radius:14px;padding:16px;cursor:pointer;
+  border:1px solid rgba(255,255,255,.28);
+  background:rgba(255,255,255,.13);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 2px 8px rgba(0,0,0,.04);
+  display:flex;flex-direction:column;gap:12px;
+  transition:transform .18s cubic-bezier(.23,1,.32,1),box-shadow .18s;
+  position:relative;overflow:hidden;
+}
+.gc::before{
+  content:'';position:absolute;inset:0;pointer-events:none;border-radius:inherit;
+  background:linear-gradient(145deg,rgba(255,255,255,.16),transparent 55%);
+}
+.gc:hover{transform:translateY(-2px);box-shadow:inset 0 1px 0 rgba(255,255,255,.60),0 8px 24px rgba(0,0,0,.09);}
+.gc.pri{
+  background:rgba(37,99,235,.08);
+  border-color:rgba(37,99,235,.26);border-top-color:rgba(255,255,255,.72);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.62),0 4px 16px rgba(37,99,235,.10);
+}
+.gc.pri:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.68),0 10px 28px rgba(37,99,235,.15);}
+.gc-z{position:relative;z-index:1;}
+
+.gc-top{display:flex;align-items:flex-start;justify-content:space-between;}
+.gc-badge{
+  width:26px;height:26px;border-radius:50%;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;
+}
+.bp{background:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.30);}
+.bs{
+  background:rgba(255,255,255,.32);color:var(--t3);
+  border:1.5px solid rgba(148,163,184,.28);
+}
+.pri-tag{
+  font-size:8px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  padding:3px 8px;border-radius:100px;
+  background:rgba(37,99,235,.11);color:var(--blue);border:1px solid rgba(37,99,235,.20);
+}
+
+.gc-name{font-size:14px;font-weight:800;letter-spacing:-.02em;color:var(--t1);line-height:1.25;margin-top:8px;}
+.gc-name.primary{color:var(--blue);}
+.gc-name.sm{font-size:13px;}
+
+/* progress */
+.gp-row{display:flex;justify-content:space-between;font-size:9px;font-weight:600;color:var(--t3);margin-bottom:5px;}
+.gp-row span:last-child{font-weight:700;color:var(--t2);}
+.gp-track{height:3px;border-radius:100px;background:rgba(255,255,255,.35);overflow:hidden;}
+.gp-fill{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--blue),#818cf8);}
+.gp-fill.am{background:linear-gradient(90deg,var(--amber),#fbbf24);}
+
+/* chips inside card */
+.gchips{display:flex;flex-wrap:wrap;gap:4px;margin-top:2px;}
+.gchip{
+  font-size:9px;font-weight:600;padding:2px 8px;border-radius:100px;
+  background:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.52);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.48);color:var(--t2);white-space:nowrap;
+}
+.gchip-m{color:var(--t3);background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.32);}
+
+.gc-foot{display:flex;align-items:center;justify-content:space-between;margin-top:auto;}
+.gc-hrs{font-size:10px;font-weight:600;color:var(--t3);display:flex;align-items:center;gap:4px;}
+.gc-hrs b{font-size:13px;font-weight:800;color:var(--t2);}
+.gc-btn{
+  font-size:10px;font-weight:700;padding:5px 11px;border-radius:8px;
+  background:rgba(37,99,235,.09);color:var(--blue);
+  border:1px solid rgba(37,99,235,.20);cursor:pointer;font-family:inherit;
+  text-decoration:none;display:inline-flex;align-items:center;gap:3px;
+  transition:background .14s;
+}
+.gc-btn:hover{background:rgba(37,99,235,.16);}
+
+.add-dir{
+  width:100%;padding:11px;border-radius:12px;
+  border:1.5px dashed rgba(37,99,235,.25);background:rgba(37,99,235,.03);
+  font:600 11px/1 inherit;color:var(--blue);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:6px;
+  transition:all .18s;
+}
+.add-dir:hover{background:rgba(37,99,235,.08);border-color:rgba(37,99,235,.40);}
+
+/* ─── SIDEBAR ─── */
+.sidebar{display:flex;flex-direction:column;gap:12px;}
+
+.kpi-card{padding:20px;}
+.kpi-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--t3);margin-bottom:4px;}
+.kpi-v{font-size:44px;font-weight:800;letter-spacing:-.05em;color:var(--t1);line-height:1;}
+.kpi-u{font-size:12px;font-weight:500;color:var(--t3);margin-left:3px;}
+.pt{height:4px;border-radius:100px;background:rgba(255,255,255,.30);overflow:hidden;margin-top:14px;}
+.pf{height:100%;border-radius:100px;background:linear-gradient(90deg,#2563EB,#60a5fa);}
+.kpi-sub{display:flex;justify-content:space-between;font-size:10px;margin-top:7px;color:var(--t3);font-weight:500;}
+.kpi-sub b{color:var(--t2);}
+
+.ai-card{padding:18px 20px;}
+.ai-l{font-size:9px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--blue);margin-bottom:6px;}
+.ai-t{font-size:12px;font-weight:500;color:var(--t1);line-height:1.65;}
+.btn-rpt{
+  margin-top:12px;display:inline-flex;align-items:center;gap:4px;
+  padding:7px 14px;border-radius:9px;
+  background:rgba(37,99,235,.08);color:var(--blue);
+  border:1px solid rgba(37,99,235,.18);font:700 11px/1 inherit;cursor:pointer;
+  transition:background .14s;
+}
+.btn-rpt:hover{background:rgba(37,99,235,.15);}
+
+.sjt-card{padding:20px;display:flex;flex-direction:column;align-items:center;text-align:center;}
+.sjt-ico{
+  width:42px;height:42px;border-radius:13px;margin-bottom:12px;
+  background:rgba(255,255,255,.26);border:1px solid rgba(255,255,255,.55);
+  border-top-color:rgba(255,255,255,.78);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.62);
+  display:flex;align-items:center;justify-content:center;color:var(--blue);
+}
+.sjt-card h4{font-size:13px;font-weight:700;color:var(--t1);margin-bottom:5px;}
+.sjt-card p{font-size:10px;color:var(--t3);line-height:1.6;margin-bottom:14px;}
+.btn-sjt{
+  padding:9px 22px;border-radius:11px;background:var(--blue);color:#fff;
+  border:none;font:700 12px/1 inherit;cursor:pointer;
+  box-shadow:0 2px 10px rgba(37,99,235,.28);transition:all .18s;
+}
+.btn-sjt:hover{background:var(--blue-d);transform:translateY(-1px);}
+
+/* ══ BOTTOM BENTO: 3 col ══ */
+.bottom{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+.sec{padding:18px 20px;}
+.sec-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.sec-t{font-size:12px;font-weight:700;color:var(--t1);}
+.sec-c{font-size:10px;font-weight:600;color:var(--t3);}
+
+/* chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px;}
+.chip{
+  font-size:10px;font-weight:600;padding:4px 10px;border-radius:100px;
+  background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.48);
+  border-top-color:rgba(255,255,255,.70);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.46);
+  color:var(--t2);display:inline-flex;align-items:center;gap:4px;
+}
+.d{width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.de{background:#2563EB;}.dp{background:#16a34a;}.df{background:#94a3b8;}
+.moreb{
+  font-size:10px;font-weight:700;padding:4px 10px;border-radius:100px;cursor:pointer;
+  color:var(--blue);background:rgba(37,99,235,.07);border:1px solid rgba(37,99,235,.16);
+  font-family:inherit;transition:background .14s;
+}
+.moreb:hover{background:rgba(37,99,235,.13);}
+
+/* Projects */
+.proj-list{display:flex;flex-direction:column;gap:6px;}
+.proj{
+  display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:11px;
+  background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.35);
+  font-size:11px;font-weight:500;color:var(--t2);
+}
+.proj-ico{
+  width:24px;height:24px;border-radius:7px;flex-shrink:0;
+  background:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.48);
+  display:flex;align-items:center;justify-content:center;color:var(--t3);
+}
+
+/* Background strips */
+.bg-sec{display:flex;flex-direction:column;gap:10px;}
+.bg-item{
+  padding:12px 14px;border-radius:12px;
+  background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.38);
+}
+.bg-l{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--t3);margin-bottom:3px;}
+.bg-v{font-size:13px;font-weight:700;color:var(--t1);}
+
+svg{display:inline-block;vertical-align:middle;flex-shrink:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- toggle -->
+<div class="toggle">
+  <span style="font-size:12px;font-weight:600;color:var(--t2);">状态：</span>
+  <div class="pill">
+    <button class="on" id="t0" onclick="show(0)">未设定方向</button>
+    <button id="t1" onclick="show(1)">已设 3 个方向</button>
+  </div>
+  <span class="tgl-r">profile-demo.html · v3 bento</span>
+</div>
+
+<!-- HEADER — compact single row -->
+<div class="g hdr">
+  <div class="gi" style="display:flex;align-items:center;gap:14px;width:100%;">
+    <div class="av">刘</div>
+    <div>
+      <div class="hdr-name">刘新宇C</div>
+      <div class="hdr-sub">最近更新于 2026-04-06 · 第 5 步 — 完成软技能测评</div>
+    </div>
+    <div class="hdr-stats">
+      <div class="stat"><div class="stat-v">60</div><div class="stat-l">竞争力</div></div>
+      <div class="stat-sep"></div>
+      <div class="stat"><div class="stat-v">80%</div><div class="stat-l">完整度</div></div>
+      <div class="stat-sep"></div>
+      <div class="stat"><div class="stat-v">22</div><div class="stat-l">技能数</div></div>
+    </div>
+    <div class="hdr-acts">
+      <button class="btn btn-blue">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        上传简历
+      </button>
+      <button class="btn btn-ghost">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        编辑
+      </button>
+      <button class="btn btn-red">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.37"/></svg>
+        重置画像
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN BENTO: career (left) + sidebar (right) -->
+<div class="bento">
+
+  <!-- LEFT COLUMN: career + bottom 3-col -->
+  <div style="display:flex;flex-direction:column;gap:12px;">
+
+  <!-- career card -->
+  <div class="g career-card">
+    <div class="gi" style="display:flex;flex-direction:column;gap:16px;height:100%;">
+
+      <div class="career-hdr">
+        <div>
+          <div class="career-eyebrow">职业方向规划</div>
+          <div class="career-title">你在追踪的方向</div>
+        </div>
+        <a href="#" class="graph-link">
+          图谱
+          <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+        </a>
+      </div>
+
+      <!-- From node -->
+      <div class="from-node">
+        <div>
+          <div class="from-node-sub">当前岗位（简历识别）</div>
+          <div class="from-node-name">C++ 后端工程师</div>
+        </div>
+        <span class="zpill zt"><span class="zdot dt"></span>转型区</span>
+      </div>
+
+      <!-- STATE 0: no goal -->
+      <div id="s0" style="flex:1;display:flex;flex-direction:column;">
+        <div class="no-goal" style="flex:1;">
+          <div class="no-goal-orb">
+            <svg width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+          </div>
+          <h3>还没有设定目标方向</h3>
+          <p>在岗位图谱中浏览各方向的 AI 安全度、薪资区间与晋升路径，锁定目标后系统将计算技能差距与学习路径</p>
+          <button class="btn-explore">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
+            去图谱探索方向
+          </button>
+        </div>
+      </div>
+
+      <!-- STATE 1: goal cards -->
+      <div id="s1" style="display:none;flex:1;display:none;flex-direction:column;gap:12px;">
+
+        <!-- BENTO of goals: 2fr 1fr 1fr -->
+        <div class="goal-grid">
+
+          <!-- Primary -->
+          <div class="gc pri">
+            <div class="gc-z">
+              <div class="gc-top">
+                <div class="gc-badge bp">●</div>
+                <span class="pri-tag">主方向</span>
+              </div>
+              <div style="margin-top:10px;font-size:9px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:rgba(37,99,235,.55);margin-bottom:3px;">目标岗位</div>
+              <div class="gc-name primary">高级后端工程师</div>
+              <div style="margin-top:7px;"><span class="zpill zs"><span class="zdot ds"></span>安全区</span></div>
+            </div>
+            <div class="gc-z">
+              <div class="gp-row"><span>技能差距</span><span>5 项</span></div>
+              <div class="gp-track"><div class="gp-fill" style="width:50%"></div></div>
+              <div class="gchips" style="margin-top:9px;">
+                <span class="gchip">系统设计</span>
+                <span class="gchip">gRPC</span>
+                <span class="gchip">Redis</span>
+                <span class="gchip">分布式事务</span>
+                <span class="gchip gchip-m">+1</span>
+              </div>
+            </div>
+            <div class="gc-foot gc-z">
+              <div class="gc-hrs"><svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>预计 <b>240h</b></div>
+              <a href="#" class="gc-btn">查看路径 <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></a>
+            </div>
+          </div>
+
+          <!-- Goal 2 -->
+          <div class="gc">
+            <div class="gc-z">
+              <div class="gc-badge bs">○</div>
+              <div style="margin-top:10px;font-size:9px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:3px;">备选</div>
+              <div class="gc-name sm">数据工程师</div>
+              <div style="margin-top:7px;"><span class="zpill zt"><span class="zdot dt"></span>过渡区</span></div>
+            </div>
+            <div class="gc-z">
+              <div class="gp-row"><span>差距</span><span>8 项</span></div>
+              <div class="gp-track"><div class="gp-fill am" style="width:80%"></div></div>
+              <div class="gchips" style="margin-top:9px;">
+                <span class="gchip">Spark</span>
+                <span class="gchip">Hadoop</span>
+                <span class="gchip gchip-m">+6</span>
+              </div>
+            </div>
+            <div class="gc-foot gc-z">
+              <div class="gc-hrs"><b>320h</b></div>
+              <a href="#" class="gc-btn">查看 →</a>
+            </div>
+          </div>
+
+          <!-- Goal 3 -->
+          <div class="gc">
+            <div class="gc-z">
+              <div class="gc-badge bs">○</div>
+              <div style="margin-top:10px;font-size:9px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);margin-bottom:3px;">备选</div>
+              <div class="gc-name sm">DevOps 工程师</div>
+              <div style="margin-top:7px;"><span class="zpill zs"><span class="zdot ds"></span>安全区</span></div>
+            </div>
+            <div class="gc-z">
+              <div class="gp-row"><span>差距</span><span>6 项</span></div>
+              <div class="gp-track"><div class="gp-fill" style="width:60%"></div></div>
+              <div class="gchips" style="margin-top:9px;">
+                <span class="gchip">K8s</span>
+                <span class="gchip">Terraform</span>
+                <span class="gchip gchip-m">+4</span>
+              </div>
+            </div>
+            <div class="gc-foot gc-z">
+              <div class="gc-hrs"><b>180h</b></div>
+              <a href="#" class="gc-btn">查看 →</a>
+            </div>
+          </div>
+
+        </div><!-- /goal-grid -->
+
+        <button class="add-dir">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+          添加更多方向
+        </button>
+
+      </div><!-- /s1 -->
+
+    </div>
+  </div>
+
+  <!-- bottom 3-col INSIDE left column -->
+  <div class="bottom">
+
+  <!-- Skills -->
+  <div class="g sec">
+    <div class="gi">
+      <div class="sec-hdr"><span class="sec-t">专业技能</span><span class="sec-c">22 项</span></div>
+      <div class="chips">
+        <span class="chip"><span class="d de"></span>C/C++</span>
+        <span class="chip"><span class="d de"></span>多线程/并发</span>
+        <span class="chip"><span class="d de"></span>Socket 编程</span>
+        <span class="chip"><span class="d dp"></span>STL</span>
+        <span class="chip"><span class="d dp"></span>RAII</span>
+        <span class="chip"><span class="d dp"></span>软件测试</span>
+        <span class="chip"><span class="d df"></span>Python</span>
+        <span class="chip"><span class="d df"></span>MySQL</span>
+        <button class="moreb">+14 ↓</button>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:12px;font-size:9px;color:var(--t3);font-weight:500;">
+        <span><span class="d de" style="width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px;"></span>精通</span>
+        <span><span class="d dp" style="width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px;"></span>熟悉</span>
+        <span><span class="d df" style="width:6px;height:6px;border-radius:50%;display:inline-block;margin-right:3px;"></span>了解</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Knowledge -->
+  <div class="g sec">
+    <div class="gi">
+      <div class="sec-hdr"><span class="sec-t">知识领域</span><span class="sec-c">12 项</span></div>
+      <div class="chips">
+        <span class="chip">数据库技术</span>
+        <span class="chip">网络编程</span>
+        <span class="chip">内存管理</span>
+        <span class="chip">操作系统</span>
+        <span class="chip">系统性能分析</span>
+        <span class="chip">数据结构与算法</span>
+        <button class="moreb">+6 ↓</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Background + Projects -->
+  <div class="g sec">
+    <div class="gi" style="display:flex;flex-direction:column;gap:14px;">
+      <div>
+        <div class="sec-hdr"><span class="sec-t">背景</span></div>
+        <div class="bg-sec">
+          <div class="bg-item"><div class="bg-l">学历</div><div class="bg-v">本科 · 软件工程</div></div>
+          <div class="bg-item"><div class="bg-l">院校</div><div class="bg-v">南华大学</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="sec-hdr"><span class="sec-t">项目经历</span><span class="sec-c">4 项</span></div>
+        <div class="proj-list">
+          <div class="proj"><div class="proj-ico"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>C++ 高性能网络库</div>
+          <div class="proj"><div class="proj-ico"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>SACOS 工程软件测试</div>
+          <div class="proj"><div class="proj-ico"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>高并发内存池优化</div>
+          <div class="proj"><div class="proj-ico"><svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg></div>高并发内存</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /bottom -->
+
+  </div><!-- /left column -->
+
+  <!-- RIGHT: sidebar -->
+  <div class="sidebar">
+
+    <div class="g kpi-card">
+      <div class="gi">
+        <div class="kpi-l">综合竞争力</div>
+        <div><span class="kpi-v">60</span><span class="kpi-u">/ 100</span></div>
+        <div class="pt"><div class="pf" style="width:60%"></div></div>
+        <div class="kpi-sub"><span>画像完整度</span><b>80%</b></div>
+        <div class="pt"><div class="pf" style="width:80%"></div></div>
+      </div>
+    </div>
+
+    <div class="g ai-card">
+      <div class="gi">
+        <div class="ai-l">AI 诊断结论</div>
+        <div class="ai-t">基础扎实，提升核心技术深度是当前关键抓手。</div>
+        <button class="btn-rpt">查看详细报告 <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg></button>
+      </div>
+    </div>
+
+    <div class="g sjt-card">
+      <div class="gi" style="display:flex;flex-direction:column;align-items:center;text-align:center;">
+        <div class="sjt-ico">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <h4>完成情境评估</h4>
+        <p>了解你的软技能画像<br/>15 道题 · 约 5-8 分钟</p>
+        <button class="btn-sjt">开始评估</button>
+      </div>
+    </div>
+
+  </div><!-- /sidebar -->
+
+</div><!-- /bento -->
+</div><!-- /wrap -->
+
+<script>
+function show(n){
+  document.getElementById('t0').classList.toggle('on',n===0);
+  document.getElementById('t1').classList.toggle('on',n===1);
+  const s0=document.getElementById('s0');
+  const s1=document.getElementById('s1');
+  if(n===0){s0.style.display='flex';s1.style.display='none';}
+  else{s0.style.display='none';s1.style.display='flex';}
+}
+</script>
+</body>
+</html>
