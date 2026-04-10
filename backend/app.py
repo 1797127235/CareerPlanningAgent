@@ -41,12 +41,15 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     """Build and return the configured FastAPI application."""
-    from slowapi import Limiter, _rate_limit_exceeded_handler
-    from slowapi.util import get_remote_address
-    from slowapi.errors import RateLimitExceeded
-    from slowapi.middleware import SlowAPIMiddleware
-
-    limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+    try:
+        from slowapi import Limiter, _rate_limit_exceeded_handler
+        from slowapi.util import get_remote_address
+        from slowapi.errors import RateLimitExceeded
+        from slowapi.middleware import SlowAPIMiddleware
+        _slowapi_available = True
+    except ImportError:
+        logger.warning("slowapi not installed — rate limiting disabled. Run: pip install slowapi")
+        _slowapi_available = False
 
     app = FastAPI(
         title="职途智析 API",
@@ -54,9 +57,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         redirect_slashes=False,
     )
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-    app.add_middleware(SlowAPIMiddleware)
+
+    if _slowapi_available:
+        limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+        app.state.limiter = limiter
+        app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+        app.add_middleware(SlowAPIMiddleware)
 
     _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
     app.add_middleware(

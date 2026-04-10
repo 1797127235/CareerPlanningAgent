@@ -7,7 +7,8 @@ import {
 
 import { useAuth } from '@/hooks/useAuth'
 import { useProfileData } from '@/hooks/useProfileData'
-import { useResumeUpload } from '@/hooks/useResumeUpload'
+import { useResumeUpload, useJustUploaded } from '@/hooks/useResumeUpload'
+import { dispatchCoachTrigger } from '@/hooks/useCoachTrigger'
 import { fetchRecommendations, type Recommendation } from '@/api/recommendations'
 import { setCareerGoal } from '@/api/graph'
 import { rawFetch } from '@/api/client'
@@ -96,7 +97,7 @@ function RecommendationCard({
 export default function ProfilePage() {
   const { token } = useAuth()
   const { profile, loading, loadError, loadProfile, handleSaveEdit, savingEdit } = useProfileData(token)
-  const { fileInputRef, triggerFileDialog, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
+  const { fileInputRef, triggerFileDialog, onFileSelected, uploading, uploadStep, uploadError, justUploaded, clearJustUploaded } = useResumeUpload(loadProfile)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -195,6 +196,32 @@ export default function ProfilePage() {
       setShowNamePrompt(true)
     }
   }, [hasProfile, loading, recsLoading, profile?.name, showNamePrompt])
+
+  // After upload: fire personalized coach greeting with actual profile data
+  useEffect(() => {
+    if (!justUploaded || loading || !hasProfile) return
+    clearJustUploaded()
+    // Build rich context from actual profile
+    const prof = profile?.profile ?? {}
+    const skillNames = ((prof.skills ?? []) as Array<{ name?: string } | string>)
+      .slice(0, 6)
+      .map(s => (typeof s === 'string' ? s : s.name ?? ''))
+      .filter(Boolean)
+      .join('、')
+    const domain = (prof as any).primary_domain ?? ''
+    const name = profile?.name ? `（${profile.name}同学）` : ''
+    const edu = (prof.education as any) ?? {}
+    const schoolInfo = edu.school ? `${edu.school} ${edu.degree ?? ''}` : ''
+    const ctx = [
+      `用户${name}刚上传了简历，画像已生成。`,
+      skillNames ? `技能：${skillNames}。` : '',
+      domain ? `主方向：${domain}。` : '',
+      schoolInfo ? `学校：${schoolInfo}。` : '',
+      '请给出个性化的欢迎词，结合用户技能背景推荐2-3个最适合的职业方向，语气亲切简洁（3-4句话即可）。'
+    ].join('')
+    dispatchCoachTrigger('resume-uploaded', ctx)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justUploaded, hasProfile, loading])
 
   function handleNameConfirm() {
     if (!pendingName.trim()) return

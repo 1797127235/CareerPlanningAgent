@@ -691,6 +691,17 @@ function PanelBubble({
   onFollowUp?: (text: string) => void
 }) {
   if (message.role === 'user') {
+    // System notifications (sent internally, not by user) — show as subtle divider, not a bubble
+    if (message.text.startsWith('[系统通知]')) {
+      const summary = message.text.replace(/^\[系统通知\]\s*/, '').split('。')[0]
+      return (
+        <div className="mb-3 flex items-center gap-2 px-1">
+          <div className="flex-1 h-px bg-slate-100" />
+          <span className="text-[10px] text-slate-300 shrink-0">{summary}</span>
+          <div className="flex-1 h-px bg-slate-100" />
+        </div>
+      )
+    }
     return (
       <div className="mb-4 flex justify-end">
         <div className="bg-[var(--blue)]/[0.12] border border-[var(--blue)]/30 text-[var(--blue)] px-4 py-2.5 rounded-[14px_14px_4px_14px] max-w-[85%] text-[13px] leading-[1.6]">

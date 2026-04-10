@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { apiFetch, apiUpload } from '@/api/client'
-import { dispatchCoachTrigger } from '@/hooks/useCoachTrigger'
 
 interface UseResumeUploadReturn {
   uploading: boolean
@@ -95,8 +94,8 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
         // Set justUploaded AFTER loadProfile completes so dialog gets fresh data
         _justUploaded = true
         _listeners.forEach(fn => fn())
-        // Notify coach
-        dispatchCoachTrigger('resume-uploaded', '简历已上传，画像已更新')
+        // Coach notification dispatched by the calling component after profile loads
+        // (so it can include actual profile data for a personalized greeting)
       } catch (err) {
         _set(false, 0, err instanceof Error ? err.message : '上传失败')
       }
