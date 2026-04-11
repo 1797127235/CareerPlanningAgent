@@ -8,6 +8,8 @@ export interface CardData {
   score?: number
   gap_count?: number
   jd_title?: string  // for jd_diagnosis: used to pre-fill "加入实战追踪"
+  company?: string   // LLM-extracted company name from JD text
+  job_url?: string   // original JD URL if available (search-card origin)
 }
 
 export interface JdCardData {
@@ -19,6 +21,16 @@ export interface JdCardData {
   full_text: string
 }
 
+export interface MarketCardData {
+  family: string
+  timing: 'best' | 'good' | 'neutral' | 'caution' | 'no_data'
+  timing_label: string
+  demand_change_pct: number
+  salary_cagr: number
+  node_id: string | null
+  role_examples: string[]  // e.g. ["Java", "Python", "Go"] shown on card before click
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'ai'
@@ -26,6 +38,13 @@ export interface ChatMessage {
   agent?: string  // which agent produced this response
   card?: CardData
   jdCards?: JdCardData[]
+  marketCards?: MarketCardData[]
+}
+
+/** Extra metadata attached to the next AI response's card (e.g. JD URL from search origin) */
+export interface PendingCardContext {
+  company?: string
+  job_url?: string
 }
 
 interface UseChatReturn {
@@ -34,7 +53,7 @@ interface UseChatReturn {
   currentStreamText: string
   currentStreamAgent: string | undefined
   sessionId: number | null
-  sendMessage: (text: string) => void
+  sendMessage: (text: string, pendingCardContext?: PendingCardContext) => void
   clearMessages: () => void
   loadSession: (id: number) => Promise<void>
   setPageContext: (ctx: PageContext) => void
@@ -61,6 +80,7 @@ export function useChat(onComplete?: () => void): UseChatReturn {
   const sessionIdRef = useRef<number | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const pageContextRef = useRef<PageContext | null>(null)
+  const pendingCardCtxRef = useRef<PendingCardContext | null>(null)
 
   const updateSessionId = useCallback((id: number | null) => {
     sessionIdRef.current = id
@@ -68,9 +88,13 @@ export function useChat(onComplete?: () => void): UseChatReturn {
   }, [])
 
   const sendMessage = useCallback(
-    (text: string) => {
+    (text: string, pendingCardContext?: PendingCardContext) => {
       const trimmed = text.trim()
       if (!trimmed || isStreaming) return
+
+      // Store pending card context (e.g. JD URL from search origin) so it can
+      // be merged into the next card emitted by the backend for this turn.
+      pendingCardCtxRef.current = pendingCardContext ?? null
 
       const userMsg: ChatMessage = { id: genId(), role: 'user', text: trimmed }
       setMessages((prev) => [...prev, userMsg])
@@ -128,6 +152,7 @@ export function useChat(onComplete?: () => void): UseChatReturn {
           let accumulated = ''
           let pendingCard: CardData | undefined
           let pendingJdCards: JdCardData[] | undefined
+          let pendingMarketCards: MarketCardData[] | undefined
           let pendingAgent: string | undefined
 
           while (true) {
@@ -143,7 +168,7 @@ export function useChat(onComplete?: () => void): UseChatReturn {
                 const raw = line.slice(5).trim()
                 if (!raw || raw === '[DONE]') continue
                 try {
-                  const parsed = JSON.parse(raw) as { content?: string; session_id?: number; card?: CardData; jd_cards?: JdCardData[]; agent?: string }
+                  const parsed = JSON.parse(raw) as { content?: string; session_id?: number; card?: CardData; jd_cards?: JdCardData[]; market_cards?: MarketCardData[]; agent?: string }
                   if (parsed.content) {
                     accumulated += parsed.content
                     setCurrentStreamText(accumulated)
@@ -158,8 +183,22 @@ export function useChat(onComplete?: () => void): UseChatReturn {
                   if (parsed.jd_cards) {
                     pendingJdCards = parsed.jd_cards
                   }
+                  if (parsed.market_cards) {
+                    pendingMarketCards = parsed.market_cards
+                  }
                   if (parsed.card) {
-                    pendingCard = parsed.card
+                    // Merge pending context (e.g. JD URL from search origin) — client only fills
+                    // fields that the backend did not set, preserving backend-provided values.
+                    const ctx = pendingCardCtxRef.current
+                    if (ctx && parsed.card.type === 'jd_diagnosis') {
+                      pendingCard = {
+                        ...parsed.card,
+                        company: parsed.card.company || ctx.company,
+                        job_url: parsed.card.job_url || ctx.job_url,
+                      }
+                    } else {
+                      pendingCard = parsed.card
+                    }
                   }
                 } catch {
                   /* skip unparseable chunks */
@@ -171,7 +210,7 @@ export function useChat(onComplete?: () => void): UseChatReturn {
           const finalText = accumulated || getFallbackResponse(trimmed)
           setMessages((prev) => [
             ...prev,
-            { id: genId(), role: 'ai', text: finalText, agent: pendingAgent, card: pendingCard, jdCards: pendingJdCards },
+            { id: genId(), role: 'ai', text: finalText, agent: pendingAgent, card: pendingCard, jdCards: pendingJdCards, marketCards: pendingMarketCards },
           ])
         } catch {
           /* Backend unavailable - use fallback */
@@ -184,6 +223,7 @@ export function useChat(onComplete?: () => void): UseChatReturn {
           setCurrentStreamText('')
           setCurrentStreamAgent(undefined)
           abortRef.current = null
+          pendingCardCtxRef.current = null  // consumed — clear for next turn
           onComplete?.()
         }
       })()

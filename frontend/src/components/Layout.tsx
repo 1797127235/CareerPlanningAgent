@@ -43,15 +43,21 @@ export function Layout() {
     document.addEventListener('mouseup', onUp)
   }, [panelWidth])
 
-  // After resume upload, navigate to profile page
-  const { justUploaded, clearJustUploaded } = useJustUploaded()
+  // After resume upload, navigate to profile page.
+  // Do NOT clear justUploaded here — ProfilePage needs to see it to fire the coach greeting.
+  // Use a ref to prevent repeated navigation without consuming the shared flag.
+  const { justUploaded } = useJustUploaded()
+  const hasNavigatedForUpload = useRef(false)
 
   useEffect(() => {
-    if (justUploaded) {
-      clearJustUploaded()
+    if (justUploaded && !hasNavigatedForUpload.current) {
+      hasNavigatedForUpload.current = true
       navigate('/profile')
     }
-  }, [justUploaded, clearJustUploaded, navigate])
+    if (!justUploaded) {
+      hasNavigatedForUpload.current = false
+    }
+  }, [justUploaded, navigate])
 
   // Global ext_session guard
   useEffect(() => {

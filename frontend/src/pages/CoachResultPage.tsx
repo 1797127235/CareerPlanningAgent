@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { rawFetch } from '@/api/client'
-import { ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Trash2, FileText, TrendingUp, Target, BookOpen, Search } from 'lucide-react'
+import { createApplication } from '@/api/applications'
+import { ArrowLeft, CheckCircle2, XCircle, AlertTriangle, Trash2, FileText, TrendingUp, Target, BookOpen, Search, Crosshair, FolderKanban } from 'lucide-react'
 import { motion } from 'framer-motion'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -298,8 +300,23 @@ function MarkdownView({ text, summary }: { text: string; summary: string }) {
 }
 
 
+/* ── Parse JD title into company + position ── */
+function parseJdTitle(title: string): { company: string; position: string } {
+  const separators = /[—\-·|]/
+  const parts = title.split(separators).map(s => s.trim()).filter(Boolean)
+  if (parts.length >= 2) return { company: parts[0], position: parts.slice(1).join(' ') }
+  return { company: '', position: title }
+}
+
 /* ── Build next-step actions from diagnosis data ── */
-function buildNextSteps(detail: StructuredDetail, navigate: ReturnType<typeof useNavigate>): NextStep[] {
+function buildNextSteps(
+  detail: StructuredDetail,
+  navigate: ReturnType<typeof useNavigate>,
+  onApplyGaps: () => void,
+  applyDone: boolean,
+  onAddToGrowth: () => void,
+  trackingDone: boolean,
+): NextStep[] {
   const gaps = detail.gap_skills ?? []
   const highPriGaps = gaps.filter(g => g.priority === 'high')
   const gapNames = (highPriGaps.length > 0 ? highPriGaps : gaps).slice(0, 3).map(g => g.skill).join('、')
@@ -311,7 +328,19 @@ function buildNextSteps(detail: StructuredDetail, navigate: ReturnType<typeof us
 
   return [
     {
-      icon: <BookOpen className="w-4 h-4 text-emerald-500" />,
+      icon: <FolderKanban className="w-4 h-4 text-emerald-500" />,
+      label: trackingDone ? '已加入成长档案' : '加入成长档案实战经历',
+      desc: trackingDone ? '在成长档案 → 实战经历中查看' : '记录这次实战经历，追踪投递进展',
+      onClick: trackingDone ? () => navigate('/growth-log?tab=pursuits') : onAddToGrowth,
+    },
+    {
+      icon: <Crosshair className="w-4 h-4 text-violet-500" />,
+      label: applyDone ? '已加入学习目标' : `将 ${gaps.length} 项缺口设为学习目标`,
+      desc: applyDone ? '前往学习路径查看详细计划' : '写入目标计划，学习路径自动对焦缺口',
+      onClick: applyDone ? () => navigate('/profile/learning') : onApplyGaps,
+    },
+    {
+      icon: <BookOpen className="w-4 h-4 text-blue-400" />,
       label: '查看学习路径',
       desc: `${gaps.length} 项缺口技能的学习路线`,
       onClick: () => navigate('/profile/learning'),
@@ -347,6 +376,9 @@ export default function CoachResultPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const [applyDone, setApplyDone] = useState(false)
+  const [applyError, setApplyError] = useState('')
+  const [trackingDone, setTrackingDone] = useState(false)
 
   const { data, isLoading, error } = useQuery<CoachResultData>({
     queryKey: ['coach-result', id],
@@ -369,6 +401,26 @@ export default function CoachResultPage() {
         else navigate('/', { replace: true })
       }
     },
+  })
+
+  const addToGrowthMut = useMutation({
+    mutationFn: ({ company, position }: { company: string; position: string }) =>
+      createApplication({ company: company || undefined, position: position || undefined }),
+    onSuccess: () => setTrackingDone(true),
+  })
+
+  const applyGapsMut = useMutation({
+    mutationFn: (gapSkills: string[]) =>
+      rawFetch('/graph/career-goal/gaps', {
+        method: 'PATCH',
+        body: JSON.stringify({ gap_skills: gapSkills, source: 'jd_diagnosis' }),
+      }),
+    onSuccess: () => {
+      setApplyDone(true)
+      setApplyError('')
+      setTimeout(() => navigate('/profile/learning'), 800)
+    },
+    onError: () => setApplyError('设置失败，请重试'),
   })
 
   if (isLoading) {
@@ -460,10 +512,33 @@ export default function CoachResultPage() {
           </motion.div>
 
           {/* Content — structured or fallback */}
-          {isStructured
-            ? <JDDiagnosisView detail={data.detail} nextSteps={buildNextSteps(data.detail, navigate)} />
-            : <MarkdownView text={data.detail?.raw_text ?? ''} summary={data.summary} />
-          }
+          {isStructured ? (
+            <>
+              <JDDiagnosisView
+                detail={data.detail}
+                nextSteps={buildNextSteps(
+                  data.detail,
+                  navigate,
+                  () => {
+                    const gaps = (data.detail.gap_skills ?? []).map(g => g.skill)
+                    if (gaps.length > 0) applyGapsMut.mutate(gaps)
+                  },
+                  applyDone,
+                  () => {
+                    const title = data.detail.jd_title || data.title || ''
+                    const { company, position } = parseJdTitle(title)
+                    addToGrowthMut.mutate({ company, position })
+                  },
+                  trackingDone,
+                )}
+              />
+              {applyError && (
+                <p className="text-[13px] text-red-500 mt-2 text-center">{applyError}</p>
+              )}
+            </>
+          ) : (
+            <MarkdownView text={data.detail?.raw_text ?? ''} summary={data.summary} />
+          )}
 
           {/* Bottom actions */}
           <motion.div

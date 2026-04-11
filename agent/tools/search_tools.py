@@ -10,10 +10,74 @@ from __future__ import annotations
 import json
 import logging
 import re
+from contextvars import ContextVar
 
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
+
+# ContextVar for injecting user profile into search queries
+# Set by supervisor before calling navigator_agent/coach_agent
+_injected_profile_for_search: ContextVar[dict | None] = ContextVar(
+    '_injected_profile_for_search', default=None
+)
+_injected_goal_for_search: ContextVar[dict | None] = ContextVar(
+    '_injected_goal_for_search', default=None
+)
+
+
+def _enrich_query_with_profile(query: str) -> str:
+    """Enrich a generic query with profile-based technical keywords.
+
+    If the query has no specific tech terms, prepend target role + top skills
+    from the user's profile/goal.
+    """
+    # Detect if query already has specific tech keywords
+    _TECH_KEYWORDS = (
+        "c++", "java", "python", "go", "rust", "javascript", "typescript",
+        "react", "vue", "android", "ios", "flutter",
+        "后端", "前端", "全栈", "算法", "机器学习", "深度学习",
+        "嵌入式", "运维", "测试", "安全", "数据", "dba",
+        "ml", "ai", "nlp", "cv", "llm", "mlops",
+    )
+    query_lower = query.lower()
+    has_tech = any(kw in query_lower for kw in _TECH_KEYWORDS)
+
+    if has_tech:
+        return query  # Query already specific enough
+
+    # Pull from ContextVar
+    profile = _injected_profile_for_search.get()
+    goal = _injected_goal_for_search.get()
+
+    hints: list[str] = []
+
+    # Priority 1: target role from career goal
+    if goal and goal.get("label"):
+        hints.append(goal["label"])
+
+    # Priority 2: primary_domain or job_target from profile
+    if profile:
+        jt = profile.get("job_target") or profile.get("primary_domain") or ""
+        if jt and jt not in hints:
+            hints.append(jt)
+
+        # Priority 3: top 2 skills
+        skills = profile.get("skills", [])[:3]
+        skill_names = []
+        for s in skills:
+            name = s.get("name", "") if isinstance(s, dict) else str(s)
+            if name and len(name) <= 20:
+                skill_names.append(name)
+        if skill_names:
+            hints.append(" ".join(skill_names))
+
+    if hints:
+        enriched = " ".join(hints) + " 校招 " + query
+        logger.info("Enriched generic query '%s' → '%s'", query[:40], enriched[:80])
+        return enriched
+
+    return query
 
 # ── Layer 1: Aggregator domain blocklist ─────────────────────────────────────
 # Inspired by JobMatch-AI's 37-item list, extended with Chinese job sites
@@ -55,32 +119,85 @@ _ARTICLE_PATTERNS = [
 
 # ── Layer 3: JD content verification ─────────────────────────────────────────
 
-_JD_INDICATORS_ZH = ["岗位职责", "任职要求", "职位描述", "技能要求", "工作职责", "职位要求", "招聘"]
-_JD_INDICATORS_EN = ["responsibilities", "requirements", "qualifications", "apply now", "hiring"]
+# Strong positive: these almost always mean a real job posting
+_JD_STRONG_POSITIVE = [
+    "岗位职责", "任职要求", "职位描述", "岗位要求", "任职资格",
+    "工作内容", "职位要求",
+    "responsibilities", "qualifications", "requirements:", "what you'll do",
+]
+
+# Weak positive: supportive signals (need at least 2 to count)
+_JD_WEAK_POSITIVE = [
+    "岗位名称", "工作地点", "薪资范围", "汇报对象", "发布时间",
+    "apply now", "hiring", "we're looking for",
+]
+
+# Strong negative: Q&A format, FAQ pages, meta-discussion about recruitment
+_JD_NEGATIVE = [
+    "Q：", "Q:", "A：", "A:",
+    "投递时间：", "校园招聘Q&A", "全职补录", "招聘答疑",
+    "面经", "薪资报告", "行业分析",
+    "人才计划", "笔试邀请", "面试邀请",
+    "招聘流程", "招聘对象", "投递机会",
+    "frequently asked", "faq",
+]
+
+# Job ID pattern: hiring IDs like "职位 ID：A192104" or "Job ID: 12345"
+_JOB_ID_RE = re.compile(r"职位\s*(ID|编号)[:：]?\s*[A-Z0-9]{4,}|Job\s*ID[:：]?\s*\w{4,}", re.IGNORECASE)
+
+# Numbered requirements pattern: matches "1、文字" "2.文字" style without false-matching "1.5倍"
+# Requires: digit + 、/．/. + non-digit non-whitespace char (rules out decimal numbers)
+_NUMBERED_REQ_RE = re.compile(r"[1-9][、．\.]\s*[^\d\s.]")
 
 
 def _is_blocked(url: str) -> bool:
     """Check if URL is a blocked site, listing page, or article."""
     url_lower = url.lower()
-    # Domain blocklist (non-job sites)
     if any(d in url_lower for d in _BLOCKED_DOMAINS):
         return True
-    # Search/listing page patterns (individual JD pages pass through)
     if any(re.search(p, url_lower) for p in _LISTING_PAGE_PATTERNS):
         return True
-    # Article/guide detection
     if any(re.search(p, url_lower) for p in _ARTICLE_PATTERNS):
         return True
     return False
 
 
 def _looks_like_jd(text: str) -> bool:
-    """Verify content actually contains job posting indicators."""
+    """Verify content is a real job posting, not an FAQ or landing page.
+
+    Uses signal scoring:
+      - Hard reject: multiple Q&A markers or explicit FAQ keywords
+      - Hard accept: job ID + numbered requirements
+      - Soft scoring: strong_positive (2 pts) + weak_positive (1 pt) ≥ 3
+    """
+    if not text or len(text) < 100:
+        return False
+
+    # Hard reject: FAQ/Q&A patterns
+    negative_hits = sum(1 for kw in _JD_NEGATIVE if kw in text)
+    if negative_hits >= 2:
+        return False
+
+    # Hard accept: has job ID AND numbered requirements (very strong signal)
+    has_job_id = bool(_JOB_ID_RE.search(text))
+    numbered_matches = _NUMBERED_REQ_RE.findall(text)
+    if has_job_id and len(numbered_matches) >= 2:
+        return True
+
+    # Soft scoring
+    score = 0
     text_lower = text.lower()
-    return (
-        any(ind in text_lower for ind in _JD_INDICATORS_ZH)
-        or any(ind in text_lower for ind in _JD_INDICATORS_EN)
-    )
+    for kw in _JD_STRONG_POSITIVE:
+        if kw.lower() in text_lower:
+            score += 2
+    for kw in _JD_WEAK_POSITIVE:
+        if kw.lower() in text_lower:
+            score += 1
+    # Numbered list bonus
+    if len(numbered_matches) >= 3:
+        score += 2
+
+    return score >= 3
 
 
 def _extract_requirements(text: str) -> str:
@@ -161,6 +278,9 @@ def search_real_jd(query: str) -> str:
     if not query or not query.strip():
         return "请提供搜索关键词，如'C++ 后端开发'。"
 
+    # Enrich generic queries with user profile context (prevents HR/misc results)
+    query = _enrich_query_with_profile(query.strip())
+
     try:
         import os
         from tavily import TavilyClient
@@ -185,7 +305,7 @@ def search_real_jd(query: str) -> str:
         # Default: campus domains only (no social hire results)
         include_domains = [matched_domain] if matched_domain else all_campus
 
-        search_query = f"{query.strip()} 招聘 岗位职责 任职要求"
+        search_query = f"{query} 招聘 岗位职责 任职要求"
         response = client.search(
             query=search_query,
             search_depth="advanced",
@@ -217,7 +337,7 @@ def search_real_jd(query: str) -> str:
                 "source": _get_domain(r.get("url", "")),
                 "skills": skills,
                 "requirements": requirements,
-                "full_text": content[:1000],
+                "full_text": content[:3000],  # expanded from 1000 to preserve 任职要求 section
             })
 
         # Return structured marker for frontend rendering

@@ -45,6 +45,15 @@ export interface Education {
   school?: string
 }
 
+export interface Internship {
+  company: string
+  role: string
+  duration?: string
+  tech_stack?: string[]
+  highlights?: string
+  tier?: string
+}
+
 export interface SoftSkillEntry {
   score: number
   level?: 'high' | 'medium' | 'low'
@@ -63,6 +72,8 @@ export interface ProfileData {
     education?: Education
     experience_years?: number
     projects?: string[]
+    internships?: Internship[]
+    certificates?: string[]
     soft_skills?: Record<string, SoftSkillEntry | number>
     [key: string]: unknown
   }

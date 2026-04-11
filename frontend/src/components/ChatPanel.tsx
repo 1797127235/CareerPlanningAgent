@@ -4,7 +4,7 @@ import { Paperclip, ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, Volum
 import { useNavigate, useLocation } from 'react-router-dom'
 import { marked } from 'marked'
 import { useChat } from '@/hooks/useChat'
-import type { ChatMessage, CardData, JdCardData, PageContext } from '@/hooks/useChat'
+import type { ChatMessage, CardData, JdCardData, MarketCardData, PageContext } from '@/hooks/useChat'
 import { useSessions } from '@/hooks/useSessions'
 import { useBrowserTTS } from '@/hooks/useBrowserTTS'
 import { useBrowserSTT } from '@/hooks/useBrowserSTT'
@@ -398,7 +398,10 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
                 onTTSToggle={tts.supported ? handleTTSToggle : undefined}
                 isTTSPlaying={tts.speaking && ttsPlayingId === msg.id}
                 onCardClick={(card) => navigate(`/coach/result/${card.id}`)}
-                onJdDiagnose={(jd) => sendMessage(`请诊断这份JD的匹配度：\n\n${jd.full_text}`)}
+                onJdDiagnose={(jd) => sendMessage(
+                  `请诊断这份JD的匹配度：\n\n${jd.full_text}`,
+                  { job_url: jd.url, company: jd.source },
+                )}
                 onFollowUp={(text) => sendMessage(text)}
               />
             ))}
@@ -557,6 +560,72 @@ function ActionCard({ card, onClick }: { card: CardData; onClick: () => void }) 
   )
 }
 
+/* ── Market Signal Cards ── */
+function MarketCards({ cards }: { cards: MarketCardData[] }) {
+  const navigate = useNavigate()
+
+  const cfg: Record<string, { icon: string; border: string; bg: string; badge: string; text: string }> = {
+    best:    { icon: '✅', border: 'border-emerald-200', bg: 'bg-emerald-50', badge: 'bg-emerald-100 text-emerald-700', text: 'text-emerald-600' },
+    good:    { icon: '✓',  border: 'border-blue-200',   bg: 'bg-blue-50',    badge: 'bg-blue-100 text-blue-700',     text: 'text-blue-600' },
+    neutral: { icon: '→',  border: 'border-slate-200',  bg: 'bg-slate-50',   badge: 'bg-slate-100 text-slate-600',   text: 'text-slate-500' },
+    caution: { icon: '⚠️', border: 'border-amber-200',  bg: 'bg-amber-50',   badge: 'bg-amber-100 text-amber-700',   text: 'text-amber-600' },
+    no_data: { icon: '—',  border: 'border-slate-200',  bg: 'bg-slate-50',   badge: 'bg-slate-100 text-slate-500',   text: 'text-slate-400' },
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t border-slate-100">
+      <div className="text-[10px] text-slate-400 mb-2 flex items-center gap-1">
+        <span>系统市场数据</span>
+        <span>·</span>
+        <span>2021→2024 年真实招聘趋势</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {cards.map(card => {
+          const c = cfg[card.timing] ?? cfg.neutral
+          const demandSign = card.demand_change_pct >= 0 ? '▲' : '▼'
+          const salarySign = card.salary_cagr >= 0 ? '+' : ''
+          return (
+            <div
+              key={card.family}
+              className={`flex-1 min-w-[130px] max-w-[180px] rounded-lg border ${c.border} ${c.bg} p-2.5 ${card.node_id ? 'cursor-pointer hover:shadow-sm' : ''} transition-shadow`}
+              onClick={() => card.node_id && navigate(`/roles/${card.node_id}`)}
+            >
+              <div className="flex items-start justify-between gap-1 mb-2">
+                <span className="font-medium text-xs text-slate-700 leading-tight">{card.family}</span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${c.badge}`}>{c.icon}</span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">市场需求</span>
+                  <span className={`font-medium ${card.demand_change_pct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {demandSign} {Math.abs(card.demand_change_pct).toFixed(0)}%
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="text-slate-400">薪资趋势</span>
+                  <span className={`font-medium ${card.salary_cagr >= 3 ? 'text-emerald-600' : card.salary_cagr >= 0 ? 'text-slate-500' : 'text-red-500'}`}>
+                    {salarySign}{card.salary_cagr.toFixed(0)}%/年
+                  </span>
+                </div>
+              </div>
+              {card.role_examples && card.role_examples.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {card.role_examples.map(r => (
+                    <span key={r} className="text-[9px] px-1 py-0.5 bg-white/70 rounded text-slate-500 border border-slate-200">{r}</span>
+                  ))}
+                </div>
+              )}
+              {card.node_id && (
+                <div className="mt-1.5 text-[10px] text-slate-400">查看详情 →</div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /* ── JD Search Result Cards ── */
 function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose: (jd: JdCardData) => void }) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
@@ -633,6 +702,7 @@ function SlowResponseHint({ isStreaming }: { isStreaming: boolean }) {
 /* ── Add to Tracking Button ── */
 function AddToTrackingButton({ card }: { card: CardData }) {
   const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const navigate = useNavigate()
 
   function parseJdTitle(title: string): { company: string; position: string } {
     const separators = /[—\-·|]/
@@ -647,8 +717,22 @@ function AddToTrackingButton({ card }: { card: CardData }) {
     if (state !== 'idle') return
     setState('loading')
     try {
-      const { company, position } = parseJdTitle(card.jd_title || card.title || '')
-      await createApplication({ company: company || undefined, position: position || undefined })
+      // Priority: card.company + card.jd_title > parsed title fallback
+      let company = card.company || ''
+      let position = card.jd_title || ''
+      if (!company && !position) {
+        const parsed = parseJdTitle(card.title || '')
+        company = parsed.company
+        position = parsed.position
+      } else if (!position) {
+        // Have company from LLM but no explicit position, fall back to title
+        position = card.title || ''
+      }
+      await createApplication({
+        company: company || undefined,
+        position: position || undefined,
+        job_url: card.job_url || undefined,
+      })
       setState('done')
     } catch {
       setState('error')
@@ -658,9 +742,16 @@ function AddToTrackingButton({ card }: { card: CardData }) {
 
   if (state === 'done') {
     return (
-      <span className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-600 bg-emerald-50 border border-emerald-100">
-        <CheckCircle2 className="w-3 h-3" /> 已加入追踪
-      </span>
+      <button
+        onClick={() => {
+          setState('idle')        // 重置，允许删掉后再次添加
+          navigate('/growth-log?tab=pursuits')
+        }}
+        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 transition-colors cursor-pointer"
+        title="前往成长档案 · 返回后可重新添加"
+      >
+        <CheckCircle2 className="w-3 h-3" /> 已加入追踪 →
+      </button>
     )
   }
 
@@ -742,6 +833,9 @@ function PanelBubble({
       )}
       {message.jdCards && message.jdCards.length > 0 && onJdDiagnose && (
         <JdSearchCards cards={message.jdCards} onDiagnose={onJdDiagnose} />
+      )}
+      {message.marketCards && message.marketCards.length > 0 && (
+        <MarketCards cards={message.marketCards} />
       )}
       {/* Follow-up chips after JD diagnosis */}
       {message.card?.type === 'jd_diagnosis' && onFollowUp && (

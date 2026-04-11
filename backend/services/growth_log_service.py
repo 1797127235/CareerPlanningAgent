@@ -19,6 +19,51 @@ _DELTA_ESTIMATE = {
 }
 
 
+def _compute_readiness_live(profile_id: int, db: Session) -> float | None:
+    """Compute readiness directly from CareerGoal + current skills, bypassing stale snapshot.
+
+    Called after skill updates so the returned value reflects new skills immediately.
+    """
+    try:
+        from backend.db_models import CareerGoal, Profile
+        profile = db.query(Profile).filter(Profile.id == profile_id).first()
+        if not profile:
+            return None
+
+        goal = (
+            db.query(CareerGoal)
+            .filter(CareerGoal.profile_id == profile_id, CareerGoal.is_active == True)
+            .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
+            .first()
+        )
+        if not goal:
+            return None
+
+        from backend.services.graph_service import GraphService
+        svc = GraphService()
+        svc.load()
+        node = svc.get_node(goal.target_node_id)
+        if not node:
+            return None
+
+        must_skills = [s.lower().strip() for s in node.get("must_skills", [])]
+        if not must_skills:
+            return 0.0
+
+        profile_data = json.loads(profile.profile_json or "{}")
+        raw_skills = profile_data.get("skills", [])
+        if raw_skills and isinstance(raw_skills[0], dict):
+            user_skills = {s.get("name", "").lower().strip() for s in raw_skills}
+        else:
+            user_skills = {s.lower().strip() for s in raw_skills if isinstance(s, str)}
+
+        matched = sum(1 for s in must_skills if s in user_skills)
+        return round(matched / len(must_skills) * 100, 1)
+    except Exception as e:
+        logger.debug("_compute_readiness_live failed: %s", e)
+        return None
+
+
 def get_current_readiness(profile_id: int, db: Session) -> float | None:
     """获取当前 readiness%。
 
@@ -342,17 +387,21 @@ def on_learning_completed(
                 profile_data = json.loads(profile.profile_json or "{}")
                 existing_skills = profile_data.get("skills", [])
 
-                # Normalize to list of strings
-                if existing_skills and isinstance(existing_skills[0], dict):
+                # Detect format: list of dicts vs list of strings
+                is_dict_format = bool(existing_skills) and isinstance(existing_skills[0], dict)
+                if is_dict_format:
                     existing_names = {s.get("name", "").lower() for s in existing_skills}
                     existing_list = existing_skills
                 else:
                     existing_names = {s.lower() for s in existing_skills if isinstance(s, str)}
                     existing_list = list(existing_skills)
 
-                # Add if not already present
+                # Add if not already present — preserve format (dict vs string)
                 if matched_skill not in existing_names:
-                    existing_list.append(matched_skill)
+                    if is_dict_format:
+                        existing_list.append({"name": matched_skill, "level": "familiar"})
+                    else:
+                        existing_list.append(matched_skill)
                     profile_data["skills"] = existing_list
                     profile.profile_json = json.dumps(profile_data, ensure_ascii=False)
                     # Invalidate cached recommendations so next visit recomputes
@@ -362,6 +411,35 @@ def on_learning_completed(
                     logger.info(
                         "Learning '%s' → added skill '%s' to profile %d",
                         topic_title, matched_skill, profile_id,
+                    )
+
+            # Compute new readiness live (bypasses stale snapshot)
+            readiness_after_live = _compute_readiness_live(profile_id, db)
+
+            # Create new GrowthSnapshot on every learning completion (even without new skill).
+            # This builds the readiness curve over time so students can see their progress.
+            if readiness_after_live is not None:
+                from backend.db_models import GrowthSnapshot, CareerGoal
+                goal = (
+                    db.query(CareerGoal)
+                    .filter(CareerGoal.profile_id == profile_id, CareerGoal.is_active == True)
+                    .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
+                    .first()
+                )
+                if goal:
+                    db.add(GrowthSnapshot(
+                        profile_id=profile_id,
+                        target_node_id=goal.target_node_id,
+                        trigger="skill_acquired",
+                        stage_completed=0,
+                        readiness_score=readiness_after_live,
+                        base_score=readiness_after_live,
+                        growth_bonus=0.0,
+                        four_dim_detail=None,
+                    ))
+                    logger.info(
+                        "GrowthSnapshot created: profile=%d readiness %.1f→%.1f (topic=%s)",
+                        profile_id, readiness_before or 0, readiness_after_live, topic_title,
                     )
 
             # Create GrowthEvent (whether or not a skill was added)
@@ -374,7 +452,7 @@ def on_learning_completed(
                 profile_id=profile_id,
                 event_type="learning_completed",
                 source_table="learning_progress",
-                source_id=0,  # subtopic_id is a string, use 0 as placeholder
+                source_id=0,
                 summary=summary,
                 skills_delta={"added": added_skills} if added_skills else {},
                 readiness_before_override=readiness_before,

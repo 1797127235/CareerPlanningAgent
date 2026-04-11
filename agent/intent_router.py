@@ -17,7 +17,11 @@ _initialized = False
 
 
 def _make_encoder():
-    """Create OpenAIEncoder compatible with DashScope text-embedding-v3."""
+    """Create OpenAIEncoder compatible with DashScope text-embedding-v3.
+
+    DashScope's compatible-mode API rejects batches larger than 10 texts.
+    _BatchedEncoder overrides __call__ to chunk into ≤10-item batches.
+    """
     from semantic_router.encoders import OpenAIEncoder
 
     api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
@@ -25,6 +29,18 @@ def _make_encoder():
 
     if not api_key or api_key == "sk-placeholder":
         return None
+
+    class _BatchedEncoder(OpenAIEncoder):
+        """Chunks embedding calls into batches of ≤10 for DashScope API limit."""
+        _BATCH_SIZE = 10
+
+        def __call__(self, docs: list[str]) -> list[list[float]]:
+            if len(docs) <= self._BATCH_SIZE:
+                return super().__call__(docs)
+            result: list[list[float]] = []
+            for i in range(0, len(docs), self._BATCH_SIZE):
+                result.extend(super().__call__(docs[i:i + self._BATCH_SIZE]))
+            return result
 
     # Monkey-patch tiktoken to handle unknown DashScope model names
     _original = tiktoken.encoding_for_model
@@ -37,7 +53,7 @@ def _make_encoder():
 
     tiktoken.encoding_for_model = _patched
     try:
-        encoder = OpenAIEncoder(
+        encoder = _BatchedEncoder(
             name="text-embedding-v3",
             openai_api_key=api_key,
             openai_base_url=base_url,

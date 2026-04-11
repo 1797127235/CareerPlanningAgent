@@ -52,7 +52,7 @@ Write-Host ""
 
 # Start Backend
 Write-Host "[1/2] Starting Backend (port 8000)..." -ForegroundColor Yellow
-$backendCmd = "Set-Location '$Root'; python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000; Read-Host 'Press Enter to close'"
+$backendCmd = "Set-Location '$Root'; python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload; Read-Host 'Press Enter to close'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Normal
 
 Start-Sleep -Seconds 3

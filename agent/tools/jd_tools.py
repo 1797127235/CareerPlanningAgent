@@ -17,6 +17,8 @@ _injected_user_id: ContextVar[int | None] = ContextVar('_injected_user_id', defa
 def _save_jd_coach_result(
     jd_text: str, match_score: int, matched: list, gaps: list, jd_title: str,
     user_id: int | None = None,
+    company: str = "",
+    job_url: str = "",
 ) -> int | None:
     """Save JD diagnosis as a CoachResult. Returns the result ID or None."""
     try:
@@ -36,10 +38,15 @@ def _save_jd_coach_result(
             if not user_id:
                 return None
 
+            # Build display title: prefer "公司 - 岗位" if company available
+            display_title = jd_title or (jd_text[:40] + "...")
+            if company and jd_title and company not in jd_title:
+                display_title = f"{company} · {jd_title}"
+
             coach_result = CoachResult(
                 user_id=user_id,
                 result_type="jd_diagnosis",
-                title=jd_title or jd_text[:40] + "...",
+                title=display_title,
                 summary=f"匹配度 {match_score}%，匹配 {len(matched)} 项技能，缺口 {len(gaps)} 项",
                 detail_json=json.dumps({
                     "_structured": True,
@@ -47,11 +54,15 @@ def _save_jd_coach_result(
                     "matched_skills": matched,
                     "gap_skills": gaps,
                     "jd_title": jd_title,
+                    "company": company,
+                    "job_url": job_url,
                 }, ensure_ascii=False),
                 metadata_json=json.dumps({
                     "match_score": match_score,
                     "gap_count": len(gaps),
                     "matched_count": len(matched),
+                    "company": company,
+                    "job_url": job_url,
                 }, ensure_ascii=False),
             )
             db.add(coach_result)

@@ -119,6 +119,7 @@ export default function ProfilePage() {
   const hasProfile = (profile?.profile?.skills?.length ?? 0) > 0
     || (profile?.profile?.knowledge_areas?.length ?? 0) > 0
     || (profile?.profile?.projects?.length ?? 0) > 0
+    || (profile?.profile?.internships?.length ?? 0) > 0
     || (profile?.profile?.experience_years ?? 0) > 0
     || !!profile?.profile?.education?.school
     || !!profile?.profile?.education?.major
@@ -301,6 +302,11 @@ export default function ProfilePage() {
   const experienceYears = prof.experience_years ?? 0
   const knowledgeAreas = prof.knowledge_areas ?? []
   const softSkills = prof.soft_skills
+  const internships = (prof.internships ?? []) as Array<{
+    company: string; role: string; duration?: string
+    tech_stack?: string[]; highlights?: string; tier?: string
+  }>
+  const certificates = (prof.certificates ?? []) as string[]
 
   const sjtDims = ['communication', 'learning', 'collaboration', 'innovation', 'resilience'] as const
   const DIM_LABEL: Record<string, string> = {
@@ -581,6 +587,99 @@ export default function ProfilePage() {
                 />
               </div>
             </div>
+
+            {/* 区块 2.5：实习经历 + 证书 (仅当有数据时显示) */}
+            {(internships.length > 0 || certificates.length > 0) && (
+              <div className="glass-static p-5">
+                <div className="g-inner space-y-4">
+
+                  {/* 实习经历 */}
+                  {internships.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h2 className="text-[14px] font-bold text-slate-800">实习经历</h2>
+                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{internships.length} 段</span>
+                        {internships.filter(i => i.tier === '顶级大厂').length > 0 && (
+                          <span className="ml-auto text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-md">
+                            {internships.filter(i => i.tier === '顶级大厂').length} 顶级大厂
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-2.5">
+                        {internships.map((intern, idx) => (
+                          <div key={idx} className="flex items-start gap-3">
+                            {/* 时间线点 */}
+                            <div className="mt-1.5 flex-shrink-0">
+                              <div className={`w-2 h-2 rounded-full ring-2 ${
+                                intern.tier === '顶级大厂'
+                                  ? 'bg-blue-500 ring-blue-100'
+                                  : 'bg-slate-300 ring-slate-100'
+                              }`} />
+                            </div>
+                            <div className="flex-1 min-w-0 pb-2.5 border-b border-slate-50 last:border-0 last:pb-0">
+                              <div className="flex items-start justify-between gap-2 mb-1">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[13px] font-bold text-slate-800">{intern.company}</span>
+                                    {intern.tier && (
+                                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-[5px] ${
+                                        intern.tier === '顶级大厂'
+                                          ? 'bg-blue-50 text-blue-600'
+                                          : 'bg-slate-100 text-slate-500'
+                                      }`}>{intern.tier}</span>
+                                    )}
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 mt-0.5">{intern.role}</p>
+                                </div>
+                                {intern.duration && (
+                                  <span className="text-[10px] text-slate-400 shrink-0 whitespace-nowrap">{intern.duration}</span>
+                                )}
+                              </div>
+                              {intern.highlights && (
+                                <p className="text-[11px] text-slate-600 leading-relaxed mb-1.5">{intern.highlights}</p>
+                              )}
+                              {intern.tech_stack && intern.tech_stack.length > 0 && (
+                                <div className="flex flex-wrap gap-1">
+                                  {intern.tech_stack.slice(0, 5).map(t => (
+                                    <span key={t} className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 分割线（两个区块都有时显示） */}
+                  {internships.length > 0 && certificates.length > 0 && (
+                    <div className="h-px bg-slate-100" />
+                  )}
+
+                  {/* 证书 */}
+                  {certificates.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <h2 className="text-[14px] font-bold text-slate-800">证书</h2>
+                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">{certificates.length} 项</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {certificates.map((cert, idx) => (
+                          <span key={idx} className="flex items-center gap-1 px-2.5 py-1 rounded-[8px] text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-100">
+                            <svg className="w-3 h-3 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                            </svg>
+                            {cert}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            )}
 
             {/* 区块 3：教育 + 软技能 (双列) */}
             <div className="grid grid-cols-2 gap-4" ref={sjtRef}>

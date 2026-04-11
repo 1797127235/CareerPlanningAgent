@@ -25,6 +25,93 @@ from agent.state import CareerState
 
 logger = logging.getLogger(__name__)
 
+# ── Market signals loader (lazy, cached) ──────────────────────────────────────
+
+_market_signals: dict | None = None
+_industry_signals: dict | None = None
+_graph_family_map: dict | None = None  # node_id → role_family
+
+
+def _get_global_market_summary() -> str:
+    """Return a compact market summary for all role families (always injected into context).
+
+    This ensures coach always has real data to reference, preventing hallucination
+    when no specific career goal is set.
+    """
+    global _market_signals
+    import json
+    from pathlib import Path
+
+    if _market_signals is None:
+        try:
+            data_dir = Path(__file__).resolve().parent.parent / "data"
+            _market_signals = json.loads((data_dir / "market_signals.json").read_text(encoding="utf-8"))
+        except Exception:
+            return ""
+
+    if not _market_signals:
+        return ""
+
+    best, good, caution = [], [], []
+    for family, sig in _market_signals.items():
+        if sig.get("is_proxy"):
+            continue
+        timing = sig.get("timing", "")
+        pct = sig.get("demand_change_pct", 0)
+        salary_cagr = sig.get("salary_cagr", 0)
+        if timing == "best":
+            best.append(f"{family}(需求{pct:+.0f}%，薪资+{salary_cagr:.0f}%/年)")
+        elif timing == "good":
+            good.append(f"{family}(需求{pct:+.0f}%，薪资+{salary_cagr:.0f}%/年)")
+        elif timing == "caution":
+            caution.append(f"{family}(需求{pct:+.0f}%)")
+
+    lines = ["- 各CS方向市场时机（系统真实数据，2021→2024年招聘趋势）:"]
+    if best:
+        lines.append(f"  ✅ 入场好时机: {' / '.join(best)}")
+    if good:
+        lines.append(f"  ✓ 相对稳健: {' / '.join(good)}")
+    if caution:
+        lines.append(f"  ⚠️ 岗位收紧（需差异化）: {' / '.join(caution)}")
+    lines.append("  [这是系统招聘库的真实数据，用这些数字回答用户，禁止编造其他统计]")
+
+    return "\n".join(lines)
+
+
+def _get_market_signal_for_node(node_id: str) -> dict | None:
+    """Return precomputed market signal + top industries for a graph node_id."""
+    global _market_signals, _industry_signals, _graph_family_map
+    import json
+    from pathlib import Path
+    data_dir = Path(__file__).resolve().parent.parent / "data"
+
+    if _market_signals is None:
+        try:
+            _market_signals = json.loads((data_dir / "market_signals.json").read_text(encoding="utf-8"))
+        except Exception:
+            _market_signals = {}
+    if _industry_signals is None:
+        try:
+            _industry_signals = json.loads((data_dir / "industry_signals.json").read_text(encoding="utf-8"))
+        except Exception:
+            _industry_signals = {}
+    if _graph_family_map is None:
+        try:
+            nodes = json.loads((data_dir / "graph.json").read_text(encoding="utf-8")).get("nodes", [])
+            _graph_family_map = {n["node_id"]: n.get("role_family", "") for n in nodes}
+        except Exception:
+            _graph_family_map = {}
+
+    role_family = _graph_family_map.get(node_id, "")
+    if not role_family:
+        return None
+    sig = _market_signals.get(role_family)
+    if sig:
+        # Merge top industries from separate file
+        sig = dict(sig)
+        sig["top_industries"] = _industry_signals.get(role_family, [])[:3]
+    return sig
+
 
 # ── Context summary builder ───────────────────────────────────────────────────
 
@@ -37,6 +124,12 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
                     triage from fabricating data-dependent answers.
     """
     parts = ["当前用户状态："]
+
+    # Always inject global market summary so coach has real data regardless of career goal
+    if not for_triage:
+        market_summary = _get_global_market_summary()
+        if market_summary:
+            parts.append(market_summary)
 
     if state.get("user_profile"):
         profile = state["user_profile"]
@@ -53,24 +146,45 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
         edu = profile.get("education", {})
         if edu and edu.get("degree") and not for_triage:
             parts.append(f"- 学历: {edu.get('degree', '')} · {edu.get('major', '')}")
+        # Resume projects — inject so coach doesn't ask "what projects have you done"
+        if not for_triage:
+            resume_projects = profile.get("projects", [])
+            if resume_projects:
+                proj_parts = []
+                for p in resume_projects[:3]:
+                    if isinstance(p, dict):
+                        name = p.get("name", "")
+                        desc = p.get("description", "")
+                        if name:
+                            proj_parts.append(f"「{name}」{desc[:60] if desc else ''}")
+                    elif p:
+                        proj_parts.append(str(p)[:60])
+                if proj_parts:
+                    parts.append(f"- 简历项目: {' / '.join(proj_parts)}")
         # Career preferences
         prefs = profile.get("preferences", {})
-        if prefs and not for_triage:
-            pref_labels = {
-                "work_style": {"tech": "深挖技术", "product": "做产品", "data": "分析数据", "management": "带团队"},
-                "value_priority": {"growth": "技术成长", "stability": "薪资稳定", "balance": "工作生活平衡", "innovation": "行业前景"},
-                "ai_attitude": {"do_ai": "拥抱AI工具", "avoid_ai": "找AI替代不了的", "no_preference": "看机会"},
-                "company_type": {"big_tech": "大厂", "growing": "成长型公司", "startup": "初创", "state_owned": "国企"},
-            }
-            pref_parts = []
-            for key, label_map in pref_labels.items():
-                val = prefs.get(key, "")
-                if val and val in label_map:
-                    pref_parts.append(label_map[val])
-            if pref_parts:
-                parts.append(f"- 就业意愿: {' / '.join(pref_parts)}")
-                import json as _json
-                parts.append(f"- 意愿数据(JSON): {_json.dumps(prefs, ensure_ascii=False)}")
+        if not for_triage:
+            if prefs and any(prefs.values()):
+                pref_labels = {
+                    "work_style": {"tech": "深挖技术", "product": "做产品", "data": "分析数据", "management": "带团队"},
+                    "value_priority": {"growth": "技术成长", "stability": "薪资稳定", "balance": "工作生活平衡", "innovation": "行业前景"},
+                    "ai_attitude": {"do_ai": "拥抱AI工具", "avoid_ai": "找AI替代不了的", "no_preference": "看机会"},
+                    "company_type": {"big_tech": "大厂", "growing": "成长型公司", "startup": "初创", "state_owned": "国企"},
+                    "work_intensity": {"high": "可以拼", "moderate": "偶尔加班", "low": "准时下班"},
+                    "current_stage": {"lost": "方向迷茫", "know_gap": "有方向但技能不足", "ready": "技能够但找不到机会", "not_started": "刚开始考虑就业"},
+                }
+                pref_parts = []
+                for key, label_map in pref_labels.items():
+                    val = prefs.get(key, "")
+                    if val and val in label_map:
+                        pref_parts.append(label_map[val])
+                if pref_parts:
+                    parts.append(f"- 就业意愿: {' / '.join(pref_parts)}")
+                    import json as _json
+                    parts.append(f"- 意愿数据(JSON): {_json.dumps(prefs, ensure_ascii=False)}")
+            else:
+                # No preferences filled — remind coach to prompt user at right moment
+                parts.append("- 就业意愿: 未填写（如对话中合适，引导用户去画像页填写就业意愿问卷）")
     else:
         parts.append("- 画像: 未建立（建议先上传简历）")
 
@@ -80,6 +194,32 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
         if goal.get("zone"):
             zone_names = {"safe": "安全区", "thrive": "成长区", "transition": "转型区", "danger": "风险区"}
             parts.append(f"- 目标区域: {zone_names.get(goal['zone'], goal['zone'])}")
+        # Inject real market signal for target direction
+        if not for_triage:
+            target_node = goal.get("target_node_id", "")
+            sig = _get_market_signal_for_node(target_node) if target_node else None
+            if sig and sig.get("timing") not in ("no_data", None):
+                timing_icons = {"best": "✅", "good": "✓", "neutral": "→", "caution": "⚠️"}
+                icon = timing_icons.get(sig["timing"], "")
+                parts.append(
+                    f"- 目标方向市场动态: {icon} {sig.get('timing_label','')} — {sig.get('timing_reason','')}"
+                )
+                demand = sig.get("demand_label", "")
+                salary = sig.get("salary_label", "")
+                ai_info = sig.get("ai_label", "")
+                if demand:
+                    parts.append(f"  · 需求: {demand}（{sig.get('demand_change_pct',0):+.0f}%，{sig.get('baseline_year')}→{sig.get('compare_year')}）")
+                if salary:
+                    parts.append(f"  · 薪资: {salary}")
+                if ai_info:
+                    parts.append(f"  · AI渗透: {ai_info}")
+                # Top industries
+                top_inds = sig.get("top_industries", [])
+                if top_inds:
+                    ind_names = " | ".join(
+                        i["industry"][:10] for i in top_inds[:3] if i.get("industry")
+                    )
+                    parts.append(f"  · 主要招聘行业: {ind_names}")
     else:
         parts.append("- 目标岗位: 未设定（建议去画像页查看推荐方向）")
 
@@ -105,8 +245,17 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
             parts.append(f"- 上次JD诊断: {diag.get('jd_title', '')} · 匹配度 {diag.get('match_score', 'N/A')}%")
             gaps = diag.get("gap_skills", [])
             if gaps:
-                gap_names = [g.get("name", g) if isinstance(g, dict) else str(g) for g in gaps[:5]]
-                parts.append(f"- 技能缺口: {', '.join(gap_names)}")
+                # JDService returns {skill, priority, match_delta}; legacy may use {name}
+                gap_names = []
+                for g in gaps[:5]:
+                    if isinstance(g, dict):
+                        name = g.get("skill") or g.get("name") or ""
+                        if name:
+                            gap_names.append(str(name))
+                    elif g:
+                        gap_names.append(str(g))
+                if gap_names:
+                    parts.append(f"- 技能缺口: {', '.join(gap_names)}")
 
     # Growth log context
     gc = state.get("growth_context")
@@ -165,7 +314,8 @@ def _make_handoff_tool(agent_name: str, description: str, label: str):
 _AGENT_REGISTRY = [
     ("coach_agent", "当用户闲聊、问候、情绪倾诉、职业方向讨论、决策纠结时，转交给成长教练。", "成长教练"),
     ("profile_agent", "当用户需要：简历解析、能力画像查看、技能评分、图谱定位时，转交给画像分析师。", "画像分析师"),
-    ("navigator", "当用户需要：岗位搜索、岗位详情、逃生路线、AI冲击分析、转型路径规划时，转交给岗位导航员。", "岗位导航员"),
+    ("navigator", "当用户需要：岗位图谱方向分析、逃生路线、AI冲击分析、转型路径规划时，转交给方向顾问。", "方向顾问"),
+    ("search_agent", "当用户需要：搜索真实招聘 JD、找校招信息、按公司/技术方向搜岗位时，转交给岗位搜索员。", "岗位搜索员"),
     ("jd_agent", "当用户需要：JD诊断、技能匹配分析、缺口分析、简历优化建议时，转交给JD诊断师。", "JD诊断师"),
     ("growth_agent", "当用户需要：成长进度查看、学习计划、仪表盘数据、下一步行动推荐时，转交给成长顾问。", "成长顾问"),
     ("practice_agent", "当用户需要：练习面试题、出题、刷题、答题评分、查看题库标签时，转交给练习教练。", "练习教练"),
@@ -199,17 +349,23 @@ _INTENT_CLASSIFY_PROMPT = """判断用户消息应该由哪个专家处理。只
 用户消息：{message}
 分类："""
 
-_VALID_AGENTS = {"coach_agent", "navigator", "jd_agent", "profile_agent", "practice_agent", "growth_agent", "report_agent"}
+_VALID_AGENTS = {"coach_agent", "navigator", "search_agent", "jd_agent", "profile_agent", "practice_agent", "growth_agent", "report_agent"}
 
 # Regex patterns for detecting "search real JD" intent (deterministic, no LLM needed)
 # 触发真实JD搜索的模式
 # 核心原则：含"搜/找"动词 + 岗位/工作/招聘等名词 → 搜真实JD
 _SEARCH_JD_PATTERN = _re.compile(
-    r"(帮我|能帮我)?(搜[搜索一下几份]*|找[找几份]*).{0,15}(招聘|岗位|职位|工作机会|JD|职位描述|岗位要求|岗位信息|工作信息)"
+    # 动词 + 泛化对象（招聘/岗位/职位/工作/JD）
+    r"(帮我|能帮我)?(搜[搜索一下几份]*|找[找几份]*).{0,20}(招聘|岗位|职位|工作|JD|职位描述|岗位要求|岗位信息|工作信息|机会)"
+    # 动词 + 具体岗位方向（后端/前端/算法/开发/工程师）
+    r"|(帮我|能帮我)?(搜[搜索一下几份]*|找[找几份]*).{0,20}(后端|前端|全栈|算法|开发|工程师|实习|校招|测试|运维|数据|ai|llm|架构)"
+    # 动词 + 公司名（搜xx公司）
     r"|搜[搜一下]*.*?公司"
+    # 省略宾语的求助
     r"|[能可]不[能可]帮我搜"
     r"|帮我搜[搜一下]*$"
-    r"|搜[搜一下]*看?$"
+    r"|搜[搜一下]*看?$",
+    _re.IGNORECASE,
 )
 
 # Cache the classifier LLM instance
@@ -235,8 +391,23 @@ def _detect_intent(text: str) -> tuple[str | None, str]:
         return None, ""
 
     # Fast path 1: JD text detection (long text with JD keywords)
-    if len(text) > 100 and any(kw in text for kw in ("岗位职责", "任职要求", "job description", "职位描述", "工作职责", "技能要求")):
+    _JD_KEYWORDS = (
+        "岗位职责", "任职要求", "job description", "职位描述", "工作职责", "技能要求",
+        "岗位描述", "岗位要求", "任职资格", "职责描述", "职位要求", "工作职责",
+        "加分项", "基本要求", "招聘要求", "薪资待遇", "岗位详情", "校园招聘",
+        "必须具备", "有一定了解", "工作地点", "base 地",
+    )
+    if len(text) > 100 and any(kw in text for kw in _JD_KEYWORDS):
         return "jd_agent", ""
+    # Explicit "诊断" intent + JD indicator (even if keywords above don't match)
+    if ("诊断" in text[:30] or "分析" in text[:30]) and len(text) > 200 and "JD" in text[:50]:
+        return "jd_agent", ""
+
+    # Fast path 2: Search real JD intent (deterministic regex, bypass broken semantic router)
+    # 触发"搜索真实招聘"必须有两个条件：动词（搜/找）+ 岗位类名词
+    # → 路由到 search_agent (workflow，强制调 search_real_jd 工具)
+    if _SEARCH_JD_PATTERN.search(text):
+        return "search_agent", ""
 
     # Fast path 2a: 项目规划请求 → coach_agent (不搜JD)
     if text.startswith("[项目规划请求]") or ("项目规划" in text and "里程碑" in text):
@@ -404,6 +575,18 @@ def _make_agent_node(agent, agent_name: str):
             tok2 = _injected_user_id.set(state.get("user_id"))
             _ctx_resets = [(_injected_profile, tok1), (_injected_user_id, tok2)]
 
+        # Inject profile/goal for search_real_jd (used by navigator + coach + search_agent)
+        if agent_name in ("navigator", "coach_agent", "search_agent"):
+            from agent.tools.search_tools import (
+                _injected_profile_for_search, _injected_goal_for_search,
+            )
+            tok_sp = _injected_profile_for_search.set(state.get("user_profile"))
+            tok_sg = _injected_goal_for_search.set(state.get("career_goal"))
+            _ctx_resets.extend([
+                (_injected_profile_for_search, tok_sp),
+                (_injected_goal_for_search, tok_sg),
+            ])
+
         try:
             # Guard: cap message history to prevent memory blow-up and infinite loops
             _MAX_MSGS = 60
@@ -462,12 +645,14 @@ def build_supervisor() -> StateGraph:
     from agent.agents.practice_agent import create_practice_agent
     from agent.agents.profile_agent import create_profile_agent
     from agent.agents.report_agent import create_report_agent
+    from agent.agents.search_agent import create_search_agent
 
     # Create all agents (including coach)
     agents = {
         "coach_agent": create_coach_agent(),
         "profile_agent": create_profile_agent(),
         "navigator": create_navigator_agent(),
+        "search_agent": create_search_agent(),
         "jd_agent": create_jd_agent(),
         "growth_agent": create_growth_agent(),
         "practice_agent": create_practice_agent(),

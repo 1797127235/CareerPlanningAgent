@@ -18,8 +18,12 @@ from backend.llm import get_llm_client, get_model
 from backend.services.graph_service import get_graph_service
 from backend.services.learning_service import get_learning_service
 
-_ROLE_INTROS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "role_intros.json"
-_role_intros: dict[str, dict] | None = None
+_ROLE_INTROS_PATH   = Path(__file__).resolve().parent.parent.parent / "data" / "role_intros.json"
+_SIGNALS_PATH       = Path(__file__).resolve().parent.parent.parent / "data" / "market_signals.json"
+_INDUSTRY_PATH      = Path(__file__).resolve().parent.parent.parent / "data" / "industry_signals.json"
+_role_intros:   dict[str, dict] | None = None
+_market_signals: dict[str, dict] | None = None
+_industry_signals: dict[str, list] | None = None
 
 
 def _get_role_intros() -> dict[str, dict]:
@@ -31,9 +35,50 @@ def _get_role_intros() -> dict[str, dict]:
             _role_intros = {}
     return _role_intros
 
+
+def _get_market_signals() -> dict[str, dict]:
+    global _market_signals
+    if _market_signals is None:
+        try:
+            _market_signals = json.loads(_SIGNALS_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _market_signals = {}
+    return _market_signals
+
+
+def _get_industry_signals() -> dict[str, list]:
+    global _industry_signals
+    if _industry_signals is None:
+        try:
+            _industry_signals = json.loads(_INDUSTRY_PATH.read_text(encoding="utf-8"))
+        except Exception:
+            _industry_signals = {}
+    return _industry_signals
+
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+# ── Market signals endpoint ───────────────────────────────────────────────────
+
+@router.get("/market-signals")
+def get_market_signals(user: User = Depends(get_current_user)):
+    """Return precomputed market decision signals for all role_families.
+
+    Used by GraphPage to color-code nodes and by RoleDetailPage for timing panel.
+    Data is precomputed by etl/03_signals.py — zero DB query, JSON file read.
+    """
+    signals = _get_market_signals()
+    industry = _get_industry_signals()
+    # Attach top-3 industry breakdown to each family signal
+    result = {}
+    for fam, sig in signals.items():
+        entry = dict(sig)
+        entry["top_industries"] = industry.get(fam, [])[:3]
+        result[fam] = entry
+    return result
 
 
 # ── Full map ─────────────────────────────────────────────────────────────────
@@ -179,6 +224,17 @@ def get_node(
         from backend.services.matching_service import compute_match
         match_result = compute_match(profile_data, node)
 
+    # Attach market signal for this node's role_family
+    role_family = node.get("role_family", "")
+    signals_map = _get_market_signals()
+    industry_map = _get_industry_signals()
+    market_signal = signals_map.get(role_family)
+    if market_signal:
+        market_signal = {
+            **market_signal,
+            "top_industries": industry_map.get(role_family, [])[:3],
+        }
+
     return {
         **node,
         "terrain": terrain,
@@ -195,6 +251,7 @@ def get_node(
         "user_matched_skills": user_matched,
         "user_gap_skills": user_gaps,
         "match": match_result,
+        "market_signal": market_signal,
     }
 
 
@@ -311,6 +368,61 @@ def set_career_goal(
     db.commit()
 
     return {"ok": True, "target_label": req.target_label, "target_zone": req.target_zone}
+
+
+# ── Patch career-goal gaps only ──────────────────────────────────────────────
+
+class PatchGapsRequest(BaseModel):
+    gap_skills: list[str]
+    source: str = "jd_diagnosis"  # for audit trail
+
+
+@router.patch("/career-goal/gaps")
+def patch_career_goal_gaps(
+    req: PatchGapsRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update gap_skills on the primary career goal without touching target/zone.
+
+    Called after JD diagnosis: student elects to 'apply gap skills to learning path'.
+    Creates a goal record if one does not yet exist (no target set).
+    """
+    from backend.db_models import CareerGoal, Profile
+
+    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    if not profile:
+        raise HTTPException(404, "请先上传简历建立画像")
+
+    goal = (
+        db.query(CareerGoal)
+        .filter_by(profile_id=profile.id, user_id=user.id, is_active=True, is_primary=True)
+        .first()
+    )
+
+    clean_gaps = [s.strip() for s in req.gap_skills if s.strip()][:20]
+
+    if goal:
+        goal.gap_skills = clean_gaps
+        goal.set_at = datetime.now(timezone.utc)
+    else:
+        # No goal yet — create a placeholder goal with just gap_skills
+        # target_node_id will be filled when student picks a role on graph page
+        goal = CareerGoal(
+            user_id=user.id,
+            profile_id=profile.id,
+            from_node_id="",
+            target_node_id="",
+            target_label="待设定目标岗位",
+            target_zone="transition",
+            gap_skills=clean_gaps,
+            is_primary=True,
+            is_active=True,
+        )
+        db.add(goal)
+
+    db.commit()
+    return {"ok": True, "gap_count": len(clean_gaps), "target_label": goal.target_label}
 
 
 # ── Multi-goal CRUD ──────────────────────────────────────────────────────────

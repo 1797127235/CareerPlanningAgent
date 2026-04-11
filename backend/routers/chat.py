@@ -35,6 +35,95 @@ router = APIRouter()
 
 _supervisor = None
 
+# ── Market card extraction ────────────────────────────────────────────────────
+
+_market_signals_for_cards: dict | None = None
+
+def _extract_market_cards(text: str) -> list[dict]:
+    """Detect market direction mentions in coach response, return signal cards for frontend.
+
+    Emitted as market_cards SSE event so frontend can render inline data cards.
+    Only fires for coach_agent responses that reference market directions.
+    """
+    global _market_signals_for_cards
+    if _market_signals_for_cards is None:
+        import json as _json
+        from pathlib import Path as _Path
+        try:
+            _data = _Path(__file__).resolve().parent.parent.parent / "data" / "market_signals.json"
+            _market_signals_for_cards = _json.loads(_data.read_text(encoding="utf-8"))
+        except Exception:
+            _market_signals_for_cards = {}
+
+    signals = _market_signals_for_cards
+    if not signals:
+        return []
+
+    # Node ID → short readable label for card preview
+    _NODE_LABELS: dict[str, str] = {
+        "java": "Java", "python": "Python", "golang": "Go", "cpp": "C++", "rust": "Rust",
+        "frontend": "前端", "full-stack": "全栈", "android": "Android", "ios": "iOS",
+        "flutter": "Flutter", "react-native": "RN", "ai-engineer": "AI工程师",
+        "machine-learning": "ML", "ai-data-scientist": "AI数据", "ai-agents": "AI Agent",
+        "mlops": "MLOps", "ml-architect": "ML架构", "algorithm-engineer": "算法",
+        "data-analyst": "数据分析", "data-engineer": "数据工程", "bi-analyst": "BI",
+        "postgresql-dba": "DBA", "data-architect": "数据架构",
+        "devops": "DevOps", "devsecops": "DevSecOps", "cloud-architect": "云架构",
+        "game-developer": "游戏开发", "server-side-game-developer": "游戏服务端",
+        "cyber-security": "网络安全", "ai-red-teaming": "AI红队", "security-architect": "安全架构",
+        "qa": "测试", "qa-lead": "测试负责人",
+        "product-manager": "产品经理", "engineering-manager": "技术管理", "cto": "CTO",
+        "search-engine-engineer": "搜索引擎", "storage-database-kernel": "存储内核",
+        "infrastructure-engineer": "基础设施", "software-architect": "软件架构",
+    }
+
+    # Keyword aliases: family → list of strings to look for in text
+    # Covers both Chinese direction names and common tech keywords users/coach might say
+    _ALIASES: dict[str, list[str]] = {
+        "AI/ML":       ["AI/ML", "AI方向", "AI 方向", "人工智能", "算法", "机器学习", "深度学习", "大模型", "LLM"],
+        "后端开发":    ["后端开发", "后端", "Java", "Python", "Golang", "Go语言", "服务端", "后台"],
+        "系统开发":    ["系统开发", "系统软件", "C++", "Rust", "底层开发", "内核", "基础架构"],
+        "前端开发":    ["前端开发", "前端", "Vue", "React", "Angular", "TypeScript", "H5"],
+        "数据":        ["数据方向", "数据分析", "数据工程", "大数据", "数仓", "BI"],
+        "移动开发":    ["移动开发", "移动端", "Android", "iOS", "Flutter", "App开发"],
+        "游戏开发":    ["游戏开发", "游戏", "Unity", "UE", "客户端游戏"],
+        "运维/DevOps": ["运维/DevOps", "运维", "DevOps", "云原生", "Kubernetes", "k8s"],
+        "安全":        ["安全方向", "网络安全", "信息安全", "渗透测试"],
+        "质量保障":    ["质量保障", "测试", "QA", "自动化测试"],
+        "产品":        ["产品方向", "产品经理", "产品设计", "PM"],
+        "管理":        ["技术管理", "工程管理", "CTO"],
+    }
+
+    cards = []
+    seen: set[str] = set()
+
+    for family, aliases in _ALIASES.items():
+        if family in seen or family not in signals:
+            continue
+        sig = signals[family]
+        if sig.get("is_proxy"):
+            continue
+
+        # Exact family name first, then aliases
+        matched = family in text or any(kw in text for kw in aliases)
+        if not matched:
+            continue
+
+        node_ids = sig.get("node_ids", [])
+        role_examples = [_NODE_LABELS.get(n, n) for n in node_ids[:3]]
+        cards.append({
+            "family": family,
+            "timing": sig.get("timing"),
+            "timing_label": sig.get("timing_label", ""),
+            "demand_change_pct": sig.get("demand_change_pct", 0),
+            "salary_cagr": sig.get("salary_cagr", 0),
+            "node_id": node_ids[0] if node_ids else None,
+            "role_examples": role_examples,
+        })
+        seen.add(family)
+
+    return cards[:4]  # Cap at 4 to avoid UI clutter
+
 
 def _get_supervisor():
     global _supervisor
@@ -610,6 +699,9 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
     agent_source_sent = False  # Whether we've sent the agent_source SSE event
     tool_messages: list = []  # Collect tool messages for structured data extraction
 
+    # Pre-scan user message for direction mentions (user-side trigger)
+    user_detected_cards = _extract_market_cards(req.message)
+
     try:
         async for event in supervisor.astream(
             initial_state,
@@ -680,6 +772,15 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
         logger.exception("Chat stream error")
         yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 
+    # ── Step 2.5: Emit market_cards — merge user message + AI response detections ──
+    if agent_source == "coach_agent":
+        ai_cards = _extract_market_cards(full_response) if full_response else []
+        # Merge: AI cards take priority (more context), user cards fill in gaps
+        seen_families = {c["family"] for c in ai_cards}
+        merged_cards = ai_cards + [c for c in user_detected_cards if c["family"] not in seen_families]
+        if merged_cards:
+            yield f"data: {json.dumps({'market_cards': merged_cards[:4]}, ensure_ascii=False)}\n\n"
+
     # ── Step 3: Save response + optionally create CoachResult card ──
     if session and full_response:
         try:
@@ -706,14 +807,23 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
             logger.exception("Failed to save assistant message")
 
     # Check if any tool already saved a CoachResult
-    # The marker [COACH_RESULT_ID:N] can appear in tool messages OR in the agent's final response
+    # Strategy (most reliable → least):
+    #   1. Marker in tool messages (tool returned [COACH_RESULT_ID:N])
+    #   2. Marker in LLM response (LLM echoed it)
+    #   3. DB fallback: query recent CoachResult for this user (LLM forgot the marker)
     import re
+    from datetime import timedelta
     coach_result_id = None
 
     # Check tool messages first
     for tm in tool_messages:
         content = getattr(tm, "content", "")
-        m = re.search(r'\[COACH_RESULT_ID:(\d+)\]', content)
+        if isinstance(content, list):
+            # Some LangChain versions return content as list of dicts
+            content = " ".join(
+                c.get("text", "") if isinstance(c, dict) else str(c) for c in content
+            )
+        m = re.search(r'\[COACH_RESULT_ID:(\d+)\]', str(content))
         if m:
             coach_result_id = int(m.group(1))
             break
@@ -723,19 +833,50 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
         m = re.search(r'\[COACH_RESULT_ID:(\d+)\]', full_response)
         if m:
             coach_result_id = int(m.group(1))
-            # Strip the marker from the saved response
             full_response = re.sub(r'\[COACH_RESULT_ID:\d+\]', '', full_response).strip()
 
+    # DB fallback: unconditional — query for any recent CoachResult created by a tool
+    # during this request. This handles:
+    #  - LLM ignoring [COACH_RESULT_ID:N] marker
+    #  - agent_source not being set to "jd_agent" (nested graph node naming issues)
+    #  - ToolMessage content format differences (list vs str) across LangChain versions
+    if not coach_result_id:
+        try:
+            from datetime import datetime, timezone
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=60)
+            recent_cr = (
+                db.query(CoachResult)
+                .filter(
+                    CoachResult.user_id == user.id,
+                    CoachResult.created_at >= cutoff,
+                )
+                .order_by(CoachResult.created_at.desc())
+                .first()
+            )
+            if recent_cr:
+                coach_result_id = recent_cr.id
+                logger.info(
+                    "DB fallback: found %s CoachResult id=%d for user %d (agent_source=%s)",
+                    recent_cr.result_type, recent_cr.id, user.id, agent_source,
+                )
+        except Exception:
+            logger.exception("DB fallback for CoachResult failed")
+
     if coach_result_id:
-        # Tool already saved the CoachResult — fix user_id and emit the card
+        # Tool already saved the CoachResult — fix user_id/session_id and emit the card
         try:
             cr = db.query(CoachResult).filter_by(id=coach_result_id).first()
-            # Ensure the CoachResult belongs to the current user
-            if cr and cr.user_id != user.id:
-                cr.user_id = user.id
-                if session:
+            # Always bind session_id + ensure correct user_id
+            if cr:
+                needs_commit = False
+                if cr.user_id != user.id:
+                    cr.user_id = user.id
+                    needs_commit = True
+                if session and cr.session_id != session.id:
                     cr.session_id = session.id
-                db.commit()
+                    needs_commit = True
+                if needs_commit:
+                    db.commit()
             if cr:
                 meta = json.loads(cr.metadata_json or "{}")
                 card_payload: dict = {
@@ -745,11 +886,13 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                     "score": meta.get("match_score"),
                     "gap_count": meta.get("gap_count"),
                 }
-                # For jd_diagnosis, also carry jd_title for "加入实战追踪"
+                # For jd_diagnosis, also carry jd_title + company + job_url for "加入实战追踪"
                 if cr.result_type == "jd_diagnosis":
                     try:
                         detail = json.loads(cr.detail_json or "{}")
                         card_payload["jd_title"] = detail.get("jd_title", "")
+                        card_payload["company"] = detail.get("company", "")
+                        card_payload["job_url"] = detail.get("job_url", "")
                     except Exception:
                         pass
                 card_data = {"card": card_payload}

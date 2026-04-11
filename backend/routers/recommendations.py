@@ -72,8 +72,14 @@ def _get_role(role_id: str) -> dict | None:
 
 _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背景，从以下岗位中推荐最匹配的 5 个方向。
 
+【强制规则】
+如果用户求职意向（job_target）不为空，则与求职意向最匹配的岗位必须出现在推荐中，且作为 entry 通道的第一个推荐，affinity_pct 不低于 85。这是用户的主观意愿，优先级高于任何技能分析。
+
 【岗位列表】
 {role_list}
+
+【用户求职意向（最高优先级）】
+{job_target}
 
 【用户技能】
 {user_skills}
@@ -82,12 +88,43 @@ _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背
 专业：{major}，学历：{degree}，工作年限：{exp_years}
 
 分三个通道推荐：
-- entry（起步岗位）：当前技能最匹配，可以直接胜任的 1-2 个
+- entry（起步岗位）：与求职意向最匹配的岗位排第一，当前技能可胜任的 1-2 个
 - growth（成长目标）：需要一定提升但方向自然的 1-2 个
 - explore（探索方向）：跨领域但有潜力的 1 个
 
 返回严格 JSON 数组，不要任何其他文字：
 [{{"role_id": "岗位ID", "label": "中文名", "channel": "entry|growth|explore", "reason": "一句话推荐理由", "affinity_pct": 匹配度0到100}}]"""
+
+
+# Keywords to role_id mapping for programmatic job_target override
+_JOB_TARGET_ROLE_MAP = [
+    (["产品经理", "product manager", "pm", "产品实习"], "product-manager"),
+    (["前端", "frontend", "front-end", "web开发"], "frontend"),
+    (["后端", "backend", "服务端", "java开发"], "java"),
+    (["全栈", "full stack", "full-stack"], "full-stack"),
+    (["算法", "algorithm", "研究员", "研究岗"], "algorithm-engineer"),
+    (["机器学习", "ml工程", "machine learning"], "machine-learning"),
+    (["ai工程", "ai engineer", "大模型", "llm"], "ai-engineer"),
+    (["数据分析", "数据科学", "data analyst"], "ai-data-scientist"),
+    (["搜索引擎", "search engine"], "search-engine-engineer"),
+    (["运维", "devops", "sre"], "devops"),
+    (["安全", "security", "网络安全"], "cyber-security"),
+    (["游戏", "game"], "game-developer"),
+    (["c++", "c plus"], "cpp"),
+    (["go", "golang"], "golang"),
+    (["python工程师", "python developer"], "python"),
+]
+
+
+def _find_role_id_for_job_target(job_target: str) -> str | None:
+    """Map job_target text to a role_id using keyword matching."""
+    if not job_target or job_target == "未指定":
+        return None
+    target_lower = job_target.lower()
+    for keywords, role_id in _JOB_TARGET_ROLE_MAP:
+        if any(kw in target_lower for kw in keywords):
+            return role_id
+    return None
 
 
 def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
@@ -99,9 +136,11 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     if not skills:
         return {"recommendations": [], "user_skill_count": 0}
 
+    job_target = profile_data.get("job_target", "") or "未指定"
     edu = profile_data.get("education", {})
     prompt = _RECOMMEND_PROMPT.format(
         role_list=_get_role_list_text(),
+        job_target=job_target,
         user_skills=", ".join(skills),
         major=edu.get("major", "未知"),
         degree=edu.get("degree", "未知"),
@@ -140,7 +179,42 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
             "replacement_pressure": node.get("replacement_pressure", 50),
             "human_ai_leverage": node.get("human_ai_leverage", 50),
         })
-    return {"recommendations": enriched, "user_skill_count": len(skills)}
+
+    # ── Programmatic job_target override (double insurance) ──────────────────
+    # If user explicitly stated a job target, ensure that role appears first.
+    # Never rely solely on LLM to respect a hard constraint.
+    target_role_id = _find_role_id_for_job_target(job_target)
+    if target_role_id and target_role_id in graph_nodes:
+        existing_ids = [r["role_id"] for r in enriched]
+        if target_role_id in existing_ids:
+            # Move it to front and set high affinity
+            idx = existing_ids.index(target_role_id)
+            target_rec = enriched.pop(idx)
+            target_rec["affinity_pct"] = max(target_rec["affinity_pct"], 88)
+            target_rec["channel"] = "entry"
+            target_rec["reason"] = target_rec.get("reason") or f"与求职意向「{job_target}」高度吻合"
+            enriched.insert(0, target_rec)
+        else:
+            # Not in LLM results at all — insert it
+            node = graph_nodes[target_role_id]
+            enriched.insert(0, {
+                "role_id": target_role_id,
+                "label": node.get("label", target_role_id),
+                "affinity_pct": 88,
+                "matched_skills": [],
+                "gap_skills": node.get("must_skills", [])[:4],
+                "gap_hours": 0,
+                "zone": node.get("zone", "safe"),
+                "salary_p50": node.get("salary_p50", 0),
+                "reason": f"与求职意向「{job_target}」高度吻合",
+                "channel": "entry",
+                "career_level": node.get("career_level", 0),
+                "replacement_pressure": node.get("replacement_pressure", 50),
+                "human_ai_leverage": node.get("human_ai_leverage", 50),
+            })
+        logger.info("job_target override: moved %s to rank #1 (job_target=%s)", target_role_id, job_target)
+
+    return {"recommendations": enriched[:top_k], "user_skill_count": len(skills)}
 
 
 def _save_rec_cache(profile: Profile, p_hash: str, resp: dict, db: Session):
