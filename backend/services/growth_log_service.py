@@ -16,12 +16,172 @@ _DELTA_ESTIMATE = {
     "interview_done": 1.0,
     "learning_completed": 0.8,
     "skill_added": 1.5,
+    "direction_set": 0.0,
+    "profile_created": 0.0,
+    "jd_diagnosis_done": 0.0,
+    "skill_confirmed": 1.5,
 }
 
 
-def _compute_readiness_live(profile_id: int, db: Session) -> float | None:
-    """Compute readiness directly from CareerGoal + current skills, bypassing stale snapshot.
+# ── 自动成长事件触发器 ────────────────────────────────────────────────────────
 
+def _auto_record(
+    user_id: int,
+    profile_id: int | None,
+    event_type: str,
+    summary: str,
+    db: Session,
+    skills_delta: dict | None = None,
+    readiness_before: float | None = None,
+    readiness_after: float | None = None,
+    source_id: int = 0,
+) -> None:
+    """Create a GrowthEvent record for system-generated milestones. Silent on failure."""
+    try:
+        from backend.db_models import GrowthEvent
+        event = GrowthEvent(
+            user_id=user_id,
+            profile_id=profile_id,
+            event_type=event_type,
+            source_table="system",
+            source_id=source_id,
+            summary=summary,
+            skills_delta=skills_delta or {},
+            readiness_before=readiness_before,
+            readiness_after=readiness_after,
+        )
+        db.add(event)
+        db.commit()
+        logger.info("growth_event recorded: user=%d type=%s", user_id, event_type)
+    except Exception as e:
+        logger.debug("_auto_record failed: %s", e)
+
+
+def record_profile_created(user_id: int, profile_id: int, skill_count: int, db: Session) -> None:
+    """Record milestone: first resume uploaded and profile built."""
+    _auto_record(
+        user_id, profile_id, "profile_created",
+        f"上传简历，识别到 {skill_count} 项技能，能力画像建立完成",
+        db,
+    )
+
+
+def record_direction_set(
+    user_id: int, profile_id: int, node_id: str, label: str, db: Session
+) -> None:
+    """Record milestone: student selected a career target direction."""
+    readiness = _compute_readiness_live(profile_id, db)
+    _auto_record(
+        user_id, profile_id, "direction_set",
+        f"选定目标方向：{label}",
+        db,
+        readiness_after=readiness,
+    )
+
+
+def record_jd_diagnosis(
+    user_id: int,
+    profile_id: int,
+    jd_title: str,
+    match_score: float,
+    gap_skills: list[str],
+    db: Session,
+) -> None:
+    """Record milestone: JD diagnosis completed with gap analysis."""
+    gap_str = "、".join(gap_skills[:3]) if gap_skills else "无明显缺口"
+    _auto_record(
+        user_id, profile_id, "jd_diagnosis_done",
+        f"JD诊断完成：{jd_title}，匹配度 {match_score:.0f}%，缺口技能：{gap_str}",
+        db,
+        readiness_after=match_score,
+    )
+
+
+def record_project_completed(
+    user_id: int,
+    profile_id: int,
+    project_id: int,
+    project_name: str,
+    skills_used: list[str],
+    db: Session,
+) -> None:
+    """Record milestone: project marked as completed."""
+    readiness_before = _compute_readiness_live(profile_id, db)
+    skills_str = "、".join(skills_used[:3]) if skills_used else ""
+    summary = f"项目完成：{project_name}"
+    if skills_str:
+        summary += f"（技能：{skills_str}）"
+    _auto_record(
+        user_id, profile_id, "project_completed",
+        summary, db,
+        skills_delta={"added": skills_used},
+        readiness_before=readiness_before,
+        source_id=project_id,
+    )
+
+
+def record_skill_confirmed(
+    user_id: int,
+    profile_id: int,
+    skill_name: str,
+    db: Session,
+) -> None:
+    """Record milestone: Coach validated a skill via calibration question."""
+    readiness_before = _compute_readiness_live(profile_id, db)
+    _auto_record(
+        user_id, profile_id, "skill_confirmed",
+        f"Coach 校准确认掌握：{skill_name}",
+        db,
+        skills_delta={"confirmed": [skill_name]},
+        readiness_before=readiness_before,
+    )
+
+
+def _skill_matches(skill_name: str, user_skills: set[str]) -> bool:
+    """Case-insensitive substring match for a skill keyword against user skill set.
+
+    Handles variants like "Spring Boot" vs "SpringBoot", "Redis缓存" vs "Redis".
+    Normalization removes spaces/hyphens/underscores before comparison.
+    Short keywords (≤2 chars) require exact match to avoid false positives.
+    """
+    def _norm(s: str) -> str:
+        return s.lower().strip().replace(" ", "").replace("-", "").replace("_", "")
+
+    name = skill_name.lower().strip()
+    name_norm = _norm(skill_name)
+    if not name:
+        return False
+
+    # Exact match (raw lowercase)
+    if name in user_skills:
+        return True
+
+    # Short keyword: only exact match allowed
+    if len(name_norm) <= 2:
+        return False
+
+    for us in user_skills:
+        if not us:
+            continue
+        us_norm = _norm(us)
+        # Normalized exact match (handles SpringBoot vs spring boot)
+        if name_norm == us_norm:
+            return True
+        # Substring match (both directions, normalized)
+        if len(us_norm) > 2 and (name_norm in us_norm or us_norm in name_norm):
+            return True
+    return False
+
+
+def _compute_readiness_live(profile_id: int, db: Session) -> float | None:
+    """Compute readiness from CareerGoal + current skills using real market skill weights.
+
+    Uses skill_tiers (from 48万 JD ETL) with weighted scoring:
+      core skills: weight 1.0 (≥50% JD mention rate)
+      important:   weight 0.6 (20-49%)
+      bonus:       weight 0.3 (5-19%)
+
+    Falls back to flat must_skills matching if skill_tiers unavailable.
     Called after skill updates so the returned value reflects new skills immediately.
     """
     try:
@@ -46,19 +206,44 @@ def _compute_readiness_live(profile_id: int, db: Session) -> float | None:
         if not node:
             return None
 
-        must_skills = [s.lower().strip() for s in node.get("must_skills", [])]
-        if not must_skills:
-            return 0.0
-
+        # Build user skill set (lowercase, from both dict-format and string-format)
         profile_data = json.loads(profile.profile_json or "{}")
         raw_skills = profile_data.get("skills", [])
         if raw_skills and isinstance(raw_skills[0], dict):
-            user_skills = {s.get("name", "").lower().strip() for s in raw_skills}
+            user_skills = {s.get("name", "").lower().strip() for s in raw_skills if s.get("name")}
         else:
-            user_skills = {s.lower().strip() for s in raw_skills if isinstance(s, str)}
+            user_skills = {s.lower().strip() for s in raw_skills if isinstance(s, str) and s.strip()}
 
-        matched = sum(1 for s in must_skills if s in user_skills)
+        # ── Tiered scoring (preferred) ──────────────────────────────────────
+        tiers = node.get("skill_tiers", {})
+        core_list = tiers.get("core", [])
+        important_list = tiers.get("important", [])
+        bonus_list = tiers.get("bonus", [])
+
+        if core_list or important_list:
+            # Weights: core=1.0, important=0.6, bonus=0.3
+            total_w = len(core_list) * 1.0 + len(important_list) * 0.6 + len(bonus_list) * 0.3
+            if total_w == 0:
+                return 0.0
+            matched_w = 0.0
+            for entry in core_list:
+                if _skill_matches(entry["name"], user_skills):
+                    matched_w += 1.0
+            for entry in important_list:
+                if _skill_matches(entry["name"], user_skills):
+                    matched_w += 0.6
+            for entry in bonus_list:
+                if _skill_matches(entry["name"], user_skills):
+                    matched_w += 0.3
+            return round(min(matched_w / total_w * 100, 100.0), 1)
+
+        # ── Fallback: flat must_skills equal-weight matching ────────────────
+        must_skills = [s.lower().strip() for s in node.get("must_skills", []) if s and s.strip()]
+        if not must_skills:
+            return 0.0
+        matched = sum(1 for s in must_skills if _skill_matches(s, user_skills))
         return round(matched / len(must_skills) * 100, 1)
+
     except Exception as e:
         logger.debug("_compute_readiness_live failed: %s", e)
         return None

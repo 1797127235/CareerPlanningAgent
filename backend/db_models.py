@@ -816,6 +816,8 @@ class ProjectRecord(Base):
     name: Mapped[str] = mapped_column(String(256), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     skills_used: Mapped[list] = mapped_column(JSON, default=list)     # ["C++", "Redis", "Linux"]
+    # 学生主动选择: 这个项目补哪些 gap 技能 (来自 CareerGoal.gap_skills)
+    gap_skill_links: Mapped[list] = mapped_column(JSON, default=list)  # ["Redis", "K8s"]
     github_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     # planning | in_progress | completed
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="in_progress")

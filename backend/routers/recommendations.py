@@ -75,28 +75,58 @@ _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背
 【强制规则】
 如果用户求职意向（job_target）不为空，则与求职意向最匹配的岗位必须出现在推荐中，且作为 entry 通道的第一个推荐，affinity_pct 不低于 85。这是用户的主观意愿，优先级高于任何技能分析。
 
+【熟练度折算（严格执行）】
+每个技能后面括号里是熟练度，affinity_pct 计算时必须按折算系数考虑：
+  - expert / proficient / advanced → 1.0 完整技能点
+  - intermediate                    → 0.5 技能点
+  - familiar                        → 0.3 技能点
+  - beginner                        → 0.2 技能点
+举例：一个用户写了"机器学习(familiar)"，他只是"了解过"机器学习，**不能**作为推荐机器学习岗位的强信号。
+
+【高门槛方向 affinity_pct 上限（违反视为严重错误）】
+以下方向门槛远高于普通工程岗，没有硬核信号时 affinity_pct 必须受上限约束：
+
+■ AI 数据科学家 / 机器学习工程师 / 算法工程师 / AI 工程师：
+  硬核信号定义：
+    (a) 论文发表（SCI / EI / CCF-A/B）
+    (b) 学科竞赛奖（Kaggle 铜牌以上 / ACM / 数学建模国奖）
+    (c) 独立实现过模型（不仅调用 sklearn.cluster / fit_predict）
+    (d) 深度学习框架（PyTorch/TensorFlow）完整项目经历
+  - 零硬核信号：affinity_pct ≤ 50
+  - 1 条硬核信号：affinity_pct ≤ 60
+  - 2+ 条硬核信号：可以 70+
+  ⚠ "在项目里用过聚类算法分类用户" 不算硬核信号，那是数据分析的日常。
+
+■ 数据分析师 / BI 分析师 / 数据运营：
+  - 有 Python+Excel+SQL 其一 intermediate 以上 + 一段数据分析实习 → affinity_pct ≥ 80
+  - 全满足 + 真实业务产出（用户画像/销售分析/报表）→ affinity_pct ≥ 85
+
+■ 产品经理：
+  - 偏业务思维岗位，不看硬技能只看业务理解。默认 50-65 区间，有产品实习或产品经历可到 75+
+
 【岗位列表】
 {role_list}
 
 【用户求职意向（最高优先级）】
 {job_target}
 
-【用户技能】
+【用户技能（含熟练度）】
 {user_skills}
 
 【用户背景】
 专业：{major}，学历：{degree}，工作年限：{exp_years}
 
 分三个通道推荐：
-- entry（起步岗位）：与求职意向最匹配的岗位排第一，当前技能可胜任的 1-2 个
+- entry（起步岗位）：与求职意向最匹配的岗位排第一，当前技能+熟练度真实可胜任的 1-2 个
 - growth（成长目标）：需要一定提升但方向自然的 1-2 个
 - explore（探索方向）：跨领域但有潜力的 1 个
 
 返回严格 JSON 数组，不要任何其他文字：
-[{{"role_id": "岗位ID", "label": "中文名", "channel": "entry|growth|explore", "reason": "一句话推荐理由", "affinity_pct": 匹配度0到100}}]"""
+[{{"role_id": "岗位ID", "label": "中文名", "channel": "entry|growth|explore", "reason": "一句话推荐理由（必须提到熟练度）", "affinity_pct": 匹配度0到100}}]"""
 
 
 # Keywords to role_id mapping for programmatic job_target override
+# ⚠ 一定要各归各，不能把"数据分析"映射到"ai-data-scientist"（两个方向门槛差巨大）
 _JOB_TARGET_ROLE_MAP = [
     (["产品经理", "product manager", "pm", "产品实习"], "product-manager"),
     (["前端", "frontend", "front-end", "web开发"], "frontend"),
@@ -105,7 +135,11 @@ _JOB_TARGET_ROLE_MAP = [
     (["算法", "algorithm", "研究员", "研究岗"], "algorithm-engineer"),
     (["机器学习", "ml工程", "machine learning"], "machine-learning"),
     (["ai工程", "ai engineer", "大模型", "llm"], "ai-engineer"),
-    (["数据分析", "数据科学", "data analyst"], "ai-data-scientist"),
+    # 修复：数据分析 ≠ AI 数据科学家，两个方向门槛差巨大
+    (["数据分析", "data analyst", "数据分析师"], "data-analyst"),
+    (["数据科学", "data scientist", "ai数据"], "ai-data-scientist"),
+    (["数据工程", "data engineer", "数据工程师"], "data-engineer"),
+    (["bi", "商业智能", "bi分析"], "bi-analyst"),
     (["搜索引擎", "search engine"], "search-engine-engineer"),
     (["运维", "devops", "sre"], "devops"),
     (["安全", "security", "网络安全"], "cyber-security"),
@@ -132,16 +166,23 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     from backend.llm import llm_chat, parse_json_response, get_model
     from backend.routers.profiles import _get_role_list_text
 
-    skills = [s.get("name", "") for s in profile_data.get("skills", []) if s.get("name")]
-    if not skills:
+    # Preserve level: pass full skill objects to downstream formatting
+    skill_objs = [s for s in profile_data.get("skills", []) if isinstance(s, dict) and s.get("name")]
+    if not skill_objs:
         return {"recommendations": [], "user_skill_count": 0}
+
+    # Format skills with mastery level so LLM can calibrate affinity_pct
+    # e.g. "Python(intermediate), 机器学习(familiar), SQL(familiar)"
+    skills_with_level = ", ".join(
+        f"{s.get('name')}({s.get('level') or 'unspecified'})" for s in skill_objs
+    )
 
     job_target = profile_data.get("job_target", "") or "未指定"
     edu = profile_data.get("education", {})
     prompt = _RECOMMEND_PROMPT.format(
         role_list=_get_role_list_text(),
         job_target=job_target,
-        user_skills=", ".join(skills),
+        user_skills=skills_with_level,
         major=edu.get("major", "未知"),
         degree=edu.get("degree", "未知"),
         exp_years=profile_data.get("experience_years", 0),
@@ -150,7 +191,7 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     result = llm_chat([{"role": "user", "content": prompt}], model=get_model("fast"), temperature=0.1, timeout=60)
     recs = parse_json_response(result)
     if not isinstance(recs, list):
-        return {"recommendations": [], "user_skill_count": len(skills)}
+        return {"recommendations": [], "user_skill_count": len(skill_objs)}
 
     # Enrich with graph data
     graph_path = Path("data/graph.json")
@@ -214,7 +255,7 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
             })
         logger.info("job_target override: moved %s to rank #1 (job_target=%s)", target_role_id, job_target)
 
-    return {"recommendations": enriched[:top_k], "user_skill_count": len(skills)}
+    return {"recommendations": enriched[:top_k], "user_skill_count": len(skill_objs)}
 
 
 def _save_rec_cache(profile: Profile, p_hash: str, resp: dict, db: Session):

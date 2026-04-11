@@ -121,6 +121,14 @@ def init_db() -> None:
             conn.commit()
         except Exception:
             pass  # column already exists
+        # 成长档案: 项目-缺口技能关联
+        try:
+            conn.execute(text("ALTER TABLE project_records ADD COLUMN gap_skill_links TEXT NOT NULL DEFAULT '[]'"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+        # 成长档案: 扩展 GrowthEvent 事件类型注释（无结构变更，仅记录）
+        # 新增类型: profile_created | direction_set | jd_diagnosis_done | skill_confirmed
 
 
 def get_db():

@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { X, GitBranch, CheckCircle2 } from 'lucide-react'
-import { createProject, updateProject } from '@/api/growthLog'
+import { useQuery } from '@tanstack/react-query'
+import { X, GitBranch, CheckCircle2, Target } from 'lucide-react'
+import { createProject, updateProject, getGrowthDashboard } from '@/api/growthLog'
 import type { ProjectRecord } from '@/api/growthLog'
 
 const STATUS_OPTIONS = [
@@ -29,9 +30,37 @@ export function ProjectForm({ onSuccess, onCancel, initial }: Props) {
   const [status, setStatus] = useState<string>(initial?.status ?? 'in_progress')
   const [reflection, setReflection] = useState(initial?.reflection ?? '')
   const [skills, setSkills] = useState<string[]>(initial?.skills_used ?? [])
+  const [gapLinks, setGapLinks] = useState<string[]>(initial?.gap_skill_links ?? [])
   const [skillInput, setSkillInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+
+  // Load current gap skills from dashboard (core missing + important missing)
+  const { data: dashboard } = useQuery({
+    queryKey: ['growth-dashboard'],
+    queryFn: getGrowthDashboard,
+    staleTime: 60_000,
+  })
+  const availableGaps: string[] = (() => {
+    if (!dashboard?.has_goal) return []
+    const coreMissing = dashboard.skill_coverage?.core?.missing ?? []
+    const impMissing = dashboard.skill_coverage?.important?.missing ?? []
+    // Deduplicate, prioritize core
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const s of [...coreMissing, ...impMissing]) {
+      if (s && !seen.has(s)) { seen.add(s); result.push(s) }
+    }
+    return result
+  })()
+
+  function toggleGapLink(skill: string) {
+    if (gapLinks.includes(skill)) {
+      setGapLinks(gapLinks.filter(s => s !== skill))
+    } else {
+      setGapLinks([...gapLinks, skill])
+    }
+  }
 
   function addSkill(s: string) {
     const trimmed = s.trim()
@@ -55,6 +84,7 @@ export function ProjectForm({ onSuccess, onCancel, initial }: Props) {
         name: name.trim(),
         description: description.trim() || undefined,
         skills_used: skills,
+        gap_skill_links: gapLinks,
         github_url: github.trim() || undefined,
         status,
         reflection: reflection.trim() || undefined,
@@ -106,6 +136,42 @@ export function ProjectForm({ onSuccess, onCancel, initial }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Gap skill links — 这个项目补哪些缺口技能 */}
+      {availableGaps.length > 0 && (
+        <div>
+          <label className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-600 mb-1.5">
+            <Target className="w-3.5 h-3.5 text-blue-600" />
+            这个项目补哪些缺口技能？
+            <span className="text-[10px] font-normal text-slate-400">（基于你的目标方向）</span>
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            {availableGaps.slice(0, 10).map(s => {
+              const active = gapLinks.includes(s)
+              return (
+                <button
+                  type="button"
+                  key={s}
+                  onClick={() => toggleGapLink(s)}
+                  className={`px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all cursor-pointer ${
+                    active
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-500 hover:border-blue-300 hover:text-blue-600'
+                  }`}
+                >
+                  {active && <CheckCircle2 className="w-3 h-3 inline mr-1" />}
+                  {s}
+                </button>
+              )
+            })}
+          </div>
+          {gapLinks.length > 0 && (
+            <p className="text-[10px] text-blue-600 mt-1.5">
+              已选 {gapLinks.length} 项缺口，项目完成后会反映到成长档案
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Skills */}
       <div>

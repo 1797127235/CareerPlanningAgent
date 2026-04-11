@@ -189,6 +189,21 @@ def diagnose_jd(jd_text: str) -> str:
     if user_id and jd_title:
         _auto_link_diagnosis_to_application(jd_title, user_id)
 
+    # Auto-record growth milestone: JD diagnosis completed
+    if user_id:
+        try:
+            from backend.db import SessionLocal as _SL2
+            from backend.db_models import Profile as _Profile
+            from backend.services.growth_log_service import record_jd_diagnosis
+            _db2 = _SL2()
+            _profile = _db2.query(_Profile).filter_by(user_id=user_id).first()
+            if _profile:
+                gap_names_for_record = [g.get("skill", "") for g in gaps[:5] if g.get("skill")]
+                record_jd_diagnosis(user_id, _profile.id, jd_title, match_score, gap_names_for_record, _db2)
+            _db2.close()
+        except Exception:
+            pass
+
     gap_names = [g.get("skill", "?") for g in gaps[:5]]
     lines = [
         f"JD匹配度: {match_score}%",

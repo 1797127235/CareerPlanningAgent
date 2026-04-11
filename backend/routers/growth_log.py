@@ -56,6 +56,7 @@ class CreateProjectRequest(BaseModel):
     name: str
     description: Optional[str] = None
     skills_used: list[str] = []
+    gap_skill_links: list[str] = []     # 项目补哪些 gap 技能
     github_url: Optional[str] = None
     status: str = "in_progress"        # planning | in_progress | completed
     linked_node_id: Optional[str] = None
@@ -67,6 +68,7 @@ class UpdateProjectRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     skills_used: Optional[list[str]] = None
+    gap_skill_links: Optional[list[str]] = None
     github_url: Optional[str] = None
     status: Optional[str] = None
     linked_node_id: Optional[str] = None
@@ -124,6 +126,133 @@ def get_growth_summary(
     return get_monthly_summary(user_id=user.id, profile_id=profile_id, db=db)
 
 
+@router.get("/dashboard")
+def get_growth_dashboard(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取成长看板数据：目标方向 + 分层技能覆盖率 + 匹配度曲线。"""
+    from backend.db_models import CareerGoal, GrowthSnapshot
+    from backend.services.graph_service import GraphService
+    from backend.services.growth_log_service import _skill_matches
+
+    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    if not profile:
+        return {"has_goal": False, "has_profile": False}
+
+    goal = (
+        db.query(CareerGoal)
+        .filter(
+            CareerGoal.user_id == user.id,
+            CareerGoal.profile_id == profile.id,
+            CareerGoal.is_active == True,
+        )
+        .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
+        .first()
+    )
+
+    if not goal or not goal.target_node_id:
+        return {"has_goal": False, "has_profile": True}
+
+    svc = GraphService()
+    svc.load()
+    node = svc.get_node(goal.target_node_id)
+    if not node:
+        return {"has_goal": False, "has_profile": True}
+
+    # Build user skill set
+    try:
+        profile_data = json.loads(profile.profile_json or "{}")
+    except Exception:
+        profile_data = {}
+    raw_skills = profile_data.get("skills", [])
+    if raw_skills and isinstance(raw_skills[0], dict):
+        user_skills = {s.get("name", "").lower().strip() for s in raw_skills if s.get("name")}
+    else:
+        user_skills = {s.lower().strip() for s in raw_skills if isinstance(s, str) and s.strip()}
+
+    # Tiered skill coverage
+    tiers = node.get("skill_tiers", {}) or {}
+    core_list = tiers.get("core", []) or []
+    imp_list = tiers.get("important", []) or []
+    bonus_list = tiers.get("bonus", []) or []
+
+    def _count_matched(skills_list):
+        matched_items = [s for s in skills_list if _skill_matches(s.get("name", ""), user_skills)]
+        return len(matched_items), [s.get("name") for s in matched_items]
+
+    core_cnt, core_matched = _count_matched(core_list)
+    imp_cnt, imp_matched = _count_matched(imp_list)
+    bonus_cnt, bonus_matched = _count_matched(bonus_list)
+
+    def _pct(cnt: int, total: int) -> int:
+        return int(round(cnt / total * 100)) if total > 0 else 0
+
+    # Missing (gap) skills for each tier — for project form selector
+    core_missing = [s.get("name") for s in core_list if not _skill_matches(s.get("name", ""), user_skills)]
+    imp_missing = [s.get("name") for s in imp_list if not _skill_matches(s.get("name", ""), user_skills)]
+
+    # Readiness curve from GrowthSnapshot (up to last 12 points)
+    snapshots = (
+        db.query(GrowthSnapshot)
+        .filter(GrowthSnapshot.user_id == user.id)
+        .order_by(GrowthSnapshot.created_at.asc())
+        .limit(12)
+        .all()
+    )
+    curve = [
+        {
+            "date": s.created_at.strftime("%m/%d") if s.created_at else "",
+            "score": round(s.readiness_score or 0, 1),
+        }
+        for s in snapshots
+    ]
+
+    # Days since journey started (earliest growth event or profile creation)
+    from backend.db_models import GrowthEvent as _GE
+    first_event = (
+        db.query(_GE)
+        .filter(_GE.user_id == user.id)
+        .order_by(_GE.created_at.asc())
+        .first()
+    )
+    start_date = first_event.created_at if first_event else profile.created_at
+    days_since_start = (datetime.now(timezone.utc) - start_date.replace(tzinfo=timezone.utc)).days if start_date else 0
+
+    return {
+        "has_goal": True,
+        "has_profile": True,
+        "goal": {
+            "target_node_id": goal.target_node_id,
+            "target_label": goal.target_label,
+        },
+        "days_since_start": days_since_start,
+        "skill_coverage": {
+            "core": {
+                "covered": core_cnt,
+                "total": len(core_list),
+                "pct": _pct(core_cnt, len(core_list)),
+                "matched": core_matched,
+                "missing": core_missing,
+            },
+            "important": {
+                "covered": imp_cnt,
+                "total": len(imp_list),
+                "pct": _pct(imp_cnt, len(imp_list)),
+                "matched": imp_matched,
+                "missing": imp_missing,
+            },
+            "bonus": {
+                "covered": bonus_cnt,
+                "total": len(bonus_list),
+                "pct": _pct(bonus_cnt, len(bonus_list)),
+            },
+        },
+        "gap_skills": goal.gap_skills or [],  # For project form selector
+        "readiness_curve": curve,
+    }
+
+
 # ── Projects ──────────────────────────────────────────────────────────────────
 
 @router.get("/projects")
@@ -165,6 +294,7 @@ def create_project(
         name=req.name,
         description=req.description,
         skills_used=req.skills_used,
+        gap_skill_links=req.gap_skill_links,
         github_url=req.github_url,
         status=req.status,
         linked_node_id=req.linked_node_id,
@@ -206,6 +336,8 @@ def update_project(
         project.description = req.description
     if req.skills_used is not None:
         project.skills_used = req.skills_used
+    if req.gap_skill_links is not None:
+        project.gap_skill_links = req.gap_skill_links
     if req.github_url is not None:
         project.github_url = req.github_url
     if req.linked_node_id is not None:
@@ -276,6 +408,7 @@ def _serialize_project(p: ProjectRecord) -> dict:
         "name": p.name,
         "description": p.description,
         "skills_used": p.skills_used or [],
+        "gap_skill_links": p.gap_skill_links or [],
         "github_url": p.github_url,
         "status": p.status,
         "linked_node_id": p.linked_node_id,

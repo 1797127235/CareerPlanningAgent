@@ -90,18 +90,21 @@ export function useProfileData(token: string | null): UseProfileDataReturn {
     setActionError(null)
     try {
       // Preserve existing fields not exposed by ManualProfilePayload
+      // (soft_skills, career_signals, primary_domain, raw_text 等)
       const existing = profile?.profile ?? {}
       await updateProfile({
         profile: {
           ...existing,
+          name: data.name,
           skills: data.skills,
           knowledge_areas: data.knowledge_areas,
-          education: {
-            degree: (existing.education as { degree?: string } | undefined)?.degree ?? '',
-            major: data.major,
-            school: (existing.education as { school?: string } | undefined)?.school ?? '',
-          },
+          education: data.education,
+          experience_years: data.experience_years,
+          job_target: data.job_target,
           projects: data.projects,
+          internships: data.internships,
+          certificates: data.certificates,
+          awards: data.awards,
         },
         quality: null,
       })
@@ -112,7 +115,7 @@ export function useProfileData(token: string | null): UseProfileDataReturn {
     } finally {
       setSavingEdit(false)
     }
-  }, [loadProfile])
+  }, [loadProfile, profile])
 
   return {
     profile,

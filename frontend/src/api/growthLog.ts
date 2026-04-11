@@ -4,13 +4,23 @@ const BASE = '/growth-log'
 
 /* ── Types ── */
 
+export type GrowthEventType =
+  | 'project_completed'
+  | 'interview_done'
+  | 'learning_completed'
+  | 'skill_added'
+  | 'profile_created'
+  | 'direction_set'
+  | 'jd_diagnosis_done'
+  | 'skill_confirmed'
+
 export interface GrowthEvent {
   id: number
-  event_type: 'project_completed' | 'interview_done' | 'learning_completed' | 'skill_added'
+  event_type: GrowthEventType
   source_table: string
   source_id: number
   summary: string
-  skills_delta: { added?: string[]; improved?: string[] }
+  skills_delta: { added?: string[]; improved?: string[]; confirmed?: string[] }
   readiness_before: number | null
   readiness_after: number | null
   created_at: string
@@ -21,6 +31,7 @@ export interface ProjectRecord {
   name: string
   description: string | null
   skills_used: string[]
+  gap_skill_links: string[]
   github_url: string | null
   status: 'planning' | 'in_progress' | 'completed'
   linked_node_id: string | null
@@ -71,6 +82,36 @@ export const getTimeline = (params?: { event_type?: string; limit?: number; offs
 export const getMonthlySummary = () =>
   rawFetch<MonthlySummary>(`${BASE}/summary`)
 
+/* ── Growth Dashboard ── */
+
+export interface TierCoverage {
+  covered: number
+  total: number
+  pct: number
+  matched?: string[]
+  missing?: string[]
+}
+
+export interface GrowthDashboardData {
+  has_goal: boolean
+  has_profile: boolean
+  goal?: {
+    target_node_id: string
+    target_label: string
+  }
+  days_since_start?: number
+  skill_coverage?: {
+    core: TierCoverage
+    important: TierCoverage
+    bonus: TierCoverage
+  }
+  gap_skills?: string[]
+  readiness_curve?: { date: string; score: number }[]
+}
+
+export const getGrowthDashboard = () =>
+  rawFetch<GrowthDashboardData>(`${BASE}/dashboard`)
+
 /* ── Projects ── */
 
 export const listProjects = () =>
@@ -80,6 +121,7 @@ export const createProject = (data: {
   name: string
   description?: string
   skills_used?: string[]
+  gap_skill_links?: string[]
   github_url?: string
   status?: string
   linked_node_id?: string
@@ -95,6 +137,7 @@ export const updateProject = (id: number, data: {
   name?: string
   description?: string
   skills_used?: string[]
+  gap_skill_links?: string[]
   github_url?: string
   status?: string
   linked_node_id?: string

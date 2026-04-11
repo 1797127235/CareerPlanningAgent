@@ -481,10 +481,19 @@ export default function ProfilePage() {
             saving={savingEdit}
             initialData={{
               name: name || '',
-              major: education.major || '',
+              education: {
+                degree: (education as { degree?: string }).degree || '',
+                major: (education as { major?: string }).major || '',
+                school: (education as { school?: string }).school || '',
+              },
+              experience_years: experienceYears,
+              job_target: (prof.job_target as string) || '',
               skills: skills,
               knowledge_areas: knowledgeAreas,
               projects: projects,
+              internships: internships,
+              certificates: certificates,
+              awards: (prof.awards as string[]) || [],
             }}
           />
         ) : (

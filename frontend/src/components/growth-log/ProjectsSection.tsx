@@ -119,7 +119,26 @@ function ProjectCard({ project, logCount, onClick }: {
           <ProgressRing count={logCount} status={project.status} />
         </div>
 
-        {/* Skills */}
+        {/* Gap skill links (高亮显示，这个项目补了哪些缺口) */}
+        {project.gap_skill_links && project.gap_skill_links.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 items-center">
+            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider">补缺口</span>
+            {project.gap_skill_links.slice(0, 4).map(s => (
+              <span
+                key={s}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-[5px]"
+                style={{ background: 'rgba(37,99,235,0.08)', color: '#2563EB', border: '1px solid rgba(37,99,235,0.2)' }}
+              >
+                {s}
+              </span>
+            ))}
+            {project.gap_skill_links.length > 4 && (
+              <span className="text-[10px] text-blue-500">+{project.gap_skill_links.length - 4}</span>
+            )}
+          </div>
+        )}
+
+        {/* Skills used */}
         {project.skills_used.length > 0 ? (
           <div className="flex flex-wrap gap-1.5 min-h-[20px]">
             {project.skills_used.slice(0, 5).map(s => (

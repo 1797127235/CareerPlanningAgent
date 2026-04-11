@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -77,22 +78,41 @@ def _extract_market_cards(text: str) -> list[dict]:
         "infrastructure-engineer": "基础设施", "software-architect": "软件架构",
     }
 
-    # Keyword aliases: family → list of strings to look for in text
-    # Covers both Chinese direction names and common tech keywords users/coach might say
+    # Keyword aliases: family → list of phrases to look for in text
+    # 规则：
+    #   - 中文短语：用子串匹配（中文没有词边界概念），必须是能唯一识别方向的精确短语
+    #     ❌ 不要裸 "数据"（会命中"数据库"/"数据结构"）
+    #     ❌ 不要裸 "游戏"（会命中"小游戏"等无关语境）
+    #   - 英文/数字关键词：用词边界正则，避免子串误匹配
+    #     ❌ "React" 会子串命中 "Reactor"、"UE" 会命中 "cue"
+    #     ✅ 用 "React.js" 或用词边界 r"\bReact\b"
     _ALIASES: dict[str, list[str]] = {
-        "AI/ML":       ["AI/ML", "AI方向", "AI 方向", "人工智能", "算法", "机器学习", "深度学习", "大模型", "LLM"],
-        "后端开发":    ["后端开发", "后端", "Java", "Python", "Golang", "Go语言", "服务端", "后台"],
-        "系统开发":    ["系统开发", "系统软件", "C++", "Rust", "底层开发", "内核", "基础架构"],
-        "前端开发":    ["前端开发", "前端", "Vue", "React", "Angular", "TypeScript", "H5"],
-        "数据":        ["数据方向", "数据分析", "数据工程", "大数据", "数仓", "BI"],
-        "移动开发":    ["移动开发", "移动端", "Android", "iOS", "Flutter", "App开发"],
-        "游戏开发":    ["游戏开发", "游戏", "Unity", "UE", "客户端游戏"],
-        "运维/DevOps": ["运维/DevOps", "运维", "DevOps", "云原生", "Kubernetes", "k8s"],
-        "安全":        ["安全方向", "网络安全", "信息安全", "渗透测试"],
-        "质量保障":    ["质量保障", "测试", "QA", "自动化测试"],
-        "产品":        ["产品方向", "产品经理", "产品设计", "PM"],
+        "AI/ML":       ["AI/ML", "AI方向", "AI 方向", "人工智能", "机器学习", "深度学习", "大模型", "LLM", "AIGC"],
+        "后端开发":    ["后端开发", "后端方向", "服务端开发", "后台开发", "Java", "Python", "Golang", "Go语言", "SpringBoot"],
+        "系统开发":    ["系统开发", "系统软件", "底层开发", "内核开发", "基础架构", "中间件", "C++", "Rust"],
+        "前端开发":    ["前端开发", "前端方向", "前端工程", "Vue.js", "React.js", "Next.js", "Angular", "TypeScript"],
+        "数据":        ["数据方向", "数据分析", "数据工程", "大数据", "数仓", "数据仓库", "数据科学", "BI"],
+        "移动开发":    ["移动开发", "移动端", "App开发", "Android", "iOS", "Flutter"],
+        "游戏开发":    ["游戏开发", "游戏客户端", "游戏引擎", "Unity", "UE4", "UE5"],
+        "运维/DevOps": ["运维开发", "运维方向", "DevOps", "云原生", "Kubernetes", "k8s", "SRE"],
+        "安全":        ["安全方向", "网络安全", "信息安全", "渗透测试", "红蓝对抗"],
+        "质量保障":    ["质量保障", "测试开发", "自动化测试"],
+        "产品":        ["产品方向", "产品经理", "产品设计"],
         "管理":        ["技术管理", "工程管理", "CTO"],
     }
+
+    # 纯 ASCII 关键词识别（允许 + # . / -），用于决定是否走词边界正则
+    _ASCII_ONLY = re.compile(r"^[A-Za-z0-9+#./\- ]+$")
+
+    def _kw_hit(kw: str, body: str) -> bool:
+        """Check if keyword appears in body.
+        - ASCII-only keywords: word-boundary match (avoids "React" hitting "Reactor")
+        - Chinese/mixed: literal substring (Chinese has no word boundaries)
+        """
+        if _ASCII_ONLY.match(kw):
+            pat = rf"(?<![A-Za-z0-9]){re.escape(kw.strip())}(?![A-Za-z0-9])"
+            return bool(re.search(pat, body))
+        return kw in body
 
     cards = []
     seen: set[str] = set()
@@ -104,8 +124,9 @@ def _extract_market_cards(text: str) -> list[dict]:
         if sig.get("is_proxy"):
             continue
 
-        # Exact family name first, then aliases
-        matched = family in text or any(kw in text for kw in aliases)
+        # ⚠️ 禁止裸 family name 子串匹配（family="数据" 会命中"数据库"）
+        # 只允许精确别名命中
+        matched = any(_kw_hit(kw, text) for kw in aliases)
         if not matched:
             continue
 
@@ -123,6 +144,60 @@ def _extract_market_cards(text: str) -> list[dict]:
         seen.add(family)
 
     return cards[:4]  # Cap at 4 to avoid UI clutter
+
+
+_graph_family_map_for_cards: dict | None = None
+
+def _get_card_for_node(node_id: str) -> dict | None:
+    """Get a market signal card for a specific graph node_id."""
+    global _market_signals_for_cards, _graph_family_map_for_cards
+    import json as _json2
+    from pathlib import Path as _Path2
+
+    if _graph_family_map_for_cards is None:
+        try:
+            _gdata = _Path2(__file__).resolve().parent.parent.parent / "data" / "graph.json"
+            nodes = _json2.loads(_gdata.read_text(encoding="utf-8")).get("nodes", [])
+            _graph_family_map_for_cards = {n["node_id"]: n.get("role_family", "") for n in nodes}
+        except Exception:
+            _graph_family_map_for_cards = {}
+
+    signals = _market_signals_for_cards or {}
+    role_family = (_graph_family_map_for_cards or {}).get(node_id, "")
+    if not role_family or role_family not in signals:
+        return None
+
+    sig = signals[role_family]
+    if sig.get("is_proxy"):
+        # Use the proxy's real family data
+        proxy_family = sig.get("proxy_family", "")
+        if proxy_family and proxy_family in signals:
+            sig = signals[proxy_family]
+            role_family = proxy_family
+
+    node_ids = sig.get("node_ids", [])
+    _NODE_LABELS_REF = {
+        "java": "Java", "python": "Python", "golang": "Go", "cpp": "C++", "rust": "Rust",
+        "frontend": "前端", "full-stack": "全栈", "android": "Android", "ios": "iOS",
+        "flutter": "Flutter", "react-native": "RN", "ai-engineer": "AI工程师",
+        "machine-learning": "ML", "ai-data-scientist": "AI数据", "ai-agents": "AI Agent",
+        "mlops": "MLOps", "algorithm-engineer": "算法",
+        "data-analyst": "数据分析", "data-engineer": "数据工程",
+        "devops": "DevOps", "cloud-architect": "云架构",
+        "game-developer": "游戏开发", "cyber-security": "网络安全",
+        "qa": "测试", "product-manager": "产品经理", "engineering-manager": "技术管理",
+    }
+    role_examples = [_NODE_LABELS_REF.get(n, n) for n in node_ids[:3]]
+
+    return {
+        "family": role_family,
+        "timing": sig.get("timing"),
+        "timing_label": sig.get("timing_label", ""),
+        "demand_change_pct": sig.get("demand_change_pct", 0),
+        "salary_cagr": sig.get("salary_cagr", 0),
+        "node_id": node_id,  # Keep original node_id for accurate navigation
+        "role_examples": role_examples,
+    }
 
 
 def _get_supervisor():
@@ -442,10 +517,16 @@ def _build_greeting(user: User, db: Session) -> dict:
             {"label": "聊聊下一步", "prompt": "我接下来应该重点提升什么能力？"},
         ]
 
+    # Inject market card for target direction (if user has a goal)
+    market_card = None
+    if goal and goal.target_node_id:
+        market_card = _get_card_for_node(goal.target_node_id)
+
     return {
         "stage": stage,
         "greeting": greeting,
         "chips": chips,
+        "market_card": market_card,
         "context": {
             "profile_name": profile_name,
             "skill_count": skill_count,
@@ -702,6 +783,16 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
     # Pre-scan user message for direction mentions (user-side trigger)
     user_detected_cards = _extract_market_cards(req.message)
 
+    # Also inject from page context if user is on a role detail page
+    if req.page_context and req.page_context.route.startswith("/roles/"):
+        page_node_id = req.page_context.route.split("/roles/")[-1].split("/")[0].strip()
+        if page_node_id:
+            page_card = _get_card_for_node(page_node_id)
+            if page_card:
+                existing_families = {c["family"] for c in user_detected_cards}
+                if page_card["family"] not in existing_families:
+                    user_detected_cards = [page_card] + user_detected_cards
+
     try:
         async for event in supervisor.astream(
             initial_state,
@@ -773,7 +864,8 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
         yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
 
     # ── Step 2.5: Emit market_cards — merge user message + AI response detections ──
-    if agent_source == "coach_agent":
+    _DIRECTION_AGENTS = {"coach_agent", "navigator", "profile_agent", "growth_agent"}
+    if agent_source in _DIRECTION_AGENTS:
         ai_cards = _extract_market_cards(full_response) if full_response else []
         # Merge: AI cards take priority (more context), user cards fill in gaps
         seen_families = {c["family"] for c in ai_cards}

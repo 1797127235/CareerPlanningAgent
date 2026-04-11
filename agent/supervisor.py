@@ -285,6 +285,36 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
             for k, v in page_data.items():
                 parts.append(f"  · {k}: {v}")
 
+    # Growth timeline — recent 30 days events for Coach temporal awareness
+    if not for_triage:
+        user_id = state.get("user_id")
+        if user_id:
+            try:
+                from backend.db import SessionLocal as _SL
+                from backend.db_models import GrowthEvent as _GE
+                from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+                _db = _SL()
+                _cutoff = _dt.now(_tz.utc) - _td(days=30)
+                _events = (
+                    _db.query(_GE)
+                    .filter(_GE.user_id == user_id, _GE.created_at >= _cutoff)
+                    .order_by(_GE.created_at.asc())
+                    .limit(8)
+                    .all()
+                )
+                _db.close()
+                if _events:
+                    timeline_lines = ["- 成长时间轴（最近30天）:"]
+                    for ev in _events:
+                        date_str = ev.created_at.strftime("%m/%d") if ev.created_at else ""
+                        readiness_note = ""
+                        if ev.readiness_after is not None:
+                            readiness_note = f"（技能覆盖率 {ev.readiness_after:.0f}%）"
+                        timeline_lines.append(f"  · {date_str} {ev.summary}{readiness_note}")
+                    parts.append("\n".join(timeline_lines))
+            except Exception:
+                pass
+
     # Coach memo from prior sessions
     memo = state.get("coach_memo", "")
     if memo:

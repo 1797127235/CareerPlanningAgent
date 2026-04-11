@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import type { Skill } from '@/types/profile'
+import type { Skill, Internship } from '@/types/profile'
 
 interface ManualProfileFormProps {
   onSave: (data: ManualProfilePayload) => void
@@ -11,10 +11,20 @@ interface ManualProfileFormProps {
 
 export interface ManualProfilePayload {
   name: string
-  major: string
+  /** 教育 — 全部字段可编辑 */
+  education: {
+    degree: string
+    major: string
+    school: string
+  }
+  experience_years: number
+  job_target: string
   skills: Skill[]
   knowledge_areas: string[]
   projects: string[]
+  internships: Internship[]
+  certificates: string[]
+  awards: string[]
 }
 
 const LEVEL_OPTIONS: { value: Skill['level']; label: string }[] = [
@@ -24,9 +34,23 @@ const LEVEL_OPTIONS: { value: Skill['level']; label: string }[] = [
   { value: 'expert', label: '精通' },
 ]
 
+const EMPTY_INTERNSHIP: Internship = {
+  company: '',
+  role: '',
+  duration: '',
+  tech_stack: [],
+  highlights: '',
+}
+
 export function ManualProfileForm({ onSave, onCancel, saving, initialData }: ManualProfileFormProps) {
   const [name, setName] = useState(initialData?.name ?? '')
-  const [major, setMajor] = useState(initialData?.major ?? '')
+  const [degree, setDegree] = useState(initialData?.education?.degree ?? '')
+  const [major, setMajor] = useState(initialData?.education?.major ?? '')
+  const [school, setSchool] = useState(initialData?.education?.school ?? '')
+  const [experienceYears, setExperienceYears] = useState<string>(
+    String(initialData?.experience_years ?? 0),
+  )
+  const [jobTarget, setJobTarget] = useState(initialData?.job_target ?? '')
   const [skills, setSkills] = useState<Skill[]>(
     initialData?.skills?.length ? initialData.skills : [{ name: '', level: 'familiar' }],
   )
@@ -36,33 +60,68 @@ export function ManualProfileForm({ onSave, onCancel, saving, initialData }: Man
   const [projects, setProjects] = useState<string[]>(
     initialData?.projects?.length ? initialData.projects : [],
   )
+  const [internships, setInternships] = useState<Internship[]>(
+    initialData?.internships ?? [],
+  )
+  const [certificates, setCertificates] = useState<string[]>(
+    initialData?.certificates ?? [],
+  )
+  const [awards, setAwards] = useState<string[]>(
+    initialData?.awards ?? [],
+  )
 
   const [errors, setErrors] = useState<{ name?: string; skills?: string }>({})
 
+  /* ── Skills ── */
   const addSkill = useCallback(() => {
     setSkills((prev) => [...prev, { name: '', level: 'familiar' }])
   }, [])
-
   const removeSkill = useCallback((idx: number) => {
     setSkills((prev) => prev.filter((_, i) => i !== idx))
   }, [])
-
   const updateSkill = useCallback((idx: number, field: 'name' | 'level', value: string) => {
-    setSkills((prev) =>
-      prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)),
-    )
+    setSkills((prev) => prev.map((s, i) => (i === idx ? { ...s, [field]: value } : s)))
   }, [])
 
-  const addProject = useCallback(() => {
-    setProjects((prev) => [...prev, ''])
-  }, [])
-
+  /* ── Projects ── */
+  const addProject = useCallback(() => setProjects((p) => [...p, '']), [])
   const removeProject = useCallback((idx: number) => {
-    setProjects((prev) => prev.filter((_, i) => i !== idx))
+    setProjects((p) => p.filter((_, i) => i !== idx))
+  }, [])
+  const updateProject = useCallback((idx: number, value: string) => {
+    setProjects((p) => p.map((v, i) => (i === idx ? value : v)))
   }, [])
 
-  const updateProject = useCallback((idx: number, value: string) => {
-    setProjects((prev) => prev.map((p, i) => (i === idx ? value : p)))
+  /* ── Internships ── */
+  const addInternship = useCallback(() => {
+    setInternships((p) => [...p, { ...EMPTY_INTERNSHIP }])
+  }, [])
+  const removeInternship = useCallback((idx: number) => {
+    setInternships((p) => p.filter((_, i) => i !== idx))
+  }, [])
+  const updateInternship = useCallback(
+    <K extends keyof Internship>(idx: number, field: K, value: Internship[K]) => {
+      setInternships((p) => p.map((v, i) => (i === idx ? { ...v, [field]: value } : v)))
+    },
+    [],
+  )
+
+  /* ── Certificates ── */
+  const addCertificate = useCallback(() => setCertificates((p) => [...p, '']), [])
+  const removeCertificate = useCallback((idx: number) => {
+    setCertificates((p) => p.filter((_, i) => i !== idx))
+  }, [])
+  const updateCertificate = useCallback((idx: number, value: string) => {
+    setCertificates((p) => p.map((v, i) => (i === idx ? value : v)))
+  }, [])
+
+  /* ── Awards ── */
+  const addAward = useCallback(() => setAwards((p) => [...p, '']), [])
+  const removeAward = useCallback((idx: number) => {
+    setAwards((p) => p.filter((_, i) => i !== idx))
+  }, [])
+  const updateAward = useCallback((idx: number, value: string) => {
+    setAwards((p) => p.map((v, i) => (i === idx ? value : v)))
   }, [])
 
   const handleSubmit = useCallback(() => {
@@ -81,19 +140,43 @@ export function ManualProfileForm({ onSave, onCancel, saving, initialData }: Man
       .map((s) => s.trim())
       .filter(Boolean)
 
+    const cleanInternships = internships
+      .filter((v) => v.company.trim() || v.role.trim())
+      .map((v) => ({
+        ...v,
+        company: v.company.trim(),
+        role: v.role.trim(),
+        duration: v.duration?.trim() ?? '',
+        highlights: v.highlights?.trim() ?? '',
+        tech_stack: (v.tech_stack ?? []).map((t) => t.trim()).filter(Boolean),
+      }))
+
     onSave({
       name: name.trim(),
-      major: major.trim(),
+      education: {
+        degree: degree.trim(),
+        major: major.trim(),
+        school: school.trim(),
+      },
+      experience_years: Number.parseInt(experienceYears, 10) || 0,
+      job_target: jobTarget.trim(),
       skills: validSkills,
       knowledge_areas: knowledgeAreas,
-      projects: projects.filter((p) => p.trim()),
+      projects: projects.map((p) => p.trim()).filter(Boolean),
+      internships: cleanInternships,
+      certificates: certificates.map((c) => c.trim()).filter(Boolean),
+      awards: awards.map((a) => a.trim()).filter(Boolean),
     })
-  }, [name, major, skills, knowledgeText, projects, onSave])
+  }, [
+    name, degree, major, school, experienceYears, jobTarget,
+    skills, knowledgeText, projects, internships, certificates, awards,
+    onSave,
+  ])
 
   return (
     <div className="glass-static max-w-[680px] mx-auto px-9 py-8">
       <div className="g-inner">
-      <h2 className="text-[18px] font-bold text-[var(--text-1)] mb-6">手动建立画像</h2>
+      <h2 className="text-[18px] font-bold text-[var(--text-1)] mb-6">编辑画像</h2>
 
       <div className="space-y-6">
         {/* 姓名 */}
@@ -106,15 +189,52 @@ export function ManualProfileForm({ onSave, onCancel, saving, initialData }: Man
           />
         </Field>
 
-        {/* 专业 */}
-        <Field label="专业">
-          <input
-            value={major}
-            onChange={(e) => setMajor(e.target.value)}
-            placeholder="例如：计算机科学与技术"
-            className={inputCls()}
-          />
-        </Field>
+        {/* 教育 */}
+        <div>
+          <Label text="教育背景" />
+          <div className="mt-1.5 grid grid-cols-3 gap-2">
+            <input
+              value={degree}
+              onChange={(e) => setDegree(e.target.value)}
+              placeholder="学位（本科/硕士）"
+              className={inputCls()}
+            />
+            <input
+              value={major}
+              onChange={(e) => setMajor(e.target.value)}
+              placeholder="专业"
+              className={inputCls()}
+            />
+            <input
+              value={school}
+              onChange={(e) => setSchool(e.target.value)}
+              placeholder="学校"
+              className={inputCls()}
+            />
+          </div>
+        </div>
+
+        {/* 工作年限 + 求职意向 */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="工作年限">
+            <input
+              type="number"
+              min="0"
+              value={experienceYears}
+              onChange={(e) => setExperienceYears(e.target.value)}
+              placeholder="0"
+              className={inputCls()}
+            />
+          </Field>
+          <Field label="求职意向">
+            <input
+              value={jobTarget}
+              onChange={(e) => setJobTarget(e.target.value)}
+              placeholder="例如：数据分析师"
+              className={inputCls()}
+            />
+          </Field>
+        </div>
 
         {/* 技能列表 */}
         <div>
@@ -172,6 +292,82 @@ export function ManualProfileForm({ onSave, onCancel, saving, initialData }: Man
           />
         </Field>
 
+        {/* 实习经历 */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label text="实习经历" />
+            <button
+              type="button"
+              onClick={addInternship}
+              className="flex items-center gap-1 text-[12px] font-medium text-[var(--blue)] hover:opacity-80 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> 添加实习
+            </button>
+          </div>
+          <div className="space-y-3">
+            {internships.map((intern, i) => (
+              <div
+                key={i}
+                className="rounded-xl p-3 bg-white/30 border border-white/40 space-y-2"
+              >
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={intern.company}
+                    onChange={(e) => updateInternship(i, 'company', e.target.value)}
+                    placeholder="公司名称"
+                    className={inputCls()}
+                  />
+                  <input
+                    value={intern.role}
+                    onChange={(e) => updateInternship(i, 'role', e.target.value)}
+                    placeholder="实习岗位"
+                    className={inputCls()}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    value={intern.duration ?? ''}
+                    onChange={(e) => updateInternship(i, 'duration', e.target.value)}
+                    placeholder="时间范围 2024.10-2024.12"
+                    className={inputCls()}
+                  />
+                  <input
+                    value={(intern.tech_stack ?? []).join('、')}
+                    onChange={(e) =>
+                      updateInternship(
+                        i,
+                        'tech_stack',
+                        e.target.value.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean),
+                      )
+                    }
+                    placeholder="技术栈（顿号分隔）"
+                    className={inputCls()}
+                  />
+                </div>
+                <textarea
+                  value={intern.highlights ?? ''}
+                  onChange={(e) => updateInternship(i, 'highlights', e.target.value)}
+                  placeholder="核心成果一句话，如：优化推荐算法 CTR +10%"
+                  rows={2}
+                  className={`w-full resize-none ${inputCls()}`}
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => removeInternship(i)}
+                    className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-red-500 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> 删除这段实习
+                  </button>
+                </div>
+              </div>
+            ))}
+            {internships.length === 0 && (
+              <p className="text-[11px] text-slate-400 italic">点击"添加实习"开始填写</p>
+            )}
+          </div>
+        </div>
+
         {/* 项目经历 */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -203,6 +399,78 @@ export function ManualProfileForm({ onSave, onCancel, saving, initialData }: Man
                 </button>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* 证书 */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label text="证书" />
+            <button
+              type="button"
+              onClick={addCertificate}
+              className="flex items-center gap-1 text-[12px] font-medium text-[var(--blue)] hover:opacity-80 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> 添加证书
+            </button>
+          </div>
+          <div className="space-y-2">
+            {certificates.map((cert, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={cert}
+                  onChange={(e) => updateCertificate(i, e.target.value)}
+                  placeholder="如：CET-6、软考中级、普通话二甲、机动车驾驶证C2"
+                  className={`flex-1 ${inputCls()}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeCertificate(i)}
+                  className="p-1.5 text-[var(--text-3)] hover:text-red-500 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            {certificates.length === 0 && (
+              <p className="text-[11px] text-slate-400 italic">点击"添加证书"开始填写</p>
+            )}
+          </div>
+        </div>
+
+        {/* 奖项 */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <Label text="奖项与荣誉" />
+            <button
+              type="button"
+              onClick={addAward}
+              className="flex items-center gap-1 text-[12px] font-medium text-[var(--blue)] hover:opacity-80 cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" /> 添加奖项
+            </button>
+          </div>
+          <div className="space-y-2">
+            {awards.map((aw, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={aw}
+                  onChange={(e) => updateAward(i, e.target.value)}
+                  placeholder="如：蓝桥杯省一、校级奖学金、ACM 铜牌"
+                  className={`flex-1 ${inputCls()}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => removeAward(i)}
+                  className="p-1.5 text-[var(--text-3)] hover:text-red-500 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            {awards.length === 0 && (
+              <p className="text-[11px] text-slate-400 italic">点击"添加奖项"开始填写</p>
+            )}
           </div>
         </div>
       </div>
