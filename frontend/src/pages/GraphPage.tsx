@@ -13,7 +13,13 @@ export default function GraphPage() {
   const { token } = useAuth()
   const { profile, loadProfile } = useProfileData(token)
 
-  const profileId = profile?.id ?? undefined
+  // Only treat a profile as "real" if it has at least a name or some skills.
+  // An auto-created empty profile record must not unlock goal-setting UI.
+  const hasRealProfile = !!(
+    profile?.name?.trim() ||
+    (profile?.profile?.skills?.length ?? 0) > 0
+  )
+  const profileId = hasRealProfile ? (profile?.id ?? undefined) : undefined
   const gp = profile?.graph_position
   const fromNodeId = gp?.from_node_id ?? undefined
   const targetNodeId = gp?.target_node_id !== gp?.from_node_id ? (gp?.target_node_id ?? undefined) : undefined

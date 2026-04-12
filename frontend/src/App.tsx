@@ -7,8 +7,6 @@ import GraphPage from '@/pages/GraphPage'
 import ReportPage from '@/pages/ReportPage'
 import GrowthLogPage from '@/pages/GrowthLogPage'
 import CoachResultPage from '@/pages/CoachResultPage'
-import LearningPage from '@/pages/LearningPage'
-import LearningPathPage from '@/pages/LearningPathPage'
 import RoleDetailPage from '@/pages/RoleDetailPage'
 import LoginPage from '@/pages/LoginPage'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -33,8 +31,9 @@ export default function App() {
             <Route path="/roles/:roleId" element={<RoleDetailPage />} />
             <Route path="/profile/match/:roleId" element={<MatchDetailPage />} />
             <Route path="/graph" element={<GraphPage />} />
-            <Route path="/explore/:nodeId/learning" element={<LearningPage />} />
-            <Route path="/profile/learning" element={<LearningPathPage />} />
+            {/* 学习路径已砍 — 旧路由重定向到成长档案，保证外部链接不 404 */}
+            <Route path="/explore/:nodeId/learning" element={<Navigate to="/growth-log" replace />} />
+            <Route path="/profile/learning" element={<Navigate to="/growth-log" replace />} />
             <Route path="/jd" element={<Navigate to="/growth-log?tab=pursuits" replace />} />
             <Route path="/growth" element={<Navigate to="/growth-log" replace />} />
             <Route path="/applications" element={<Navigate to="/growth-log?tab=pursuits" replace />} />

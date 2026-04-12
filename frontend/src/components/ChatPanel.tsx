@@ -62,15 +62,12 @@ const routeLabels: Record<string, string> = {
   '/': '首页',
   '/profile': '能力画像',
   '/graph': '岗位图谱',
-  '/practice': '面试练习',
-  '/growth': '成长看板',
+  '/growth-log': '成长档案',
   '/report': '职业报告',
-  '/applications': '求职追踪',
 }
 
 function getPageLabel(pathname: string): string {
   if (routeLabels[pathname]) return routeLabels[pathname]
-  if (pathname.startsWith('/explore/') && pathname.endsWith('/learning')) return '学习路径'
   if (pathname.startsWith('/roles/')) return '岗位详情'
   if (pathname.startsWith('/coach/result/')) return '教练分析报告'
   if (pathname.startsWith('/profile/match/')) return '匹配详情'
@@ -100,19 +97,34 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
   const [showHistory, setShowHistory] = useState(false)
 
   /* ── Greeting data (fetched on panel open) ── */
-  interface GreetingData { greeting: string; chips: Chip[]; market_card?: MarketCardData }
+  interface GreetingData { greeting: string; chips: Chip[]; market_card?: MarketCardData; processing?: boolean }
   const [greetingData, setGreetingData] = useState<GreetingData | null>(null)
 
   useEffect(() => {
     if (!open) return
     const token = localStorage.getItem('token')
     if (!token) return
-    fetch(`${API_BASE}/chat/greeting`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then((data: GreetingData | null) => { if (data) setGreetingData(data) })
-      .catch(() => {/* silent fail */})
+
+    let pollTimer: ReturnType<typeof setTimeout> | null = null
+
+    const fetchGreeting = () => {
+      fetch(`${API_BASE}/chat/greeting`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then((data: GreetingData | null) => {
+          if (!data) return
+          setGreetingData(data)
+          // Backend signals background processing not done — auto-refresh in 8s
+          if (data.processing) {
+            pollTimer = setTimeout(fetchGreeting, 8000)
+          }
+        })
+        .catch(() => {/* silent fail */})
+    }
+
+    fetchGreeting()
+    return () => { if (pollTimer) clearTimeout(pollTimer) }
   }, [open])
 
   /* ── Page-aware tip bar ── */
@@ -560,7 +572,6 @@ const agentConfig: Record<string, { name: string; color: string }> = {
   navigator:      { name: '方向顾问', color: 'bg-indigo-600' },
   jd_agent:       { name: '匹配分析师', color: 'bg-amber-600' },
   profile_agent:  { name: '画像顾问', color: 'bg-teal-600' },
-  practice_agent: { name: '面试教练', color: 'bg-purple-600' },
   growth_agent:   { name: '成长顾问', color: 'bg-emerald-600' },
   report_agent:   { name: '报告分析师', color: 'bg-slate-600' },
 }

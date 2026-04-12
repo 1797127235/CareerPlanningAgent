@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Search, X, ChevronLeft, ChevronRight, ArrowUp, Repeat2, ArrowRight, CheckCircle2, MapPin, Target, BookOpen, ExternalLink, Video, FileText, GraduationCap } from 'lucide-react'
-import { searchGraphNodes, fetchEscapeRoutes, setCareerGoal, addCareerGoal, fetchNodeIntro, fetchNodeLearningSummary } from '@/api/graph'
-import type { GraphNode, GraphEdge, EscapeRoute, SearchResult, LearningSummary } from '@/types/graph'
+import { searchGraphNodes, fetchEscapeRoutes, setCareerGoal, addCareerGoal, fetchNodeIntro } from '@/api/graph'
+import type { GraphNode, GraphEdge, EscapeRoute, SearchResult } from '@/types/graph'
 import { dispatchCoachTrigger } from '@/hooks/useCoachTrigger'
 
 /* ── Helpers ── */
@@ -225,10 +225,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
   const [introLoading, setIntroLoading] = useState(false)
   const introFetchedRef = useRef<Set<string>>(new Set())
 
-  // Learning summary cache
-  const [learningSummaryCache, setLearningSummaryCache] = useState<Map<string, LearningSummary>>(new Map())
-  const learningSummaryFetchedRef = useRef<Set<string>>(new Set())
-
   // Detail modal state
   const [detailNode, setDetailNode] = useState<GraphNode | null>(null)
 
@@ -266,17 +262,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
       .then(data => setIntroCache(prev => new Map(prev).set(id, data.intro)))
       .catch(() => setIntroCache(prev => new Map(prev).set(id, '')))
       .finally(() => setIntroLoading(false))
-  }, [currentNode])
-
-  // Fetch learning summary for center card
-  useEffect(() => {
-    if (!currentNode) return
-    const id = currentNode.node_id
-    if (learningSummaryFetchedRef.current.has(id)) return
-    learningSummaryFetchedRef.current.add(id)
-    fetchNodeLearningSummary(id)
-      .then(data => setLearningSummaryCache(prev => new Map(prev).set(id, data)))
-      .catch(() => {})
   }, [currentNode])
 
   const currentRoutes = currentNode ? (routesCache.get(currentNode.node_id) ?? []) : []
@@ -816,48 +801,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
                   ) : null}
                 </div>
 
-                {/* Learning resources summary */}
-                {isCenter && (() => {
-                  const summary = learningSummaryCache.get(node.node_id)
-                  if (!summary || summary.topic_count === 0) return null
-                  const tb = summary.type_breakdown || {}
-                  return (
-                    <div className="mt-4 pt-3 border-t border-slate-200/50">
-                      <div className="text-[13px] font-bold text-slate-500 flex items-center gap-1.5 mb-2">
-                        <BookOpen className="w-3.5 h-3.5" /> 学习资源
-                      </div>
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {tb.article ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-600">
-                            <FileText className="w-3 h-3" />{tb.article} 文章
-                          </span>
-                        ) : null}
-                        {tb.video ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-red-50 text-red-500">
-                            <Video className="w-3 h-3" />{tb.video} 视频
-                          </span>
-                        ) : null}
-                        {tb.course ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-purple-50 text-purple-600">
-                            <GraduationCap className="w-3 h-3" />{tb.course} 课程
-                          </span>
-                        ) : null}
-                        {(tb.book || 0) + (tb.official || 0) > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-md bg-amber-50 text-amber-600">
-                            <BookOpen className="w-3 h-3" />{(tb.book || 0) + (tb.official || 0)} 书籍/文档
-                          </span>
-                        ) : null}
-                      </div>
-                      <button
-                        onClick={e => { e.stopPropagation(); routerNavigate(`/explore/${node.node_id}/learning`) }}
-                        className="w-full text-center text-[11px] font-semibold text-[var(--blue)] bg-blue-50 hover:bg-blue-100 py-1.5 rounded-lg cursor-pointer transition-colors flex items-center justify-center gap-1"
-                      >
-                        查看 {summary.topic_count} 个学习话题 <ArrowRight className="w-3 h-3" />
-                      </button>
-                    </div>
-                  )
-                })()}
-
                 <div className="text-center text-[11px] text-slate-400 mt-4">点击翻转回正面</div>
               </div>
 
@@ -891,7 +834,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
       {detailNode && (() => {
         const ab = computeAbilities(detailNode)
         const intro = introCache.get(detailNode.node_id)
-        const summary = learningSummaryCache.get(detailNode.node_id)
         return (
           <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-6"
             onClick={() => setDetailNode(null)}>
@@ -1013,16 +955,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
                 查看完整岗位介绍
               </button>
 
-              {/* Learning link */}
-              {summary && summary.topic_count > 0 && (
-                <button
-                  onClick={() => { setDetailNode(null); routerNavigate(`/explore/${detailNode.node_id}/learning`) }}
-                  className="w-full text-center text-[12px] font-semibold text-[var(--blue)] bg-blue-50 hover:bg-blue-100 py-2 rounded-xl cursor-pointer transition-colors flex items-center justify-center gap-1.5"
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  {summary.topic_count} 个学习话题 · {summary.resource_count} 个资源
-                </button>
-              )}
             </div>
           </div>
         )
@@ -1137,10 +1069,10 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
                 {/* CTAs */}
                 <div className="space-y-2">
                   <button
-                    onClick={() => routerNavigate('/profile/learning')}
+                    onClick={() => routerNavigate('/growth-log')}
                     className="w-full bg-[var(--blue)] text-white py-3 rounded-xl text-[13px] font-bold cursor-pointer transition-all shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 hover:opacity-90"
                   >
-                    开始学习路径
+                    去成长档案追踪
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                   <div className="grid grid-cols-2 gap-2">
@@ -1240,10 +1172,10 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
                   </div>
                 </div>
                 <button
-                  onClick={() => routerNavigate(`/profile/learning`)}
+                  onClick={() => routerNavigate('/growth-log')}
                   className="w-full bg-[var(--blue)] text-white py-3.5 rounded-xl text-[14px] font-bold cursor-pointer transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 hover:opacity-90"
                 >
-                  开始学习路径
+                  去成长档案追踪
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <button
@@ -1273,7 +1205,7 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
                 </div>
 
                 <p className="text-[12px] text-slate-500 bg-slate-50 rounded-xl px-4 py-3">
-                  设定后，JD 诊断页将自动搜索该岗位相关职位，通过诊断结果了解具体能力差距。
+                  设定后，成长档案会按此目标追踪你的项目和求职进展。投递 JD 时粘贴到求职追踪做诊断，即可看到真实能力差距。
                 </p>
 
                 {directGoalError && (

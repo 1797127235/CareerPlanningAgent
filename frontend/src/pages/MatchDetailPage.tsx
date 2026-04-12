@@ -241,17 +241,17 @@ export default function MatchDetailPage() {
 
         {/* CTA */}
         <div className="flex flex-col sm:flex-row gap-3 mt-6 pt-6 border-t border-slate-200">
-          <button 
+          <button
             onClick={() => navigate(`/graph?node=${encodeURIComponent(roleId!)}`)}
             className="flex-1 bg-white border border-slate-300 text-slate-700 text-[14px] font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-slate-50 transition-colors cursor-pointer"
           >
             去图谱查看该岗位
           </button>
-          <button 
-            onClick={() => navigate(`/explore/${encodeURIComponent(roleId!)}/learning`)}
+          <button
+            onClick={() => navigate('/growth-log')}
             className="flex-1 bg-blue-600 text-white text-[14px] font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors cursor-pointer"
           >
-            查看学习资源
+            去成长档案追踪
           </button>
         </div>
 

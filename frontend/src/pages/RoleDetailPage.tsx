@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Check, AlertTriangle, ArrowRight, BookOpen, Shield, Zap } from 'lucide-react'
+import { ChevronLeft, Check, AlertTriangle, ArrowRight, BookOpen, Shield, Zap, X, Briefcase, BarChart2, ClipboardList } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { rawFetch } from '@/api/client'
 import { setCareerGoal } from '@/api/graph'
@@ -135,8 +136,6 @@ interface RoleDetail {
   intro?: string | null
   promotion_targets: CareerTarget[]
   transition_targets: CareerTarget[]
-  learning_topic_count: number
-  learning_progress?: { total_subtopics: number; completed: number; pct: number }
   user_dynamic_level?: number
   user_matched_skills: string[]
   user_gap_skills: string[]
@@ -194,6 +193,7 @@ export default function RoleDetailPage() {
   const [data, setData] = useState<RoleDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [confirming, setConfirming] = useState(false)
+  const [showGoalConfirm, setShowGoalConfirm] = useState(false)
 
   useEffect(() => {
     if (!roleId) return
@@ -204,7 +204,22 @@ export default function RoleDetailPage() {
       .finally(() => setLoading(false))
   }, [roleId])
 
-  async function handleExplore() {
+  const hasRealProfile = !!(
+    profile?.name?.trim() ||
+    (profile?.profile?.skills?.length ?? 0) > 0
+  )
+
+  function handleExplore() {
+    if (!data) return
+    if (!hasRealProfile) {
+      navigate('/profile?from=goal-set')
+      return
+    }
+    // Show confirmation dialog instead of setting goal immediately
+    setShowGoalConfirm(true)
+  }
+
+  async function handleConfirmGoal() {
     if (!data || !profile) return
     setConfirming(true)
     try {
@@ -218,7 +233,8 @@ export default function RoleDetailPage() {
         safety_gain: 0,
         salary_p50: data.salary_p50 || 0,
       })
-      navigate('/profile/learning')
+      setShowGoalConfirm(false)
+      navigate('/growth-log')
     } finally {
       setConfirming(false)
     }
@@ -346,9 +362,6 @@ export default function RoleDetailPage() {
                 <div>
                   <h4 className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2">
                     晋升阶梯
-                    {data.learning_progress && data.learning_progress.pct > 0 && (
-                      <span className="ml-1 text-blue-400 normal-case tracking-normal">· 学习 {data.learning_progress.pct}%</span>
-                    )}
                   </h4>
                   {data.promotion_path && data.promotion_path.length > 0 ? (() => {
                     const currentLevel = data.user_dynamic_level ?? 1
@@ -520,18 +533,17 @@ export default function RoleDetailPage() {
               <p className="text-[9px] text-slate-300 mt-1.5">Anthropic Economic Index</p>
             </div>
             <div>
-              <SectionTitle>学习路径</SectionTitle>
-              {data.learning_topic_count > 0 ? (
+              <SectionTitle>学习资源</SectionTitle>
+              <div className="text-[11px] text-slate-400 leading-relaxed">
+                系统不直接提供学习内容。你可以在
                 <button
-                  onClick={() => navigate(`/explore/${data.node_id}/learning`)}
-                  className="flex items-center gap-2 hover:text-[var(--blue)] transition-colors cursor-pointer group"
+                  onClick={() => navigate('/growth-log')}
+                  className="text-[var(--blue)] hover:underline mx-1 cursor-pointer font-medium"
                 >
-                  <BookOpen className="w-3.5 h-3.5 text-blue-400" />
-                  <span className="text-[12px] text-slate-500 group-hover:text-[var(--blue)]">{data.learning_topic_count} 个话题可学习 →</span>
+                  成长档案
                 </button>
-              ) : (
-                <p className="text-[11px] text-slate-300">暂无学习路径</p>
-              )}
+                追踪实战项目进度，用项目驱动技能成长。
+              </div>
             </div>
           </div>
           {/* ── 意愿对照 ── */}
@@ -641,20 +653,135 @@ export default function RoleDetailPage() {
       </div>
 
       {/* ── CTA ── */}
-      {!profileLoading && profile && (
+      {!profileLoading && (
         <div className="mt-5">
-          <button
-            onClick={handleExplore}
-            disabled={confirming}
-            className="w-full py-3 rounded-xl bg-[var(--blue)] text-white text-[14px] font-semibold cursor-pointer hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {confirming ? '设定中...' : `开始探索「${data.label}」方向`}
-          </button>
-          <p className="text-[11px] text-slate-400 text-center mt-2">
-            系统将生成差距分析和学习路径，随时可以更换方向
-          </p>
+          {hasRealProfile ? (
+            <>
+              <button
+                onClick={handleExplore}
+                disabled={confirming}
+                className="w-full py-3 rounded-xl bg-[var(--blue)] text-white text-[14px] font-semibold cursor-pointer hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {confirming ? '设定中...' : `开始探索「${data.label}」方向`}
+              </button>
+              <p className="text-[11px] text-slate-400 text-center mt-2">
+                系统将追踪你与此方向的差距，随时可以更换
+              </p>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => navigate('/profile?from=goal-set')}
+                className="w-full py-3 rounded-xl bg-slate-100 text-slate-600 text-[14px] font-semibold cursor-pointer hover:bg-slate-200 transition-all border border-slate-200"
+              >
+                先建立画像，再设定目标
+              </button>
+              <p className="text-[11px] text-slate-400 text-center mt-2">
+                上传简历后才能计算你与此方向的真实差距
+              </p>
+            </>
+          )}
         </div>
       )}
+
+      {/* ── Goal Confirmation Modal ── */}
+      <AnimatePresence>
+        {showGoalConfirm && data && (
+          <motion.div
+            className="fixed inset-0 z-50 flex items-center justify-center p-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => { if (!confirming) setShowGoalConfirm(false) }}
+          >
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-md" />
+
+            {/* Card — higher opacity than glass-static (0.30) for legible modal text */}
+            <motion.div
+              className="relative max-w-[440px] w-full rounded-[24px] shadow-2xl p-7 space-y-5"
+              style={{
+                background: 'rgba(255,255,255,0.88)',
+                backdropFilter: 'blur(32px) saturate(160%)',
+                WebkitBackdropFilter: 'blur(32px) saturate(160%)',
+                border: '1px solid rgba(255,255,255,0.70)',
+                boxShadow: '0 8px 40px rgba(0,0,0,0.14), 0 1px 4px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.9)',
+              }}
+              initial={{ opacity: 0, scale: 0.88, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 8 }}
+              transition={{ type: 'spring', damping: 22, stiffness: 320, mass: 0.8 }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                onClick={() => { if (!confirming) setShowGoalConfirm(false) }}
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-white/50 hover:bg-white/80 flex items-center justify-center text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              {/* Header */}
+              <div className="pr-8">
+                <h3 className="text-[18px] font-extrabold text-slate-800">确认设定职业方向</h3>
+                <p className="text-[12px] text-slate-400 mt-1">在此之前，请确认你理解这意味着什么</p>
+              </div>
+
+              {/* Direction badge */}
+              <div className="bg-[var(--blue)]/8 border border-[var(--blue)]/20 rounded-2xl px-4 py-3.5 flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[var(--blue)]/15 flex items-center justify-center shrink-0">
+                  <Check className="w-4.5 h-4.5 text-[var(--blue)]" strokeWidth={2.5} />
+                </div>
+                <div>
+                  <p className="text-[14px] font-extrabold text-slate-800">{data.label}</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">你选定的成长方向</p>
+                </div>
+              </div>
+
+              {/* What this means — unified blue accent, clear semantic icons */}
+              <div className="space-y-2">
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">设定后，系统会</p>
+                {[
+                  { Icon: Briefcase,     text: '优先为你推送这个方向的真实 JD 做诊断' },
+                  { Icon: BarChart2,     text: 'Coach 持续追踪你与这个方向的技能差距' },
+                  { Icon: ClipboardList, text: '成长档案按此目标记录你的项目和求职进展' },
+                ].map(({ Icon, text }, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-xl px-3.5 py-2.5 bg-slate-50 border border-slate-100">
+                    <div className="w-8 h-8 rounded-xl bg-[var(--blue)]/10 flex items-center justify-center shrink-0">
+                      <Icon className="w-4 h-4 text-[var(--blue)]" strokeWidth={1.8} />
+                    </div>
+                    <p className="text-[12.5px] text-slate-700 leading-relaxed">{text}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* Reassurance */}
+              <p className="text-[11px] text-slate-400 text-center">
+                方向可以随时更换，不会丢失已有的记录和诊断数据
+              </p>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowGoalConfirm(false)}
+                  disabled={confirming}
+                  className="flex-1 py-3 rounded-2xl text-[13px] font-semibold text-slate-600 bg-white/60 hover:bg-white/80 border border-white/60 transition-all cursor-pointer disabled:opacity-50"
+                >
+                  再想想
+                </button>
+                <button
+                  onClick={handleConfirmGoal}
+                  disabled={confirming}
+                  className="flex-1 py-3 rounded-2xl text-[13px] font-bold text-white bg-[var(--blue)] hover:brightness-110 transition-all cursor-pointer disabled:opacity-60 shadow-lg shadow-blue-500/25"
+                >
+                  {confirming ? '设定中...' : '确认，开始追踪'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

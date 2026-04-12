@@ -26,8 +26,6 @@ import {
   UploadProgress,
   ManualProfileForm,
 } from '@/components/profile'
-import { ScoreRing } from '@/components/shared/ScoreRing'
-import { GrowthPathMap } from '@/components/GrowthPathMap'
 import { cardVariants } from '@/components/profile/constants'
 
 const ZONE_STYLE: Record<string, string> = {
@@ -106,7 +104,6 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [showSjtInline, setShowSjtInline] = useState(false)
   const [showChangeGoalConfirm, setShowChangeGoalConfirm] = useState(false)
-  const [learningProgress, setLearningProgress] = useState<{ pct: number; completed: number; total: number } | null>(null)
 
   // Name prompt — shown after first upload when profile has no name
   const [showNamePrompt, setShowNamePrompt] = useState(false)
@@ -163,17 +160,6 @@ export default function ProfilePage() {
       setRecsLoading(false)
     }
   }, [hasProfile, editing, hasGoal, profileUpdatedAt])
-
-  // Fetch learning progress when goal exists
-  useEffect(() => {
-    if (hasGoal && goal) {
-      rawFetch<{ progress: { pct: number; completed: number; total: number } }>(
-        `/graph/learning-path/${goal.target_node_id}`
-      )
-        .then(res => setLearningProgress(res.progress))
-        .catch(() => setLearningProgress(null))
-    }
-  }, [hasGoal, goal?.target_node_id])
 
   // Reset name prompt guard when profile is deleted/cleared
   useEffect(() => {
@@ -268,7 +254,11 @@ export default function ProfilePage() {
       </button>
     </div>
   )
-  if (!hasProfile && !editing) return <ProfileEmptyState onUpload={triggerFileDialog} onManualEntry={handleManualEntry} />
+  const fromParam = searchParams.get('from')
+  const profileHint = fromParam === 'goal-set'
+    ? '建立画像后才能计算你与目标岗位的真实差距，先完善你的背景信息吧 →'
+    : undefined
+  if (!hasProfile && !editing) return <ProfileEmptyState onUpload={triggerFileDialog} onManualEntry={handleManualEntry} hint={profileHint} />
   if (!hasProfile && editing) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-8">
@@ -343,9 +333,6 @@ export default function ProfilePage() {
             {/* B. 核心指标 */}
             {hasGoal ? (
               <>
-                <div className="flex justify-center">
-                  <ScoreRing score={learningProgress?.pct ?? 0} label="学习进度" size={90} />
-                </div>
                 <div className="rounded-xl border border-white/30 bg-white/10 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Target className="w-3.5 h-3.5 text-[var(--blue)]" />
@@ -355,15 +342,12 @@ export default function ProfilePage() {
                     {gapTotal > 0 && (
                       <p>差距技能 {gapTotal} 项待补</p>
                     )}
-                    {learningProgress && (
-                      <p className="text-slate-400">{learningProgress.completed}/{learningProgress.total} 学习项已完成</p>
-                    )}
                   </div>
                   <button
-                    onClick={() => navigate('/profile/learning')}
+                    onClick={() => navigate('/growth-log')}
                     className="mt-2 w-full text-[12px] font-semibold text-[var(--blue)] hover:text-blue-700 transition-colors cursor-pointer text-left"
                   >
-                    查看学习路径 &rarr;
+                    去成长档案追踪 &rarr;
                   </button>
                 </div>
                 {/* 更换目标 — 次要操作 */}
@@ -499,11 +483,47 @@ export default function ProfilePage() {
         ) : (
           <div className="space-y-8 pb-12">
 
-            {/* 区块 1：有目标 → 成长路径图  |  无目标 → 推荐方向 */}
+            {/* 区块 1：有目标 → 目标概览卡  |  无目标 → 推荐方向 */}
             {hasGoal ? (
               <div className="glass-static p-6">
                 <div className="g-inner">
-                  <GrowthPathMap roleId={goal!.target_node_id} roleLabel={goal!.target_label} />
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">目标方向</p>
+                      <h3 className="text-[18px] font-bold text-slate-800 mb-1">{goal!.target_label}</h3>
+                      <p className="text-[12px] text-slate-500">
+                        {gapTotal > 0
+                          ? `差距技能 ${gapTotal} 项待补 · 通过实战项目逐项跨过`
+                          : '技能已全部覆盖，继续深化经验'}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => navigate('/growth-log')}
+                      className="shrink-0 px-4 py-2 bg-blue-600 text-white text-[12px] font-semibold rounded-xl hover:bg-blue-700 transition-colors cursor-pointer flex items-center gap-1.5"
+                    >
+                      去成长档案追踪 <ArrowUpRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  {Array.isArray(goal!.gap_skills) && goal!.gap_skills.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-white/40">
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">差距技能</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {goal!.gap_skills.slice(0, 8).map(s => (
+                          <span
+                            key={s}
+                            className="text-[11px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium border border-blue-100"
+                          >
+                            {s}
+                          </span>
+                        ))}
+                        {goal!.gap_skills.length > 8 && (
+                          <span className="text-[11px] text-slate-400 px-1">
+                            +{goal!.gap_skills.length - 8} 项
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (recsLoading || (isLocating && recs.length === 0)) ? (
@@ -758,7 +778,7 @@ export default function ProfilePage() {
                 确认更换目标方向？
               </h3>
               <div className="text-[13px] text-slate-500 space-y-1.5 mb-5">
-                <p>你在「{goal.target_label}」方向已完成 {learningProgress?.completed ?? 0}/{learningProgress?.total ?? 0} 个学习项。</p>
+                <p>你当前的目标方向是「{goal.target_label}」。</p>
                 <p className="text-slate-400">更换目标后：</p>
                 <ul className="text-[12px] text-slate-400 space-y-1 pl-1">
                   <li>✅ 已掌握的技能会保留在画像中</li>

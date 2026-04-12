@@ -329,10 +329,10 @@ export default function HomePage() {
                     } else {
                       step = {
                         icon: <BookOpen className="w-4 h-4 text-emerald-500" />,
-                        title: '继续学习路径',
-                        desc: '按计划补强缺口技能，每完成一项画像自动更新',
-                        action: '查看路径',
-                        onClick: () => navigate('/profile/learning'),
+                        title: '去成长档案追踪',
+                        desc: '在时间轴看见自己的进步，记录项目推进缺口',
+                        action: '打开档案',
+                        onClick: () => navigate('/growth-log'),
                       }
                     }
 

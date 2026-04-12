@@ -195,7 +195,7 @@ def get_growth_dashboard(
     # Readiness curve from GrowthSnapshot (up to last 12 points)
     snapshots = (
         db.query(GrowthSnapshot)
-        .filter(GrowthSnapshot.user_id == user.id)
+        .filter(GrowthSnapshot.profile_id == profile.id)
         .order_by(GrowthSnapshot.created_at.asc())
         .limit(12)
         .all()

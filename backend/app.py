@@ -84,7 +84,6 @@ def create_app() -> FastAPI:
         growth_log,
         guidance,
         jd,
-        practice,
         profiles,
         recommendations,
         report,
@@ -96,7 +95,7 @@ def create_app() -> FastAPI:
     app.include_router(graph.router, prefix="/api/graph", tags=["图谱"])
     app.include_router(jd.router, prefix="/api/jd", tags=["JD诊断"])
     app.include_router(extension.router, prefix="/api/extension", tags=["浏览器扩展"])
-    app.include_router(practice.router, prefix="/api/practice", tags=["面试训练"])
+    # 面试练习已砍 — 轻量校准改走 Coach 对话，不再需要独立 /practice 路由
     app.include_router(chat.router, prefix="/api/chat", tags=["AI对话"])
     app.include_router(report.router, prefix="/api/report", tags=["报告"])
     app.include_router(dashboard.router, prefix="/api/dashboard", tags=["看板"])

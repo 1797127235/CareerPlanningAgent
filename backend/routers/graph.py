@@ -13,10 +13,9 @@ from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import JobNode, JobNodeIntro, LearningProgress, Profile, User
+from backend.db_models import JobNode, JobNodeIntro, Profile, User
 from backend.llm import get_llm_client, get_model
 from backend.services.graph_service import get_graph_service
-from backend.services.learning_service import get_learning_service
 
 _ROLE_INTROS_PATH   = Path(__file__).resolve().parent.parent.parent / "data" / "role_intros.json"
 _SIGNALS_PATH       = Path(__file__).resolve().parent.parent.parent / "data" / "market_signals.json"
@@ -166,41 +165,8 @@ def get_node(
             else:
                 transition_targets.append(entry)
 
-    # Learning path topic count + user's completion progress
-    learning_topic_count = 0
-    learning_total_subtopics = 0
-    learning_completed = 0
-    learning_pct = 0
-    try:
-        svc = get_learning_service()
-        lp = svc.get_learning_path(node_id)
-        if lp:
-            topics = lp.get("topics", [])
-            learning_topic_count = len(topics)
-            for t in topics:
-                learning_total_subtopics += len(t.get("subtopics", []))
-    except Exception:
-        pass
-
-    # User's completed subtopics for this role
-    profile_for_progress = db.query(Profile).filter_by(user_id=user.id).first()
-    if profile_for_progress and learning_total_subtopics > 0:
-        completed_rows = (
-            db.query(LearningProgress)
-            .filter_by(profile_id=profile_for_progress.id, role_id=node_id, completed=True)
-            .count()
-        )
-        learning_completed = completed_rows
-        learning_pct = round(completed_rows / learning_total_subtopics * 100)
-
-    # Dynamic promotion level based on learning progress
-    def _pct_to_level(pct: int) -> int:
-        if pct >= 90: return 5
-        if pct >= 70: return 4
-        if pct >= 45: return 3
-        if pct >= 20: return 2
-        return 1
-    user_dynamic_level = _pct_to_level(learning_pct)
+    # 学习路径已砍 — user_dynamic_level 默认 1，前端不再依赖学习进度晋升
+    user_dynamic_level = 1
 
     # User's skill match + multi-dimensional matching (if profile exists)
     user_matched = []
@@ -241,12 +207,6 @@ def get_node(
         "intro": intro_data.get("description") or intro_data.get("brief") or None,
         "promotion_targets": promotion_targets,
         "transition_targets": transition_targets,
-        "learning_topic_count": learning_topic_count,
-        "learning_progress": {
-            "total_subtopics": learning_total_subtopics,
-            "completed": learning_completed,
-            "pct": learning_pct,
-        },
         "user_dynamic_level": user_dynamic_level,
         "user_matched_skills": user_matched,
         "user_gap_skills": user_gaps,
@@ -739,228 +699,3 @@ def search_nodes(
     }
 
 
-# ── Learning resources ─────────────────────────────────────────────────────
-
-@router.get("/node/{node_id}/learning")
-def get_node_learning(
-    node_id: str,
-    resource_type: str | None = Query(None, description="Filter: article/video/book/course/official"),
-    limit: int = Query(0, ge=0, le=300, description="Max topics (0=all)"),
-    offset: int = Query(0, ge=0, description="Skip N topics"),
-    user: User = Depends(get_current_user),
-):
-    """Return learning topics + resources for a role node."""
-    svc = get_learning_service()
-    data = svc.get_role_topics(node_id, resource_type=resource_type, limit=limit, offset=offset)
-    if data is None:
-        raise HTTPException(404, "该角色暂无学习资源")
-    return data
-
-
-@router.get("/node/{node_id}/learning/summary")
-def get_node_learning_summary(
-    node_id: str,
-    user: User = Depends(get_current_user),
-):
-    """Return topic/resource counts for a role (lightweight)."""
-    svc = get_learning_service()
-    summary = svc.get_role_summary(node_id)
-    if summary is None:
-        return {"role_id": node_id, "topic_count": 0, "resource_count": 0, "type_breakdown": {}}
-    return summary
-
-
-# ── Learning path (structured) ────────────────────────────────────────────
-
-
-@router.get("/learning-path/{role_id}")
-def get_learning_path(
-    role_id: str,
-    gap_topics: str | None = Query(None, description="Comma-separated topic titles to filter"),
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Structured learning path for a role, filtered to gap topics, with completion status."""
-    profile = db.query(Profile).filter_by(user_id=user.id).first()
-    if not profile:
-        raise HTTPException(404, "未找到画像")
-
-    # Get completed subtopic IDs from DB
-    rows = (
-        db.query(LearningProgress.subtopic_id)
-        .filter_by(profile_id=profile.id, role_id=role_id, completed=True)
-        .all()
-    )
-    completed_ids = {r[0] for r in rows}
-
-    # Parse gap topics filter
-    topics_filter = None
-    if gap_topics:
-        topics_filter = [t.strip() for t in gap_topics.split(",") if t.strip()]
-
-    svc = get_learning_service()
-    result = svc.get_learning_path(role_id, gap_topics=topics_filter, completed_ids=completed_ids)
-    if result is None:
-        raise HTTPException(404, "该角色暂无学习路径数据")
-    return result
-
-
-class ProgressUpdate(BaseModel):
-    role_id: str
-    subtopic_id: str
-    completed: bool
-
-
-@router.post("/learning-path/progress")
-def update_learning_progress(
-    body: ProgressUpdate,
-    background_tasks: BackgroundTasks,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Mark a subtopic as completed or uncompleted.
-
-    When marking complete, fires a background task to:
-    - Match topic → skill via semantic embedder
-    - Update profile skills if matched
-    - Create GrowthEvent with real readiness delta
-    """
-    profile = db.query(Profile).filter_by(user_id=user.id).first()
-    if not profile:
-        raise HTTPException(404, "未找到画像")
-
-    existing = (
-        db.query(LearningProgress)
-        .filter_by(profile_id=profile.id, role_id=body.role_id, subtopic_id=body.subtopic_id)
-        .first()
-    )
-
-    now = datetime.now(timezone.utc)
-    is_newly_completed = False
-
-    if existing:
-        # Only fire background task when transitioning to completed
-        is_newly_completed = body.completed and not existing.completed
-        existing.completed = body.completed
-        existing.completed_at = now if body.completed else None
-    else:
-        is_newly_completed = body.completed
-        db.add(LearningProgress(
-            profile_id=profile.id,
-            role_id=body.role_id,
-            subtopic_id=body.subtopic_id,
-            completed=body.completed,
-            completed_at=now if body.completed else None,
-        ))
-
-    db.commit()
-
-    # Fire background task — does NOT block the response
-    if is_newly_completed and profile:
-        # Get topic title for skill matching (subtopic_id often IS the title or a readable key)
-        # We use it directly as the topic_title for semantic matching
-        topic_title = body.subtopic_id.replace("-", " ").replace("_", " ")
-
-        from backend.services.growth_log_service import on_learning_completed
-        background_tasks.add_task(
-            on_learning_completed,
-            user_id=user.id,
-            profile_id=profile.id,
-            subtopic_id=body.subtopic_id,
-            topic_title=topic_title,
-            role_id=body.role_id,
-        )
-
-    # Return updated progress summary
-    total = (
-        db.query(LearningProgress)
-        .filter_by(profile_id=profile.id, role_id=body.role_id)
-        .count()
-    )
-    done = (
-        db.query(LearningProgress)
-        .filter_by(profile_id=profile.id, role_id=body.role_id, completed=True)
-        .count()
-    )
-    return {"ok": True, "completed": done, "total": total}
-
-
-class SkillMasteryConfirm(BaseModel):
-    skill_name: str
-    level: str = "familiar"  # familiar | proficient
-
-
-@router.post("/learning-path/confirm-skill")
-def confirm_skill_mastery(
-    body: SkillMasteryConfirm,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Student confirms they've mastered a skill → add/upgrade in profile."""
-    profile = db.query(Profile).filter_by(user_id=user.id).first()
-    if not profile:
-        raise HTTPException(404, "未找到画像")
-
-    profile_data = json.loads(profile.profile_json or "{}")
-    skills = profile_data.get("skills", [])
-
-    # Check if skill already exists
-    existing_idx = next(
-        (i for i, s in enumerate(skills) if s.get("name", "").lower() == body.skill_name.lower()),
-        None,
-    )
-
-    level_order = ["beginner", "familiar", "proficient", "expert"]
-    new_level = body.level if body.level in level_order else "familiar"
-
-    if existing_idx is not None:
-        # Upgrade only if new level is higher
-        old_level = skills[existing_idx].get("level", "beginner")
-        old_rank = level_order.index(old_level) if old_level in level_order else 0
-        new_rank = level_order.index(new_level)
-        if new_rank > old_rank:
-            skills[existing_idx]["level"] = new_level
-    else:
-        skills.append({"name": body.skill_name, "level": new_level})
-
-    profile_data["skills"] = skills
-    profile.profile_json = json.dumps(profile_data, ensure_ascii=False)
-
-    # Recompute quality (invalidates profile_hash → recommendations refresh)
-    from backend.services.profile_service import ProfileService
-    from backend.services.graph_service import get_graph_service
-    ps = ProfileService(get_graph_service(db))
-    quality = ps.compute_quality(profile_data)
-    profile.quality_json = json.dumps(quality, ensure_ascii=False)
-
-    # Clear cached recommendations (profile changed)
-    profile.cached_recs_json = None
-
-    # Compute match percentage against current goal
-    from backend.db_models import CareerGoal
-    match_pct = 0
-    gap_remaining = 0
-    goal = db.query(CareerGoal).filter_by(
-        profile_id=profile.id, is_primary=True
-    ).first()
-    if goal and goal.gap_skills:
-        user_skill_names = {s.get("name", "").lower() for s in skills}
-        still_missing = [s for s in goal.gap_skills if s.lower() not in user_skill_names]
-        gap_remaining = len(still_missing)
-        # match_pct = matched skills / total must_skills for this role
-        g = get_graph_service(db)
-        node = g.get_node(goal.target_node_id) if g else None
-        must_skills = (node.get("must_skills") or []) if node else goal.gap_skills
-        total_must = len(must_skills) if must_skills else len(goal.gap_skills)
-        if total_must > 0:
-            matched_must = sum(1 for s in must_skills if s.lower() in user_skill_names)
-            match_pct = round(matched_must / total_must * 100)
-
-    db.commit()
-    return {
-        "ok": True,
-        "skill": body.skill_name,
-        "level": new_level,
-        "match_pct": match_pct,
-        "gap_remaining": gap_remaining,
-    }

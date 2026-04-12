@@ -146,18 +146,6 @@ def _build_router():
                 ],
             ),
             Route(
-                name="practice_agent",
-                utterances=[
-                    "出一道面试题",
-                    "练习面试",
-                    "来道算法题",
-                    "模拟面试",
-                    "帮我练练面试",
-                    "出一道关于数据库的题",
-                    "练一道系统设计题",
-                ],
-            ),
-            Route(
                 name="growth_agent",
                 utterances=[
                     "看看我的成长数据",

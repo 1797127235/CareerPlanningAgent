@@ -8,10 +8,10 @@ interface ReportActionsProps {
 const CTA_ROUTES: Record<string, { path: string; label: string }> = {
   '简历': { path: '/profile', label: '完善画像' },
   '画像': { path: '/profile', label: '完善画像' },
-  '诊断': { path: '/applications', label: '去机会管理' },
-  'JD': { path: '/applications', label: '去机会管理' },
-  '面试': { path: '/practice', label: '去面试练习' },
-  '练习': { path: '/practice', label: '去面试练习' },
+  '诊断': { path: '/growth-log?tab=pursuits', label: '去求职追踪' },
+  'JD': { path: '/growth-log?tab=pursuits', label: '去求职追踪' },
+  '面试': { path: '/growth-log?tab=pursuits', label: '去求职追踪' },
+  '项目': { path: '/growth-log?tab=projects', label: '去项目管理' },
   '图谱': { path: '/graph', label: '查看岗位图谱' },
 }
 

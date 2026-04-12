@@ -64,12 +64,12 @@ export function deriveMetrics(stats: DashboardStats): MetricCardData[] {
       subtext: stats.streak_days > 0 ? '连续活跃中' : '今天还没训练',
     },
     {
-      label: '练习次数',
-      value: totalExercises,
+      label: 'JD 诊断数',
+      value: stats.jd_diagnosis_count,
       suffix: '次',
       trend: 'flat',
       sparkPoints: exerciseSpark,
-      subtext: `含 ${stats.review_count} 次面试练习`,
+      subtext: stats.jd_diagnosis_count > 0 ? '已积累诊断经验' : '尚未开始诊断',
     },
     {
       label: '平均分',
@@ -78,7 +78,7 @@ export function deriveMetrics(stats: DashboardStats): MetricCardData[] {
       decimals: 1,
       trend: scoreTrend,
       sparkPoints: sparkRaw,
-      subtext: scores.length > 0 ? `近 ${scores.length} 次练习均值` : '暂无评分数据',
+      subtext: scores.length > 0 ? `近 ${scores.length} 次评分均值` : '暂无评分数据',
     },
   ]
 }

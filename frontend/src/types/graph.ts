@@ -62,29 +62,3 @@ export interface SearchResponse {
   results: SearchResult[]
 }
 
-export interface LearningResource {
-  type: string
-  title: string
-  url: string
-}
-
-export interface LearningTopic {
-  topic_id: string
-  title: string
-  description: string
-  resources: LearningResource[]
-}
-
-export interface LearningResponse {
-  role_id: string
-  total: number
-  offset: number
-  topics: LearningTopic[]
-}
-
-export interface LearningSummary {
-  role_id: string
-  topic_count: number
-  resource_count: number
-  type_breakdown: Record<string, number>
-}

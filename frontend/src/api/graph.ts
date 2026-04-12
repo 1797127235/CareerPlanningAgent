@@ -3,8 +3,6 @@ import type {
   GraphMapResponse,
   EscapeRoutesResponse,
   SearchResponse,
-  LearningResponse,
-  LearningSummary,
 } from '@/types/graph'
 
 export async function fetchGraphMap(): Promise<GraphMapResponse> {
@@ -65,20 +63,3 @@ export async function addCareerGoal(
   })
 }
 
-// ── Learning resources ────────────────────────────────────────────────────
-
-export async function fetchNodeLearning(
-  nodeId: string,
-  opts?: { type?: string; limit?: number; offset?: number },
-): Promise<LearningResponse> {
-  const params = new URLSearchParams()
-  if (opts?.type) params.set('resource_type', opts.type)
-  if (opts?.limit) params.set('limit', String(opts.limit))
-  if (opts?.offset) params.set('offset', String(opts.offset))
-  const qs = params.toString()
-  return rawFetch<LearningResponse>(`/graph/node/${encodeURIComponent(nodeId)}/learning${qs ? `?${qs}` : ''}`)
-}
-
-export async function fetchNodeLearningSummary(nodeId: string): Promise<LearningSummary> {
-  return rawFetch<LearningSummary>(`/graph/node/${encodeURIComponent(nodeId)}/learning/summary`)
-}

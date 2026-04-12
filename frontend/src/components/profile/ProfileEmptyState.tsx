@@ -5,6 +5,7 @@ import { cardVariants } from './constants'
 interface ProfileEmptyStateProps {
   onUpload: () => void
   onManualEntry: () => void
+  hint?: string
 }
 
 const cards = [
@@ -12,7 +13,7 @@ const cards = [
   { icon: PencilLine, title: '手动填写', action: 'manual' as const },
 ]
 
-export function ProfileEmptyState({ onUpload, onManualEntry }: ProfileEmptyStateProps) {
+export function ProfileEmptyState({ onUpload, onManualEntry, hint }: ProfileEmptyStateProps) {
   return (
     <motion.div
       key="empty"
@@ -23,6 +24,11 @@ export function ProfileEmptyState({ onUpload, onManualEntry }: ProfileEmptyState
       className="flex flex-col items-center justify-center"
       style={{ minHeight: 'calc(100vh - 56px - 48px)' }}
     >
+      {hint && (
+        <div className="mb-5 px-4 py-3 rounded-xl bg-blue-50 border border-blue-200 text-[13px] text-blue-700 max-w-[340px] text-center">
+          {hint}
+        </div>
+      )}
       <p className="text-[15px] text-[var(--text-2)] mb-6">选择一种方式开始建立你的能力画像</p>
       <div className="flex gap-5">
         {cards.map((card, i) => {

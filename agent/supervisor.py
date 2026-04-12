@@ -348,7 +348,6 @@ _AGENT_REGISTRY = [
     ("search_agent", "当用户需要：搜索真实招聘 JD、找校招信息、按公司/技术方向搜岗位时，转交给岗位搜索员。", "岗位搜索员"),
     ("jd_agent", "当用户需要：JD诊断、技能匹配分析、缺口分析、简历优化建议时，转交给JD诊断师。", "JD诊断师"),
     ("growth_agent", "当用户需要：成长进度查看、学习计划、仪表盘数据、下一步行动推荐时，转交给成长顾问。", "成长顾问"),
-    ("practice_agent", "当用户需要：练习面试题、出题、刷题、答题评分、查看题库标签时，转交给练习教练。", "练习教练"),
     ("report_agent", "当用户需要：生成职业发展报告、导出报告、报告润色时，转交给报告撰写师。", "报告撰写师"),
 ]
 
@@ -371,7 +370,6 @@ _INTENT_CLASSIFY_PROMPT = """判断用户消息应该由哪个专家处理。只
 - navigator: 明确要求推荐岗位（"推荐""适合我""我能做什么"）、搜索岗位、探索图谱、转型路径、搜招聘信息、搜JD、找工作机会
 - jd_agent: 发了一段JD文本、要求诊断匹配度
 - profile_agent: 查看/分析画像、技能评估、简历分析
-- practice_agent: 面试练习、出题、刷题、模拟面试、面试复盘、练习回顾
 - growth_agent: 学习进度、成长数据、下一步行动推荐
 - report_agent: 生成/导出职业报告
 - coach_agent: 闲聊、问候、情绪倾诉、方向迷茫、职业选择讨论、系统功能咨询、自我介绍、投简历没回复、焦虑
@@ -379,7 +377,7 @@ _INTENT_CLASSIFY_PROMPT = """判断用户消息应该由哪个专家处理。只
 用户消息：{message}
 分类："""
 
-_VALID_AGENTS = {"coach_agent", "navigator", "search_agent", "jd_agent", "profile_agent", "practice_agent", "growth_agent", "report_agent"}
+_VALID_AGENTS = {"coach_agent", "navigator", "search_agent", "jd_agent", "profile_agent", "growth_agent", "report_agent"}
 
 # Regex patterns for detecting "search real JD" intent (deterministic, no LLM needed)
 # 触发真实JD搜索的模式
@@ -672,7 +670,6 @@ def build_supervisor() -> StateGraph:
     from agent.agents.growth_agent import create_growth_agent
     from agent.agents.jd_agent import create_jd_agent
     from agent.agents.navigator_agent import create_navigator_agent
-    from agent.agents.practice_agent import create_practice_agent
     from agent.agents.profile_agent import create_profile_agent
     from agent.agents.report_agent import create_report_agent
     from agent.agents.search_agent import create_search_agent
@@ -685,7 +682,6 @@ def build_supervisor() -> StateGraph:
         "search_agent": create_search_agent(),
         "jd_agent": create_jd_agent(),
         "growth_agent": create_growth_agent(),
-        "practice_agent": create_practice_agent(),
         "report_agent": create_report_agent(),
     }
 

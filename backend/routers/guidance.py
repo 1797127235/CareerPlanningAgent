@@ -85,48 +85,38 @@ def _build_guidance(
     if stage == "first_diagnosis":
         score_text = f"上次匹配度 {latest_match_score}%，" if latest_match_score else ""
         if page == "jd":
-            result["message"] = f"{score_text}发现了技能缺口？试试针对缺口做面试练习，5 分钟就能练一题。"
-            result["cta_text"] = "去面试练习"
-            result["cta_route"] = "/practice"
+            result["message"] = f"{score_text}发现了技能缺口？把它作为目标追踪，从项目实战补齐。"
+            result["cta_text"] = "去成长档案"
+            result["cta_route"] = "/growth-log"
             result["tone"] = "encouraging"
-        elif page == "practice":
-            result["message"] = "选一道和你目标岗位相关的面试题，AI 会分析你的回答亮点和改进空间。"
-            result["cta_text"] = ""
-            result["cta_route"] = ""
-            result["tone"] = "neutral"
         elif has_scheduled:
             result["message"] = f"{score_text}已有面试安排，保持状态，查看你的投递进度。"
             result["cta_text"] = "查看投递"
-            result["cta_route"] = "/applications"
+            result["cta_route"] = "/growth-log?tab=pursuits"
             result["tone"] = "encouraging"
         elif has_applied:
-            result["message"] = f"{score_text}你已投递 {app_count} 个岗位，同时可以练习面试提升胜率。"
-            result["cta_text"] = "去面试练习"
-            result["cta_route"] = "/practice"
+            result["message"] = f"{score_text}你已投递 {app_count} 个岗位，继续记录进展。"
+            result["cta_text"] = "查看投递"
+            result["cta_route"] = "/growth-log?tab=pursuits"
             result["tone"] = "encouraging"
         else:
-            result["message"] = f"{score_text}接下来可以记录投递，或做面试练习把缺口技能练到位。"
-            result["cta_text"] = "记录投递"
-            result["cta_route"] = "/applications"
+            result["message"] = f"{score_text}接下来可以记录投递，用项目补齐缺口技能。"
+            result["cta_text"] = "去成长档案"
+            result["cta_route"] = "/growth-log"
             result["tone"] = "encouraging"
         return result
 
     if stage == "training":
         score_text = f"面试平均分 {latest_review_score}，" if latest_review_score else ""
-        if page == "practice":
-            result["message"] = f"{score_text}已练 {review_count} 题。再多练几题，就能看到明显的成长曲线了。"
+        if page == "growth":
+            result["message"] = f"{score_text}已有 {review_count} 次活动记录。继续积累，数据越多成长曲线越清晰。"
             result["cta_text"] = ""
             result["cta_route"] = ""
             result["tone"] = "celebrating"
-        elif page == "growth":
-            result["message"] = f"已有 {review_count} 次练习记录。继续积累，数据越多成长曲线越清晰。"
-            result["cta_text"] = "继续练习"
-            result["cta_route"] = "/practice"
-            result["tone"] = "encouraging"
         else:
-            result["message"] = f"已做了 {jd_count} 次诊断、{review_count} 次面试练习。去看看你的成长数据？"
-            result["cta_text"] = "查看成长看板"
-            result["cta_route"] = "/growth"
+            result["message"] = f"{score_text}已做了 {jd_count} 次诊断。去成长档案看看你的进步。"
+            result["cta_text"] = "查看成长档案"
+            result["cta_route"] = "/growth-log"
             result["tone"] = "encouraging"
         return result
 

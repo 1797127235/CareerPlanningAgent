@@ -311,8 +311,8 @@ export function PursuitsSection({ onCardClick }: { onCardClick?: (appId: number)
   /* Loading skeleton */
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {[1, 2, 3, 4].map(i => (
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        {[1, 2, 3].map(i => (
           <div key={i} className="h-[200px] rounded-[20px] animate-pulse"
             style={{ background: 'rgba(255,255,255,0.4)' }} />
         ))}
@@ -332,7 +332,7 @@ export function PursuitsSection({ onCardClick }: { onCardClick?: (appId: number)
       </AnimatePresence>
 
       {/* Card grid — always shown */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         {sorted.map(app => (
           <PursuitCard
             key={app.id}

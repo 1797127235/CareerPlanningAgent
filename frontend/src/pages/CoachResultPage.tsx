@@ -335,15 +335,9 @@ function buildNextSteps(
     },
     {
       icon: <Crosshair className="w-4 h-4 text-violet-500" />,
-      label: applyDone ? '已加入学习目标' : `将 ${gaps.length} 项缺口设为学习目标`,
-      desc: applyDone ? '前往学习路径查看详细计划' : '写入目标计划，学习路径自动对焦缺口',
-      onClick: applyDone ? () => navigate('/profile/learning') : onApplyGaps,
-    },
-    {
-      icon: <BookOpen className="w-4 h-4 text-blue-400" />,
-      label: '查看学习路径',
-      desc: `${gaps.length} 项缺口技能的学习路线`,
-      onClick: () => navigate('/profile/learning'),
+      label: applyDone ? '已加入目标缺口' : `将 ${gaps.length} 项缺口纳入追踪目标`,
+      desc: applyDone ? '前往成长档案追踪进度' : '写入成长档案，用项目驱动补齐缺口',
+      onClick: applyDone ? () => navigate('/growth-log') : onApplyGaps,
     },
     {
       icon: <Target className="w-4 h-4 text-blue-500" />,
@@ -418,7 +412,7 @@ export default function CoachResultPage() {
     onSuccess: () => {
       setApplyDone(true)
       setApplyError('')
-      setTimeout(() => navigate('/profile/learning'), 800)
+      setTimeout(() => navigate('/growth-log'), 800)
     },
     onError: () => setApplyError('设置失败，请重试'),
   })

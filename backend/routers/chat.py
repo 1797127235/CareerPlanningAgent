@@ -23,7 +23,6 @@ from backend.db_models import (
     InterviewReview,
     JDDiagnosis,
     JobApplication,
-    LearningProgress,
     Profile,
     ProjectRecord,
     Report,
@@ -250,10 +249,14 @@ def _hydrate_state(user: User, db: Session) -> dict:
         except (json.JSONDecodeError, TypeError):
             state["user_profile"] = {}
 
-    # 2. Career goal
+    # 2. Career goal — exclude placeholder goals (target_node_id="")
     goal = (
         db.query(CareerGoal)
-        .filter_by(user_id=user.id, is_active=True)
+        .filter(
+            CareerGoal.user_id == user.id,
+            CareerGoal.is_active == True,  # noqa: E712
+            CareerGoal.target_node_id != "",
+        )
         .order_by(CareerGoal.set_at.desc())
         .first()
     )
@@ -349,6 +352,33 @@ def _hydrate_state(user: User, db: Session) -> dict:
     return state
 
 
+# ── Graph node lookup (lazy, shared with greeting) ───────────────────────────
+_CHAT_GRAPH_NODES: dict | None = None
+_CHAT_GRAPH_MTIME: float = 0.0
+
+
+def _get_graph_nodes_for_chat() -> dict:
+    """Lightweight graph node cache for chat.py — avoids importing profiles module."""
+    global _CHAT_GRAPH_NODES, _CHAT_GRAPH_MTIME
+    import os
+    graph_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "data", "graph.json"
+    )
+    try:
+        mtime = os.path.getmtime(graph_path)
+    except OSError:
+        mtime = 0.0
+    if _CHAT_GRAPH_NODES is None or mtime != _CHAT_GRAPH_MTIME:
+        try:
+            with open(graph_path, "r", encoding="utf-8") as f:
+                nodes = json.load(f).get("nodes", [])
+            _CHAT_GRAPH_NODES = {n["node_id"]: n for n in nodes}
+            _CHAT_GRAPH_MTIME = mtime
+        except Exception:
+            _CHAT_GRAPH_NODES = {}
+    return _CHAT_GRAPH_NODES or {}
+
+
 # ── Growth Coach greeting ────────────────────────────────────────────────────
 
 def _build_greeting(user: User, db: Session) -> dict:
@@ -375,7 +405,11 @@ def _build_greeting(user: User, db: Session) -> dict:
 
     goal = (
         db.query(CareerGoal)
-        .filter_by(user_id=user.id, is_active=True)
+        .filter(
+            CareerGoal.user_id == user.id,
+            CareerGoal.is_active == True,  # noqa: E712
+            CareerGoal.target_node_id != "",
+        )
         .order_by(CareerGoal.set_at.desc())
         .first()
     )
@@ -391,6 +425,32 @@ def _build_greeting(user: User, db: Session) -> dict:
     report_count = db.query(func.count(Report.id)).filter_by(user_id=user.id).scalar() or 0
 
     stage = compute_stage(profile_count, jd_count, review_count, report_count)
+
+    # Guard: auto-created empty profiles inflate profile_count to 1 even with no content.
+    # A profile record with zero skills AND no name AND no raw_text is effectively "no profile".
+    # Override stage so the greeting doesn't say "画像建好了！0项技能".
+    if stage == "has_profile":
+        has_real_content = (
+            skill_count > 0
+            or bool(profile_data.get("name", "").strip())
+            or bool(profile_data.get("raw_text", ""))
+            or len(profile_data.get("knowledge_areas", [])) > 0
+            or len(profile_data.get("projects", [])) > 0
+        )
+        if not has_real_content:
+            stage = "no_profile"
+
+    # Detect "processing" state: profile has skills but background graph-location
+    # thread hasn't finished yet (cached_recs_json is still empty '{}').
+    # Don't show "go explore directions" greeting — recommendations aren't ready.
+    recs_ready = False
+    if stage == "has_profile" and profile:
+        try:
+            cached = json.loads(profile.cached_recs_json or "{}")
+            # Structure: {"hash": "...", "data": {"recommendations": [...]}}
+            recs_ready = bool(cached.get("data", {}).get("recommendations"))
+        except (json.JSONDecodeError, TypeError):
+            recs_ready = False
 
     # Latest JD diagnosis info
     latest_jd_score = None
@@ -410,28 +470,8 @@ def _build_greeting(user: User, db: Session) -> dict:
             except (json.JSONDecodeError, TypeError):
                 pass
 
-    # Learning progress
+    # 学习路径已砍 — learning_pct 默认 0，不再参与 greeting 文案（stage 判断仍保留）
     learning_pct = 0
-    if profile and goal:
-        total = (
-            db.query(func.count(LearningProgress.id))
-            .filter(
-                LearningProgress.profile_id == profile.id,
-                LearningProgress.node_id == goal.target_node_id,
-            )
-            .scalar() or 0
-        )
-        completed = (
-            db.query(func.count(LearningProgress.id))
-            .filter(
-                LearningProgress.profile_id == profile.id,
-                LearningProgress.node_id == goal.target_node_id,
-                LearningProgress.completed == True,
-            )
-            .scalar() or 0
-        )
-        if total > 0:
-            learning_pct = round(completed / total * 100)
 
     # Build greeting and chips per stage
     greeting = ""
@@ -449,25 +489,124 @@ def _build_greeting(user: User, db: Session) -> dict:
         ]
 
     elif stage == "has_profile" and not goal:
-        greeting = (
-            f"{profile_name}，你的能力画像已经建好了，识别到 {skill_count} 项技能。\n\n"
-            f"下一步：看看哪些岗位方向和你最匹配？去画像页查看系统推荐，或者告诉我你感兴趣的方向。"
-        )
-        chips = [
-            {"label": "推荐适合我的方向", "prompt": "根据我的技能背景，推荐最适合我的岗位方向"},
-            {"label": "诊断一份JD", "prompt": "诊断 JD 匹配度"},
-            {"label": "我的技能有竞争力吗", "prompt": "分析一下我目前的技能在市场上的竞争力"},
-        ]
+        if not recs_ready:
+            # ── Processing state: background graph-location not done yet ──────
+            # Don't say "go explore directions" — recommendations aren't ready.
+            greeting = (
+                f"简历解析完成，{profile_name}！我正在分析你的技能背景并匹配最适合的方向，"
+                f"通常需要十几秒——稍后刷新就能看到结果。\n\n"
+                f"你也可以先告诉我你感兴趣的方向，我来帮你分析。"
+            )
+            chips = [
+                {"label": "我对后端开发感兴趣", "prompt": "我对后端开发方向感兴趣，帮我分析适不适合"},
+                {"label": "我对AI/大模型感兴趣", "prompt": "我对AI和大模型方向感兴趣，帮我分析"},
+                {"label": "帮我解释这个系统能做什么", "prompt": "介绍一下这个系统能帮我做什么"},
+            ]
+        else:
+            # A/B 类用户区分：简历里有明确求职意向 → B 类（目的型），否则 → A 类（探索型）
+            job_target = profile_data.get("job_target", "").strip()
+            if job_target:
+                # B 类：已有方向意向，帮他分析这个具体方向
+                greeting = (
+                    f"画像建好了，{profile_name}！我看到你的求职意向是「{job_target}」。\n\n"
+                    f"先别急着定目标——让我帮你分析这个方向的真实市场情况和你的差距，看清楚再做决定。"
+                )
+                chips = [
+                    {"label": f"分析「{job_target}」方向", "prompt": f"帮我深入分析{job_target}这个方向，市场需求、薪资范围和我的差距"},
+                    {"label": "这个方向竞争激烈吗", "prompt": f"{job_target}这个方向的就业竞争情况怎么样？"},
+                    {"label": "还有哪些相似方向", "prompt": f"和{job_target}相似或相关的职业方向有哪些，帮我对比一下"},
+                ]
+            else:
+                # A 类：分析已就绪，主动出牌——直接呈现顶部推荐 + zone 信号
+                # Read top recommendation from cache
+                top_rec = None
+                top_zone = None
+                top_entry_barrier = None
+                try:
+                    cached = json.loads(profile.cached_recs_json or "{}")
+                    # Structure: {"hash": "...", "data": {"recommendations": [...]}}
+                    recs_list = cached.get("data", {}).get("recommendations", [])
+                    if recs_list:
+                        top_rec = recs_list[0]
+                        # Get zone & entry_barrier from graph node
+                        graph_nodes = _get_graph_nodes_for_chat()
+                        node_data = graph_nodes.get(top_rec.get("role_id", ""), {})
+                        top_zone = node_data.get("zone", "")
+                        top_entry_barrier = node_data.get("entry_barrier", "")
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+                if top_rec:
+                    top_label = top_rec.get("label") or top_rec.get("role_id", "")
+                    top_pct = top_rec.get("affinity_pct", 0)
+
+                    # Compose zone-aware signal line
+                    if top_zone == "danger":
+                        signal = (
+                            f"不过我要提前跟你说一件事：这个方向目前受 AI 自动化冲击比较大，"
+                            f"市场需求在收缩。你想先听听我的分析，还是也看看相近的替代方向？"
+                        )
+                        chips = [
+                            {"label": f"告诉我「{top_label}」的具体风险", "prompt": f"帮我分析{top_label}这个方向的AI替代风险和市场现状"},
+                            {"label": "有没有更稳的替代方向", "prompt": f"和{top_label}相近但更有前景的方向有哪些？"},
+                            {"label": "我就想做这个，怎么出圈", "prompt": f"如果坚持做{top_label}，怎么在竞争中建立差异化？"},
+                        ]
+                    elif top_zone == "transition":
+                        signal = (
+                            f"这个方向的市场正在转型期——需求结构在变化，"
+                            f"了解清楚再决定会更稳妥。你想深入聊聊吗？"
+                        )
+                        chips = [
+                            {"label": f"「{top_label}」方向怎么转型", "prompt": f"{top_label}这个方向市场正在如何转变，我该怎么准备？"},
+                            {"label": "告诉我为什么推荐这个", "prompt": f"为什么「{top_label}」最匹配我？帮我分析原因"},
+                            {"label": "还有哪些更稳的方向", "prompt": "有没有比这个更稳定的方向值得考虑？"},
+                        ]
+                    elif top_entry_barrier in ("low",):
+                        signal = (
+                            f"这个方向进入门槛相对低，竞争者也多——"
+                            f"你想了解一下怎么在里面建立差异化吗？"
+                        )
+                        chips = [
+                            {"label": f"告诉我为什么推荐「{top_label}」", "prompt": f"为什么「{top_label}」最匹配我？帮我分析"},
+                            {"label": "怎么在这个方向出圈", "prompt": f"{top_label}方向竞争激烈，怎么让我的背景脱颖而出？"},
+                            {"label": "有没有竞争更少的方向", "prompt": "有没有需求不错但竞争相对没那么大的方向？"},
+                        ]
+                    else:
+                        # Safe/thrive + medium/high barrier: positive recommendation
+                        signal = f"你怎么看这个方向？可以告诉我你的想法，我们来聊聊。"
+                        chips = [
+                            {"label": f"告诉我为什么推荐「{top_label}」", "prompt": f"为什么「{top_label}」最匹配我？详细分析一下"},
+                            {"label": "看看其他推荐方向", "prompt": "帮我看看完整的推荐方向列表，对比一下各个选项"},
+                            {"label": "这个方向市场需求怎么样", "prompt": f"「{top_label}」的市场需求、薪资水平和发展前景怎么样？"},
+                        ]
+
+                    greeting = (
+                        f"分析完了，{profile_name}！"
+                        f"根据你的背景，我觉得「{top_label}」最适合你（匹配度 {top_pct}%）。\n\n"
+                        f"{signal}"
+                    )
+                else:
+                    # Fallback: no recommendation data
+                    greeting = (
+                        f"画像建好了，{profile_name}！我识别到你有 {skill_count} 项技能。\n\n"
+                        f"你有感兴趣的方向吗？或者让我帮你分析最匹配的。"
+                    )
+                    chips = [
+                        {"label": "帮我分析最匹配的方向", "prompt": "根据我的技能和项目背景，帮我分析最匹配的职业方向，解释为什么"},
+                        {"label": "我对某个方向感兴趣", "prompt": "我对一个职业方向感兴趣，想了解更多"},
+                        {"label": "我还不确定方向怎么办", "prompt": "我现在完全不知道该往哪个方向发展，帮我理清思路"},
+                    ]
 
     elif stage == "has_profile" and goal:
         greeting = (
-            f"{profile_name}，你已经选了「{goal.target_label}」作为成长目标。\n\n"
-            f"接下来建议找一份目标岗位的真实 JD，做匹配度诊断——看看差距在哪，才好制定计划。"
+            f"{profile_name}，你已经把「{goal.target_label}」设为成长方向了。\n\n"
+            f"下一步最有价值的事：找一份这个方向的真实 JD，粘贴过来做匹配度诊断——"
+            f"看清楚你和岗位的真实差距，比猜测有用得多。"
         )
         chips = [
-            {"label": "诊断JD匹配度", "prompt": "诊断 JD 匹配度"},
-            {"label": f"成为{goal.target_label}要什么技能", "prompt": f"成为{goal.target_label}需要哪些核心技能？"},
-            {"label": "这个方向会被AI替代吗", "prompt": f"{goal.target_label}这个方向未来会被AI替代吗？"},
+            {"label": "诊断一份JD", "prompt": "诊断 JD 匹配度"},
+            {"label": f"成为{goal.target_label}核心要什么", "prompt": f"成为{goal.target_label}最核心的技能和经验是什么？"},
+            {"label": "我现在差距有多大", "prompt": f"基于我的画像，我距离{goal.target_label}的差距主要在哪几块？"},
         ]
 
     elif stage == "first_diagnosis":
@@ -475,34 +614,35 @@ def _build_greeting(user: User, db: Session) -> dict:
         gap_part = f"发现 {gap_count} 个技能缺口" if gap_count else "发现了一些技能缺口"
         greeting = (
             f"上次 JD 诊断{score_part}{gap_part}。\n\n"
-            f"现在有两个选择：练面试题提升薄弱项，或者继续诊断更多 JD 看看市场需求。你想先做哪个？"
+            f"一份 JD 的数据太少，多诊断几份才能看清市场的真实要求——不同公司、不同规模的 JD 差异很大。"
         )
         chips = [
-            {"label": "练一道面试题", "prompt": "开始面试练习"},
             {"label": "再诊断一份JD", "prompt": "诊断 JD 匹配度"},
-            {"label": "查看技能缺口", "prompt": "帮我看看目前最大的技能缺口是什么"},
+            {"label": "我的缺口怎么补", "prompt": "帮我看看目前最大的技能缺口，以及补齐的思路"},
+            {"label": "找找更多同类岗位JD", "prompt": "帮我搜索一些我目标方向的招聘信息，看看市场要求"},
         ]
 
     elif stage == "training":
         greeting = (
-            f"你已经做了 {review_count} 次面试练习，正在积累实战经验。\n\n"
-            f"建议继续练习，尤其是薄弱维度。数据积累到一定量后，可以生成职业发展报告。"
+            f"你已经诊断了 {jd_count} 份 JD，对市场要求有了初步感知。\n\n"
+            f"下一步可以做技能校准——用一两道面试题测测自己的真实水平，"
+            f"或者继续扩大 JD 样本，看看不同公司的差异。"
         )
         chips = [
-            {"label": "继续练习面试", "prompt": "开始面试练习"},
-            {"label": "看看成长数据", "prompt": "查看我的成长数据和进步曲线"},
-            {"label": "哪个维度最弱", "prompt": "分析一下我面试练习中最薄弱的维度是什么"},
+            {"label": "出一道题校准一下", "prompt": "出一道面试题校准一下，不用太难，帮我了解自己的真实水平"},
+            {"label": "再诊断一份JD", "prompt": "诊断 JD 匹配度"},
+            {"label": "看看成长数据", "prompt": "查看我的成长数据和进度"},
         ]
 
     elif stage == "growing":
         greeting = (
-            f"你已经积累了 {jd_count} 次诊断、{review_count} 次面试练习，数据很丰富了！\n\n"
-            f"现在可以生成一份完整的职业发展报告，梳理你的成长轨迹和下一步方向。"
+            f"你已经积累了 {jd_count} 次诊断，数据很扎实了！\n\n"
+            f"现在可以生成一份职业发展报告，把你的能力画像、市场差距和成长轨迹系统梳理一下。"
         )
         chips = [
             {"label": "生成职业报告", "prompt": "帮我生成职业分析报告"},
             {"label": "看看成长看板", "prompt": "查看我的成长数据"},
-            {"label": "做新的JD诊断", "prompt": "诊断 JD 匹配度"},
+            {"label": "再诊断一份JD", "prompt": "诊断 JD 匹配度"},
         ]
 
     else:  # report_ready
@@ -522,11 +662,15 @@ def _build_greeting(user: User, db: Session) -> dict:
     if goal and goal.target_node_id:
         market_card = _get_card_for_node(goal.target_node_id)
 
+    # processing=True signals frontend to auto-refresh greeting after a few seconds
+    is_processing = (stage == "has_profile" and not goal and not recs_ready)
+
     return {
         "stage": stage,
         "greeting": greeting,
         "chips": chips,
         "market_card": market_card,
+        "processing": is_processing,
         "context": {
             "profile_name": profile_name,
             "skill_count": skill_count,
@@ -793,75 +937,84 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                 if page_card["family"] not in existing_families:
                     user_detected_cards = [page_card] + user_detected_cards
 
+    # Trailing buffer: keep last 40 chars un-emitted so [COACH_RESULT_ID:N] tokens
+    # don't flash to the user before we can strip them at stream end.
+    _TAIL = 40
+    _stream_tail = ""
+    import re as _re
+
     try:
-        async for event in supervisor.astream(
+        async for msg_chunk, metadata in supervisor.astream(
             initial_state,
-            stream_mode="updates",
+            stream_mode="messages",
         ):
-            for node_name, update in event.items():
-                if "messages" not in update:
-                    continue
-                for msg in update["messages"]:
-                    # Collect tool messages for structured data extraction
-                    if isinstance(msg, LCToolMessage):
-                        tool_messages.append(msg)
-                        # Check for JD search results in tool output → emit immediately
-                        _tm_content = getattr(msg, "content", "")
-                        if "[JD_SEARCH_RESULTS:" in _tm_content:
-                            import re as _re2
-                            _jd_match = _re2.search(r'\[JD_SEARCH_RESULTS:(.*)\]', _tm_content, _re2.DOTALL)
-                            if _jd_match:
-                                try:
-                                    _jd_data = json.loads(_jd_match.group(1))
-                                    yield f"data: {json.dumps({'jd_cards': _jd_data}, ensure_ascii=False)}\n\n"
-                                except (json.JSONDecodeError, Exception):
-                                    logger.warning("Failed to parse JD search results from tool message")
-                        continue
-                    if isinstance(msg, LCSystemMessage):
-                        continue
-                    # Skip user messages — only stream AI responses
-                    if isinstance(msg, HumanMessage):
-                        continue
-                    if (
-                        hasattr(msg, "content")
-                        and msg.content
-                        and not getattr(msg, "tool_calls", None)
-                    ):
-                        # Track which agent produced this and notify frontend
-                        if node_name not in ("triage", "handoff_executor", "__start__", "__end__"):
-                            agent_source = node_name
-                            if not agent_source_sent:
-                                agent_source_sent = True
-                                yield f"data: {json.dumps({'agent': agent_source}, ensure_ascii=False)}\n\n"
-                        # Strip internal markers before streaming to frontend
-                        import re as _re
-                        content_to_stream = msg.content
+            node_name = metadata.get("langgraph_node", "")
 
-                        # Extract JD search results marker → emit as separate SSE event
-                        jd_search_match = _re.search(
-                            r'\[JD_SEARCH_RESULTS:(.*)\]', content_to_stream, _re.DOTALL
-                        )
-                        if jd_search_match:
-                            try:
-                                jd_cards_json = jd_search_match.group(1)
-                                jd_cards_data = json.loads(jd_cards_json)
-                                yield f"data: {json.dumps({'jd_cards': jd_cards_data}, ensure_ascii=False)}\n\n"
-                            except (json.JSONDecodeError, Exception):
-                                logger.warning("Failed to parse JD search results JSON")
-                            content_to_stream = _re.sub(
-                                r'\[JD_SEARCH_RESULTS:.*\]', '', content_to_stream, flags=_re.DOTALL
-                            )
+            # ── Tool messages arrive complete (not chunked) ─────────────────
+            if isinstance(msg_chunk, LCToolMessage):
+                tool_messages.append(msg_chunk)
+                _tm_content = getattr(msg_chunk, "content", "")
+                if "[JD_SEARCH_RESULTS:" in _tm_content:
+                    _jd_match = _re.search(r'\[JD_SEARCH_RESULTS:(.*)\]', _tm_content, _re.DOTALL)
+                    if _jd_match:
+                        try:
+                            _jd_data = json.loads(_jd_match.group(1))
+                            yield f"data: {json.dumps({'jd_cards': _jd_data}, ensure_ascii=False)}\n\n"
+                        except (json.JSONDecodeError, Exception):
+                            logger.warning("Failed to parse JD search results from tool message")
+                continue
 
-                        clean_content = _re.sub(r'\[COACH_RESULT_ID:\d+\]', '', content_to_stream)
-                        if clean_content.strip():
-                            full_response += msg.content
-                            yield (
-                                f"data: {json.dumps({'content': clean_content}, ensure_ascii=False)}\n\n"
-                            )
+            if isinstance(msg_chunk, (LCSystemMessage, HumanMessage)):
+                continue
+
+            # Skip tool-call request chunks (contain tool_calls, no text)
+            if getattr(msg_chunk, "tool_calls", None):
+                continue
+
+            _chunk_content = getattr(msg_chunk, "content", "")
+            if not _chunk_content:
+                continue
+
+            # ── Track which agent is responding ─────────────────────────────
+            if node_name not in ("triage", "handoff_executor", "__start__", "__end__"):
+                agent_source = node_name
+                if not agent_source_sent:
+                    agent_source_sent = True
+                    yield f"data: {json.dumps({'agent': agent_source}, ensure_ascii=False)}\n\n"
+
+            full_response += _chunk_content
+            _stream_tail += _chunk_content
+
+            # Flush safe prefix (all but last _TAIL chars) to avoid emitting partial markers
+            if len(_stream_tail) > _TAIL:
+                _safe = _stream_tail[:-_TAIL]
+                _safe = _re.sub(r'\[COACH_RESULT_ID:\d+\]', '', _safe)
+                if _safe:
+                    yield f"data: {json.dumps({'content': _safe}, ensure_ascii=False)}\n\n"
+                _stream_tail = _stream_tail[-_TAIL:]
 
     except Exception as e:
         logger.exception("Chat stream error")
         yield f"data: {json.dumps({'error': str(e)}, ensure_ascii=False)}\n\n"
+
+    # ── Flush tail buffer (strip markers) ───────────────────────────────────
+    if _stream_tail:
+        _tail_clean = _re.sub(r'\[COACH_RESULT_ID:\d+\]', '', _stream_tail)
+        # Also strip JD_SEARCH_RESULTS if LLM embedded it in text (post-stream safe)
+        _tail_clean = _re.sub(r'\[JD_SEARCH_RESULTS:.*?\]', '', _tail_clean, flags=_re.DOTALL)
+        if _tail_clean.strip():
+            yield f"data: {json.dumps({'content': _tail_clean}, ensure_ascii=False)}\n\n"
+
+    # Post-stream: handle JD_SEARCH_RESULTS embedded in full AI response text
+    _jd_in_ai = _re.search(r'\[JD_SEARCH_RESULTS:(.*)\]', full_response, _re.DOTALL)
+    if _jd_in_ai and not any(
+        "[JD_SEARCH_RESULTS:" in getattr(tm, "content", "") for tm in tool_messages
+    ):
+        try:
+            _jd_data_ai = json.loads(_jd_in_ai.group(1))
+            yield f"data: {json.dumps({'jd_cards': _jd_data_ai}, ensure_ascii=False)}\n\n"
+        except (json.JSONDecodeError, Exception):
+            pass
 
     # ── Step 2.5: Emit market_cards — merge user message + AI response detections ──
     _DIRECTION_AGENTS = {"coach_agent", "navigator", "profile_agent", "growth_agent"}
@@ -998,7 +1151,6 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                 "jd_agent": "jd_diagnosis",
                 "report_agent": "career_report",
                 "growth_agent": "growth_analysis",
-                "practice_agent": "interview_review",
                 "navigator": "career_exploration",
                 "profile_agent": "profile_analysis",
             }
