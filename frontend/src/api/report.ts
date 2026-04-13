@@ -7,6 +7,7 @@ export interface ReportListItem {
   summary: string
   created_at: string
   profile_id?: number | null
+  match_score?: number | null
 }
 
 export interface ReportNarrative {
@@ -55,7 +56,7 @@ export async function fetchReportDetail(reportId: number): Promise<ReportDetail>
   return rawFetch<ReportDetail>(`/report/${reportId}`)
 }
 
-export async function generateReport(): Promise<{ report_key: string; data: Record<string, unknown> }> {
+export async function generateReport(): Promise<ReportDetail> {
   return rawFetch('/report/generate', {
     method: 'POST',
   })

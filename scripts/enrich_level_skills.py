@@ -218,13 +218,35 @@ def _build_from_tiers(node: dict) -> dict:
 
 # ── Main processing ───────────────────────────────────────────────────────────
 
+_ROADMAP_ALIASES: dict[str, str] = {
+    # split nodes → parent roadmap entries (125+ skills each)
+    "systems-cpp":            "cpp",
+    "server-side-game-developer": "backend",
+    "storage-database-kernel":"postgresql-dba",
+    # architecture/senior nodes → closest base discipline
+    "cto":                    "engineering-manager",
+    "ml-architect":           "machine-learning",
+    "qa-lead":                "qa",
+    "security-architect":     "cyber-security",
+    "cloud-architect":        "devops",
+    "infrastructure-engineer":"devops",
+    "data-architect":         "data-engineer",
+    "algorithm-engineer":     "machine-learning",
+    "search-engine-engineer": "data-engineer",
+    # thin roadmap nodes → richer equivalent
+    "ai-data-scientist":      "machine-learning",
+    "full-stack":             "backend",
+}
+
+
 def process_node(node: dict, roadmap_skills: dict) -> dict | None:
     """Process a single node. Returns level map or None on failure."""
     nid = node["node_id"]
     label = node["label"]
 
-    if nid in roadmap_skills:
-        skills = roadmap_skills[nid].get("skills", [])
+    lookup_key = _ROADMAP_ALIASES.get(nid, nid)
+    if lookup_key in roadmap_skills:
+        skills = roadmap_skills[lookup_key].get("skills", [])
         source = "roadmap"
     else:
         # Fall back to skill_tiers
@@ -275,9 +297,11 @@ def main():
     roadmap_skills = json.loads(_ROADMAP_SKILLS_PATH.read_text(encoding="utf-8"))
     nodes = {n["node_id"]: n for n in graph["nodes"]}
 
-    # Load existing output (for incremental updates)
+    # Load existing output — always load when targeting a single node so we don't
+    # overwrite the full file with just one entry.  --force only skips the cache
+    # check (re-processes even cached nodes), it does NOT discard existing data.
     existing: dict = {}
-    if _OUTPUT_PATH.exists() and not force:
+    if _OUTPUT_PATH.exists() and (not force or target_node):
         existing = json.loads(_OUTPUT_PATH.read_text(encoding="utf-8"))
 
     # Determine which nodes to process

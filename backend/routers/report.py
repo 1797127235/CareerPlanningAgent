@@ -53,6 +53,7 @@ def _to_list_item(r: Report) -> dict:
         "summary": r.summary or "",
         "created_at": r.created_at.isoformat() if r.created_at else "",
         "profile_id": data.get("student", {}).get("profile_id"),
+        "match_score": data.get("match_score"),
     }
 
 
