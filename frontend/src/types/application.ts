@@ -57,6 +57,7 @@ export interface JobApplication {
   interview_at: string | null
   completed_at: string | null
   notes: string | null
+  reflection: string | null
   reminder_sent: boolean
   created_at: string
   updated_at: string

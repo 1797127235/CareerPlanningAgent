@@ -1540,27 +1540,7 @@ def update_profile(
             finally:
                 _bg_db.close()
 
-        def _growth_event_bg():
-            """Record profile_created milestone on first resume upload."""
-            if _source != "resume" or _skill_count == 0:
-                return
-            _bg_db = _SL()
-            try:
-                from backend.db_models import GrowthEvent
-                # Only record if this is truly the first upload (no prior profile_created events)
-                exists = _bg_db.query(GrowthEvent).filter_by(
-                    user_id=_uid, event_type="profile_created"
-                ).first()
-                if not exists:
-                    from backend.services.growth_log_service import record_profile_created
-                    record_profile_created(_uid, _pid, _skill_count, _bg_db)
-            except Exception:
-                pass
-            finally:
-                _bg_db.close()
-
         _threading.Thread(target=_locate_bg, daemon=True).start()
-        _threading.Thread(target=_growth_event_bg, daemon=True).start()
 
     return ok(_profile_to_dict(profile, db, user.id), message="画像已更新")
 

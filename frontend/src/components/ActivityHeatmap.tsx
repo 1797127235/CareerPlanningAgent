@@ -12,7 +12,7 @@ interface Props {
 }
 
 const LEVEL_COLORS = [
-  'bg-slate-200',     // 0 — 加深底色，在 glass 背景上看得清
+  'bg-slate-100/60',  // 0 — 近透明，不抢眼
   'bg-blue-300',      // 1-2
   'bg-blue-500',      // 3-5
   'bg-blue-700',      // 6+

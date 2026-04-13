@@ -1,852 +1,734 @@
-# -*- coding: utf-8 -*-
 """
-ReportService — five-chapter data-driven report generation.
+Report service — generates career development reports.
 
-Migrated from _reference/report_v2_service.py.
+Four-dimension scoring pipeline:
+  基础要求  — education + experience match vs job requirements
+  职业技能  — weighted skill-tier match (reuses growth_log formula)
+  职业素养  — mock interview dimension averages (None if no data)
+  发展潜力  — readiness trend slope + project count + transition_probability
 
-Chapter structure:
-  Ch1: Ability Profile      <- Profile
-  Ch2: Job Match            <- Latest JD diagnosis
-  Ch3: Career Path          <- Graph + escape routes
-  Ch4: Action Plan          <- JD gaps + interview review improvements
-  Ch5: Interview Records    <- Review history
+Data sources:
+  Profile.profile_json        → skills, education, experience_years
+  CareerGoal                  → target_node_id, gap_skills, transition_probability
+  GrowthSnapshot[]            → readiness curve
+  MockInterviewSession[]      → interview dimension scores
+  ProjectRecord[]             → completed projects
+  data/graph.json             → promotion_path, skill_tiers, career_ceiling, etc.
+  data/market_signals.json    → demand_change_pct, salary_cagr, timing
+  data/level_skills.json      → per-level skill lists (optional, for action plan)
 """
 from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
-
-from sqlalchemy.orm import Session
-
-from backend.llm import get_model, llm_chat, parse_json_response
 
 logger = logging.getLogger(__name__)
 
+# Project root = two levels up from this file (backend/services/report_service.py)
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+_DATA_DIR = _PROJECT_ROOT / "data"
 
-class ReportService:
-    """Generates a 5-chapter data-driven career report."""
+# ── Static data (loaded once per process) ─────────────────────────────────────
 
-    def generate_report(self, profile_id: int, db: Session) -> dict[str, Any]:
-        """Aggregate data and build a 5-chapter report dict.
+_GRAPH_NODES: dict[str, dict] = {}
+_LEVEL_SKILLS: dict[str, dict] = {}
+_MARKET: dict[str, dict] = {}        # family_name → signal dict
+_NODE_TO_FAMILY: dict[str, str] = {} # node_id → family_name
 
-        Fetches Profile, JDDiagnosis, InterviewReview, InterviewChecklist,
-        CareerGoal, and builds structured chapter data.
 
-        Returns {report_key, data: {chapters, summary, ...}}.
-        """
-        from backend.db_models import (
-            Profile as ProfileModel,
-            Report,
-            JDDiagnosis,
-            InterviewReview,
-            InterviewChecklist,
-            CareerGoal,
-            MockInterviewSession,
-        )
+def _load_static() -> None:
+    global _GRAPH_NODES, _LEVEL_SKILLS, _MARKET, _NODE_TO_FAMILY
+    if _GRAPH_NODES:
+        return
 
-        # 1. Fetch profile
-        profile = db.query(ProfileModel).filter_by(id=profile_id).first()
-        if not profile:
-            raise ValueError("未找到简历画像")
+    try:
+        raw = json.loads((_DATA_DIR / "graph.json").read_text(encoding="utf-8"))
+        _GRAPH_NODES = {n["node_id"]: n for n in raw.get("nodes", [])}
+    except Exception as e:
+        logger.warning("graph.json load failed: %s", e)
 
-        profile_data = json.loads(profile.profile_json or "{}")
-        student_name = (
-            profile_data.get("name")
-            or profile_data.get("basic_info", {}).get("name")
-            or profile.name
-            or "同学"
-        )
+    try:
+        _LEVEL_SKILLS = json.loads((_DATA_DIR / "level_skills.json").read_text(encoding="utf-8"))
+    except Exception:
+        pass  # optional — fallback to gap_skills
 
-        # 2. Fetch JD diagnoses (latest 5)
-        jd_rows = (
-            db.query(JDDiagnosis)
-            .filter_by(profile_id=profile_id)
-            .order_by(JDDiagnosis.created_at.desc())
-            .limit(5)
-            .all()
-        )
+    try:
+        raw_market = json.loads((_DATA_DIR / "market_signals.json").read_text(encoding="utf-8"))
+        _MARKET = raw_market if isinstance(raw_market, dict) else {}
+        for family, info in _MARKET.items():
+            for nid in info.get("node_ids", []):
+                _NODE_TO_FAMILY[nid] = family
+    except Exception as e:
+        logger.warning("market_signals.json load failed: %s", e)
 
-        # 3. Fetch interview reviews (latest 20)
-        review_rows = (
-            db.query(InterviewReview)
-            .filter_by(profile_id=profile_id)
-            .order_by(InterviewReview.created_at.desc())
-            .limit(20)
-            .all()
-        )
 
-        # 4. Fetch latest checklist
-        checklist = (
-            db.query(InterviewChecklist)
-            .filter_by(profile_id=profile_id)
-            .order_by(InterviewChecklist.created_at.desc())
-            .first()
-        )
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-        # 5. Fetch career goal (scoped to this user)
-        career_goal = (
-            db.query(CareerGoal)
-            .filter_by(profile_id=profile_id, user_id=profile.user_id, is_active=True)
-            .order_by(CareerGoal.set_at.desc())
-            .first()
-        )
+def _parse_profile(profile_json: str) -> dict:
+    try:
+        return json.loads(profile_json or "{}")
+    except Exception:
+        return {}
 
-        # 6. Fetch finished mock interview sessions (latest 5)
-        mock_rows = (
-            db.query(MockInterviewSession)
-            .filter_by(profile_id=profile_id, status="finished")
-            .order_by(MockInterviewSession.created_at.desc())
-            .limit(5)
-            .all()
-        )
 
-        # 7. Compute escape routes dynamically from graph
-        escape_routes = self._load_escape_routes(profile_id, profile.user_id, db)
+def _user_skill_set(profile_data: dict) -> set[str]:
+    raw = profile_data.get("skills", [])
+    if not raw:
+        return set()
+    if isinstance(raw[0], dict):
+        return {s.get("name", "").lower().strip() for s in raw if s.get("name")}
+    return {s.lower().strip() for s in raw if isinstance(s, str) and s.strip()}
 
-        # Build chapters
-        ch1 = self._build_ability_chapter(profile_data)
-        ch2 = self._build_job_match_chapter(jd_rows)
-        ch3 = self._build_career_path_chapter(escape_routes, career_goal)
-        ch4 = self._build_action_plan_chapter(jd_rows, review_rows, checklist, career_goal, mock_rows)
-        ch5 = self._build_interview_chapter(review_rows, mock_rows)
 
-        chapters = [ch1, ch2, ch3, ch4, ch5]
+def _skill_matches(skill_name: str, user_skills: set[str]) -> bool:
+    """Reuse same matching logic as growth_log_service."""
+    def _norm(s: str) -> str:
+        return s.lower().strip().replace(" ", "").replace("-", "").replace("_", "")
 
-        # Compute summary stats
-        latest_jd = jd_rows[0] if jd_rows else None
-        target_job = "未设定"
-        match_score = 0
-        if career_goal:
-            target_job = career_goal.target_label or "未设定"
-        if latest_jd:
-            if target_job == "未设定":
-                target_job = latest_jd.jd_title or "未设定"
-            match_score = latest_jd.match_score or 0
+    name = skill_name.lower().strip()
+    name_norm = _norm(skill_name)
+    if not name:
+        return False
+    if name in user_skills:
+        return True
+    if len(name_norm) <= 2:
+        return False
+    for us in user_skills:
+        if not us:
+            continue
+        us_norm = _norm(us)
+        if name_norm == us_norm:
+            return True
+        if len(us_norm) > 2 and (name_norm in us_norm or us_norm in name_norm):
+            return True
+    return False
 
-        # Version & previous report
-        prev_report = self._get_previous_report(profile.user_id, db)
-        report_version = (prev_report.get("report_version", 0) + 1) if prev_report else 1
 
-        # LLM narrative (structured per-chapter analysis)
-        narrative = self._generate_narrative(
-            chapters, student_name, target_job, prev_report,
-        )
-        markdown = self._narrative_to_markdown(narrative) if narrative else None
+# ── Four-dimension scoring ─────────────────────────────────────────────────────
 
-        # Build report payload
-        report_key = f"v2_{profile_id}_{int(datetime.now(timezone.utc).timestamp())}"
-        report_payload = {
-            "id": report_key,
-            "version": "v2",
-            "report_version": report_version,
-            "title": f"{student_name}的职业发展报告",
-            "summary": self._build_summary(student_name, target_job, match_score, len(review_rows)),
-            "student_name": student_name,
-            "target_job": target_job,
-            "match_score": match_score,
-            "profile_id": profile_id,
-            "chapters": chapters,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "report_source": "v2",
-        }
-        if narrative:
-            report_payload["narrative"] = narrative
-        if markdown:
-            report_payload["markdown"] = markdown
+def _score_foundation(profile_data: dict, node: dict) -> int | None:
+    """基础要求: education + experience match. Returns 0–100 or None."""
+    scores = []
 
-        # Persist
-        row = Report(
-            report_key=report_key,
-            user_id=profile.user_id,
-            title=report_payload["title"],
-            summary=report_payload["summary"],
-            data_json=json.dumps(report_payload, ensure_ascii=False, default=str),
-        )
-        db.add(row)
-        db.commit()
+    # Education: check profile_json.education.major vs node.related_majors
+    education = profile_data.get("education") or {}
+    major = ""
+    if isinstance(education, dict):
+        major = (education.get("major") or "").lower().strip()
+    elif isinstance(education, str):
+        major = education.lower().strip()
 
-        return {"report_key": report_key, "data": report_payload}
+    related_majors = [m.lower() for m in (node.get("related_majors") or [])]
+    if major and related_majors:
+        # Check if user major is in (or overlaps) the related majors
+        is_match = any(major in rm or rm in major for rm in related_majors)
+        scores.append(100 if is_match else 50)
+    elif related_majors:
+        # No major info → give neutral score
+        scores.append(60)
 
-    # ── Public data-gathering (used by agent tools) ──────────────────────
+    # Experience: compare profile_json.experience_years vs node.min_experience
+    exp_years = profile_data.get("experience_years")
+    min_exp = node.get("min_experience")
+    if exp_years is not None and min_exp is not None:
+        try:
+            exp_f = float(exp_years)
+            min_f = float(min_exp)
+            if exp_f >= min_f:
+                scores.append(100)
+            elif min_f > 0:
+                scores.append(max(0, int(exp_f / min_f * 100)))
+            else:
+                scores.append(100)
+        except (TypeError, ValueError):
+            pass
 
-    def gather_report_data(self, profile_id: int, db: Session) -> str:
-        """Collect report material and return structured text for LLM consumption.
+    if not scores:
+        return None
+    return int(sum(scores) / len(scores))
 
-        This is the single source of truth for data aggregation.
-        Agent tools should call this instead of reimplementing queries.
-        """
-        from backend.db_models import (
-            Profile as ProfileModel,
-            JDDiagnosis,
-            InterviewReview,
-            CareerGoal,
-        )
-        from backend.services.dashboard_service import get_dashboard_stats
 
-        profile = db.query(ProfileModel).filter_by(id=profile_id).first()
-        if not profile:
-            return f"未找到画像 #{profile_id}。"
+def _score_skills(profile_data: dict, node: dict) -> int:
+    """职业技能: weighted skill-tier match (same formula as growth_log_service)."""
+    user_skills = _user_skill_set(profile_data)
+    tiers = node.get("skill_tiers") or {}
+    core = tiers.get("core") or []
+    important = tiers.get("important") or []
+    bonus = tiers.get("bonus") or []
 
-        profile_data = json.loads(profile.profile_json or "{}")
-        quality_data = json.loads(profile.quality_json or "{}")
+    total_w = len(core) * 1.0 + len(important) * 0.6 + len(bonus) * 0.3
+    if total_w == 0:
+        return 0
 
-        jd_rows = (
-            db.query(JDDiagnosis)
-            .filter_by(profile_id=profile_id)
-            .order_by(JDDiagnosis.created_at.desc())
-            .limit(5)
-            .all()
-        )
+    matched_w = 0.0
+    for e in core:
+        if _skill_matches(e.get("name", ""), user_skills):
+            matched_w += 1.0
+    for e in important:
+        if _skill_matches(e.get("name", ""), user_skills):
+            matched_w += 0.6
+    for e in bonus:
+        if _skill_matches(e.get("name", ""), user_skills):
+            matched_w += 0.3
 
-        review_rows = (
-            db.query(InterviewReview)
-            .filter_by(profile_id=profile_id)
-            .order_by(InterviewReview.created_at.desc())
-            .limit(10)
-            .all()
-        )
+    return min(100, int(matched_w / total_w * 100))
 
-        goal = (
-            db.query(CareerGoal)
-            .filter_by(user_id=profile.user_id, is_active=True)
-            .order_by(CareerGoal.set_at.desc())
-            .first()
-        )
 
-        stats = get_dashboard_stats(profile_id, db)
+def _score_qualities(mock_sessions: list) -> int | None:
+    """职业素养: average of interview dimension scores. None if no data."""
+    if not mock_sessions:
+        return None
 
-        return self._format_report_text(
-            profile, profile_data, quality_data,
-            jd_rows, review_rows, goal, stats,
-        )
+    dim_scores: list[float] = []
+    for session in mock_sessions:
+        # Try mapped_dimensions first (structured per-dim scores)
+        mapped_raw = getattr(session, "mapped_dimensions", None)
+        if mapped_raw:
+            try:
+                dims = json.loads(mapped_raw)
+                if isinstance(dims, dict):
+                    for v in dims.values():
+                        if isinstance(v, (int, float)) and 0 <= v <= 100:
+                            dim_scores.append(float(v))
+            except Exception:
+                pass
 
-    # ── Internal text formatter ────────────────────────────────────────
+        # Fallback: analysis_json overall rating → rough heuristic
+        if not dim_scores:
+            analysis_raw = getattr(session, "analysis_json", None)
+            if analysis_raw:
+                try:
+                    analysis = json.loads(analysis_raw)
+                    if isinstance(analysis, dict):
+                        overall = analysis.get("overall", "")
+                        strengths = analysis.get("strengths", [])
+                        weaknesses = analysis.get("weaknesses", [])
+                        if isinstance(strengths, list) and isinstance(weaknesses, list):
+                            s_cnt = len(strengths)
+                            w_cnt = len(weaknesses)
+                            total = s_cnt + w_cnt
+                            if total > 0:
+                                dim_scores.append(s_cnt / total * 100)
+                except Exception:
+                    pass
 
-    @staticmethod
-    def _format_report_text(
-        profile: Any,
-        profile_data: dict,
-        quality_data: dict,
-        jd_rows: list,
-        review_rows: list,
-        goal: Any,
-        stats: dict,
-    ) -> str:
-        """Format gathered data into structured text sections for LLM."""
-        sections: list[str] = []
+    if not dim_scores:
+        return None
+    return min(100, int(sum(dim_scores) / len(dim_scores)))
 
-        # ── Section 1: 能力画像 ──
-        sections.append("【第一章：能力画像】")
-        sections.append(f"姓名: {profile.name}")
-        sections.append(f"来源: {'简历解析' if profile.source == 'resume' else '手动填写'}")
 
-        skills = profile_data.get("skills", [])
-        if skills:
-            skill_lines = []
-            for s in skills:
-                if isinstance(s, dict):
-                    skill_lines.append(f"{s.get('name', '')}({s.get('level', '')})")
-                else:
-                    skill_lines.append(str(s))
-            sections.append(f"技能({len(skills)}项): {', '.join(skill_lines)}")
+def _score_potential(
+    snapshots: list,
+    projects: list,
+    transition_probability: float,
+) -> int:
+    """发展潜力: readiness trend + completed projects + transition_probability."""
+    scores: list[float] = []
 
-        knowledge = profile_data.get("knowledge_areas", [])
-        if knowledge:
-            sections.append(f"知识领域: {', '.join(knowledge)}")
+    # 1. Readiness trend (slope across last 4+ snapshots)
+    if len(snapshots) >= 2:
+        recent = sorted(snapshots, key=lambda s: s.created_at)[-4:]
+        values = [float(s.readiness_score) for s in recent]
+        if len(values) >= 2:
+            # Simple linear trend: compare first half avg vs second half avg
+            mid = len(values) // 2
+            avg_early = sum(values[:mid]) / mid
+            avg_late = sum(values[mid:]) / (len(values) - mid)
+            delta = avg_late - avg_early
+            # delta > 0 → growing; normalize to 0-100
+            trend_score = min(100, max(0, 50 + delta * 2))  # ±25 range maps to 0-100
+            scores.append(trend_score)
+    elif len(snapshots) == 1:
+        scores.append(50.0)  # baseline — no trend data yet
 
-        edu = profile_data.get("education", {})
-        if isinstance(edu, dict) and edu:
-            sections.append(f"教育: {edu.get('degree', '')} {edu.get('major', '')} {edu.get('school', '')}")
+    # 2. Completed projects (capped at 3 for scoring)
+    completed_count = sum(1 for p in projects if getattr(p, "status", "") == "completed")
+    project_score = min(100, completed_count * 33)
+    scores.append(float(project_score))
 
-        projects = profile_data.get("projects", [])
-        if projects:
-            sections.append(f"项目经历({len(projects)}个):")
-            for p in projects[:5]:
-                if isinstance(p, dict):
-                    sections.append(f"  · {p.get('name', '')} — {p.get('description', '')[:80]}")
-                else:
-                    sections.append(f"  · {str(p)[:80]}")
+    # 3. Transition probability from CareerGoal (already 0.0–1.0 or 0–100)
+    if transition_probability:
+        prob = transition_probability
+        if prob <= 1.0:
+            prob *= 100
+        scores.append(min(100.0, float(prob)))
 
-        awards = profile_data.get("awards", [])
-        if awards:
-            sections.append(f"竞赛/荣誉({len(awards)}项): {', '.join(str(a) for a in awards[:8])}")
+    if not scores:
+        return 50  # fallback neutral score
+    return int(sum(scores) / len(scores))
 
-        completeness = quality_data.get("completeness", 0)
-        competitiveness = quality_data.get("competitiveness", 0)
-        if completeness <= 1:
-            completeness = round(completeness * 100)
-        if competitiveness <= 1:
-            competitiveness = round(competitiveness * 100)
-        sections.append(f"画像完整度: {completeness}%，竞争力: {competitiveness}")
 
-        # ── Section 2: JD诊断 ──
-        sections.append("\n【第二章：岗位匹配】")
-        if jd_rows:
-            for jd in jd_rows:
-                result = json.loads(jd.result_json or "{}")
-                sections.append(f"  JD「{jd.jd_title or '未命名'}」 匹配度: {jd.match_score}%")
-                dims = result.get("dimensions", {})
-                if dims:
-                    for key in ["basic", "skills", "qualities", "potential"]:
-                        d = dims.get(key, {})
-                        if d:
-                            sections.append(f"    {d.get('label', key)}: {d.get('score', 0)}分 — {d.get('detail', '')}")
-                matched = result.get("matched_skills", [])
-                gap = result.get("gap_skills", [])
-                if matched:
-                    sections.append(f"    已匹配: {', '.join(matched[:10])}")
-                if gap:
-                    gap_names = [g.get("skill", str(g)) if isinstance(g, dict) else str(g) for g in gap[:8]]
-                    sections.append(f"    缺口: {', '.join(gap_names)}")
-                tips = result.get("resume_tips", [])
-                if tips:
-                    sections.append(f"    简历建议: {'; '.join(tips[:3])}")
-        else:
-            sections.append("  尚无JD诊断记录。")
+def _weighted_match_score(four_dim: dict) -> int:
+    """Compute overall match score from four dimensions. Weights: skills=40%, potential=25%, foundation=20%, qualities=15%."""
+    weights = {
+        "skills": 0.40,
+        "potential": 0.25,
+        "foundation": 0.20,
+        "qualities": 0.15,
+    }
+    total_w = 0.0
+    total_score = 0.0
+    for key, w in weights.items():
+        val = four_dim.get(key)
+        if val is not None:
+            total_score += val * w
+            total_w += w
+    if total_w == 0:
+        return 0
+    return int(total_score / total_w)
 
-        # ── Section 3: 发展路径 ──
-        sections.append("\n【第三章：发展路径】")
-        if goal:
-            sections.append(f"  目标岗位: {goal.target_label}")
-            sections.append(f"  目标区域: {goal.target_zone}")
-            if goal.gap_skills:
-                gap_s = goal.gap_skills if isinstance(goal.gap_skills, list) else []
-                sections.append(f"  差距技能: {', '.join(str(g.get('name', g)) if isinstance(g, dict) else str(g) for g in gap_s[:8])}")
-            if goal.total_hours:
-                sections.append(f"  预计学习时长: {goal.total_hours} 小时")
-            if goal.salary_p50:
-                sections.append(f"  目标薪资中位数: ¥{goal.salary_p50}")
-        else:
-            sections.append("  尚未设定职业目标。建议先在岗位图谱中探索方向。")
 
-        # ── Section 4: 面试记录 ──
-        sections.append("\n【第四章：面试训练】")
-        if review_rows:
-            total_score = 0
-            for r in review_rows:
-                analysis = json.loads(r.analysis_json or "{}")
-                score = analysis.get("score", 0)
-                total_score += score
-                strengths = analysis.get("strengths", [])
-                weaknesses = analysis.get("weaknesses", [])
-                s_text = "; ".join(str(s.get("point", s)) if isinstance(s, dict) else str(s) for s in strengths[:2])
-                w_text = "; ".join(str(w.get("point", w)) if isinstance(w, dict) else str(w) for w in weaknesses[:2])
-                sections.append(f"  题目: {r.question_text[:60]}  得分: {score}")
-                if s_text:
-                    sections.append(f"    亮点: {s_text}")
-                if w_text:
-                    sections.append(f"    不足: {w_text}")
-            avg = round(total_score / len(review_rows)) if review_rows else 0
-            sections.append(f"  平均分: {avg}，共 {len(review_rows)} 次练习")
-        else:
-            sections.append("  尚无面试练习记录。")
+# ── Skill gap analysis ────────────────────────────────────────────────────────
 
-        # ── Section 5: 成长数据 ──
-        sections.append("\n【第五章：行动计划与成长】")
-        sections.append(f"  JD诊断次数: {stats.get('jd_diagnosis_count', 0)}")
-        sections.append(f"  面试练习次数: {stats.get('review_count', 0)}")
-        sections.append(f"  连续活跃天数: {stats.get('streak_days', 0)}")
+def _build_skill_gap(profile_data: dict, node: dict) -> dict:
+    """
+    Build market-oriented skill gap analysis using JD frequency data from skill_tiers.
 
-        checklist = stats.get("checklist_progress")
-        if checklist:
-            sections.append(f"  备战清单进度: {checklist.get('passed', 0)}/{checklist.get('total', 0)} ({checklist.get('progress', 0)}%)")
+    Returns:
+      core / important / bonus  — tier coverage stats {total, matched, pct}
+      top_missing               — up to 8 missing skills sorted by JD freq desc
+      positioning               — market positioning label (初级/中级/资深)
+    """
+    user_skills = _user_skill_set(profile_data)
+    tiers = node.get("skill_tiers") or {}
+    core      = tiers.get("core")      or []
+    important = tiers.get("important") or []
+    bonus     = tiers.get("bonus")     or []
 
-        curve = stats.get("progress_curve", [])
-        if curve:
-            recent = curve[-5:]
-            pts = [f"{p.get('type','?')}:{p.get('score',0)}" for p in recent]
-            sections.append(f"  最近得分趋势: {' → '.join(pts)}")
+    def _tier_stats(skills: list) -> dict:
+        total   = len(skills)
+        matched = sum(1 for s in skills if _skill_matches(s.get("name", ""), user_skills))
+        return {"total": total, "matched": matched, "pct": int(matched / total * 100) if total else 0}
 
-        return "\n".join(sections)
+    core_stats      = _tier_stats(core)
+    important_stats = _tier_stats(important)
+    bonus_stats     = _tier_stats(bonus)
 
-    # ── Chapter builders ────────────────────────────────────────────────
+    # Collect missing skills with JD frequency + tier label
+    missing: list[dict] = []
+    for s in core:
+        if not _skill_matches(s.get("name", ""), user_skills):
+            missing.append({"name": s.get("name", ""), "freq": s.get("freq", 0), "tier": "core"})
+    for s in important:
+        if not _skill_matches(s.get("name", ""), user_skills):
+            missing.append({"name": s.get("name", ""), "freq": s.get("freq", 0), "tier": "important"})
+    for s in bonus:
+        if not _skill_matches(s.get("name", ""), user_skills):
+            missing.append({"name": s.get("name", ""), "freq": s.get("freq", 0), "tier": "bonus"})
 
-    def _build_ability_chapter(self, profile_data: dict) -> dict:
-        """Chapter 1: Ability Profile."""
-        skills = profile_data.get("skills", [])
-        basic = profile_data.get("basic_info", {})
-        education = profile_data.get("education", [])
-        experience = profile_data.get("experience", [])
+    missing.sort(key=lambda x: x["freq"], reverse=True)
+    top_missing = missing[:8]
 
-        normalized_skills = []
-        for s in skills:
-            if isinstance(s, str):
-                normalized_skills.append({"name": s, "level": "intermediate"})
-            elif isinstance(s, dict):
-                normalized_skills.append({
-                    "name": s.get("name") or s.get("skill", ""),
-                    "level": s.get("level", "intermediate"),
-                })
+    # Market positioning based on core skill coverage
+    core_pct   = core_stats["pct"]
+    node_label = node.get("label", "工程师")
+    if core_pct >= 80:
+        positioning = f"资深{node_label}"
+        positioning_level = "senior"
+    elif core_pct >= 50:
+        positioning = f"中级{node_label}"
+        positioning_level = "mid"
+    else:
+        positioning = f"初级{node_label}"
+        positioning_level = "junior"
 
-        level_counts = {"advanced": 0, "intermediate": 0, "beginner": 0}
-        for s in normalized_skills:
-            lv = s.get("level", "intermediate")
-            if lv in level_counts:
-                level_counts[lv] += 1
-
-        knowledge_areas = profile_data.get("knowledge_areas", [])
-        awards = profile_data.get("awards", [])
-        has_data = bool(normalized_skills or basic or education)
-
-        return {
-            "key": "ability",
-            "title": "能力画像",
-            "subtitle": "技能分布与职业背景",
-            "has_data": has_data,
-            "locked_hint": "上传简历建立画像后解锁本章",
-            "data": {
-                "name": basic.get("name", ""),
-                "current_title": basic.get("current_title", ""),
-                "degree": basic.get("degree", ""),
-                "major": basic.get("major", ""),
-                "education": education[:3] if isinstance(education, list) else [],
-                "experience": experience[:5] if isinstance(experience, list) else [],
-                "skills": normalized_skills,
-                "level_counts": level_counts,
-                "total_skills": len(normalized_skills),
-                "knowledge_areas": knowledge_areas,
-                "awards": awards,
-            },
-        }
-
-    def _build_job_match_chapter(self, jd_rows: list) -> dict:
-        """Chapter 2: Job Match."""
-        if not jd_rows:
-            return {
-                "key": "job_match",
-                "title": "岗位匹配",
-                "subtitle": "JD 诊断结果与技能缺口",
-                "has_data": False,
-                "locked_hint": "完成 JD 诊断后解锁本章",
-                "data": {},
-            }
-
-        latest = jd_rows[0]
-        result = json.loads(latest.result_json or "{}")
-
-        trend = []
-        for jd in reversed(jd_rows):
-            trend.append({
-                "date": jd.created_at.isoformat() if jd.created_at else "",
-                "score": jd.match_score or 0,
-                "title": jd.jd_title or "",
-            })
-
-        return {
-            "key": "job_match",
-            "title": "岗位匹配",
-            "subtitle": "人岗匹配分析",
-            "has_data": True,
-            "data": {
-                "jd_title": latest.jd_title or "未命名 JD",
-                "match_score": latest.match_score or 0,
-                "matched_skills": result.get("matched_skills", []),
-                "missing_skills": result.get("missing_skills", []),
-                "verdict": result.get("verdict", ""),
-                "resume_tips": result.get("resume_tips", []),
-                "trend": trend,
-            },
-        }
-
-    _TREND_MAP: dict = {
-        "safe":       {"label": "AI 安全区", "insight": "该岗位对人类判断力需求较高，社会用人需求稳定，AI 短期内难以全面替代，就业前景相对可期。"},
-        "leverage":   {"label": "AI 杠杆区", "insight": "该岗位可借助 AI 工具大幅提升产出效率，人机协作是核心竞争力，掌握 AI 工具者具备显著优势。"},
-        "transition": {"label": "AI 过渡区", "insight": "该岗位处于技术迭代活跃期，部分工作内容已被 AI 辅助替代，需持续更新技能以保持市场竞争力。"},
-        "danger":     {"label": "AI 高风险区", "insight": "该岗位面临较高 AI 自动化压力，行业需求可能趋于收缩，差异化能力与跨方向逃逸路线是关键应对策略。"},
+    return {
+        "core":       core_stats,
+        "important":  important_stats,
+        "bonus":      bonus_stats,
+        "top_missing":     top_missing,
+        "positioning":     positioning,
+        "positioning_level": positioning_level,
     }
 
-    def _build_career_path_chapter(
-        self, escape_routes: list, career_goal: Any = None
-    ) -> dict:
-        """Chapter 3: Career Path."""
-        goal_data = None
-        if career_goal:
-            goal_data = {
-                "target_label": career_goal.target_label,
-                "target_zone": career_goal.target_zone,
-                "gap_skills": career_goal.gap_skills or [],
-                "total_hours": career_goal.total_hours,
-                "safety_gain": career_goal.safety_gain,
-                "salary_p50": career_goal.salary_p50,
-                "tag": career_goal.tag,
-                "transition_probability": career_goal.transition_probability,
-            }
 
-        # Derive industry trend insight from zone
-        trend_zone = (
-            (career_goal.target_zone if career_goal and career_goal.target_zone else None)
-            or (escape_routes[0].get("target_zone") if escape_routes else None)
-            or "transition"
-        )
-        trend_insight = self._TREND_MAP.get(trend_zone, self._TREND_MAP["transition"])
+# ── Action plan builder ────────────────────────────────────────────────────────
 
-        has_data = bool(escape_routes) or goal_data is not None
+def _build_action_plan(
+    gap_skills: list[str],
+    node_id: str,
+    profile_data: dict,
+    current_readiness: float,
+) -> dict:
+    """Build short (1–3 month) and mid (3–6 month) term action plans."""
+    user_skills = _user_skill_set(profile_data)
 
+    # Determine current level bracket from readiness score
+    if current_readiness >= 80:
+        current_level = 3
+    elif current_readiness >= 55:
+        current_level = 2
+    else:
+        current_level = 1
+
+    next_level = current_level + 1
+    mid_level = current_level + 2
+
+    # Get per-level skills from level_skills.json (if available)
+    level_data = _LEVEL_SKILLS.get(node_id, {})
+    levels = level_data.get("levels", {})
+
+    def _level_gaps(level: int) -> list[str]:
+        """Skills needed at this level that user doesn't have."""
+        lv_info = levels.get(str(level), {})
+        lv_skills = lv_info.get("skills", [])
+        missing = [s for s in lv_skills if s and not _skill_matches(s, user_skills)]
+        return missing[:4]
+
+    short_gaps = _level_gaps(next_level)
+    mid_gaps = _level_gaps(mid_level)
+
+    # Fallback to CareerGoal.gap_skills if level_skills not available
+    if not short_gaps and gap_skills:
+        short_gaps = [s for s in gap_skills[:4] if not _skill_matches(s, user_skills)]
+    if not mid_gaps and gap_skills:
+        mid_gaps = [s for s in gap_skills[4:8] if not _skill_matches(s, user_skills)]
+
+    def _skill_to_task(skill: str, term: str) -> dict:
+        short_map: dict[str, int] = {
+            "TypeScript": 30, "React": 25, "Vue": 20, "Python": 35,
+            "Docker": 20, "Git": 10, "MySQL": 25, "Redis": 20,
+            "Kubernetes": 30, "Linux": 25, "Go": 40, "Rust": 45,
+            "JavaScript": 25, "CSS": 15, "HTML": 10,
+        }
+        hours = next((v for k, v in short_map.items() if k.lower() in skill.lower()), 25)
         return {
-            "key": "career_path",
-            "title": "发展路径",
-            "subtitle": "目标方向与行业趋势分析",
-            "has_data": has_data,
-            "locked_hint": "上传简历建立画像后自动解锁本章",
-            "data": {
-                "goal": goal_data,
-                "escape_routes": escape_routes[:5] if escape_routes else [],
-                "trend_insight": trend_insight,
-            },
+            "id": f"{term}_{skill[:8].replace(' ', '_')}",
+            "text": f"掌握 {skill}",
+            "hours": f"{hours}h",
+            "done": False,
         }
 
-    def _build_action_plan_chapter(
-        self, jd_rows: list, review_rows: list,
-        checklist: Any, career_goal: Any = None, mock_rows: list | None = None,
-    ) -> dict:
-        """Chapter 4: Action Plan."""
-        action_items: list[dict] = []
+    short_tasks = [_skill_to_task(s, "s") for s in short_gaps[:3]]
+    mid_tasks = [_skill_to_task(s, "m") for s in mid_gaps[:3]]
 
-        # From career goal gap skills
-        if career_goal and career_goal.gap_skills:
-            for gs in career_goal.gap_skills:
-                skill_name = gs.get("name", "") if isinstance(gs, dict) else str(gs)
-                if skill_name:
-                    action_items.append({
-                        "source": "goal_gap",
-                        "skill": skill_name,
-                        "detail": f"目标方向「{career_goal.target_label}」所需技能",
-                        "priority": "high",
-                    })
+    # Add project task if none present in mid term
+    if not mid_tasks:
+        node_label = _GRAPH_NODES.get(node_id, {}).get("label", "目标岗位")
+        mid_tasks.append({
+            "id": "m_project",
+            "text": f"独立完成一个 {node_label} 方向的实战项目并上线",
+            "hours": "60h",
+            "done": False,
+        })
 
-        # From JD skill gaps
-        if jd_rows:
-            latest_result = json.loads(jd_rows[0].result_json or "{}")
-            for ms in latest_result.get("missing_skills", []):
-                skill_name = ms.get("skill", "") if isinstance(ms, dict) else str(ms)
-                action_items.append({
-                    "source": "jd_gap",
-                    "skill": skill_name,
-                    "detail": ms.get("reason", "") if isinstance(ms, dict) else "",
-                    "priority": "high",
-                })
+    # Ensure non-empty short tasks
+    if not short_tasks and gap_skills:
+        short_tasks = [_skill_to_task(gap_skills[0], "s")]
 
-        # From mock interview skill gaps (highest confidence gaps)
-        seen_skills = {a["skill"].lower() for a in action_items}
-        if mock_rows:
-            latest_mock_analysis = json.loads(mock_rows[0].analysis_json or "{}")
-            mock_target_job = mock_rows[0].target_job or "模拟面试"
-            for gap in latest_mock_analysis.get("skill_gaps", []):
-                gap_str = gap if isinstance(gap, str) else str(gap)
-                if gap_str.lower() not in seen_skills:
-                    action_items.append({
-                        "source": "mock_gap",
-                        "skill": gap_str,
-                        "detail": f"模拟面试「{mock_target_job}」中真实暴露的技能缺口",
-                        "priority": "high",
-                    })
-                    seen_skills.add(gap_str.lower())
+    return {"short": short_tasks, "mid": mid_tasks}
 
-        # From interview review weaknesses
-        for r in review_rows[:10]:
-            analysis = json.loads(r.analysis_json or "{}")
-            for w in analysis.get("weaknesses", []):
-                point = w.get("point", "") if isinstance(w, dict) else str(w)
-                suggestion = w.get("suggestion", "") if isinstance(w, dict) else ""
-                if point.lower() not in seen_skills:
-                    action_items.append({
-                        "source": "review",
-                        "skill": point,
-                        "detail": suggestion,
-                        "priority": "medium",
-                    })
-                    seen_skills.add(point.lower())
 
-        # Checklist progress
-        checklist_data = None
-        if checklist:
-            items = checklist.items or []
-            total = len(items)
-            passed = sum(1 for i in items if i.get("status") in ("can_answer", "learned"))
-            checklist_data = {
-                "total": total,
-                "passed": passed,
-                "progress": round(passed / total * 100) if total else 0,
-                "jd_title": checklist.jd_title or "",
-            }
+# ── LLM narrative generator ───────────────────────────────────────────────────
 
-        has_data = bool(action_items) or checklist_data is not None
+_NARRATIVE_SYSTEM = """你是一位资深职业规划顾问，正在为一名IT学生撰写职业发展报告的核心评估段落。
+要求：
+- 语言亲切专业，200-300字
+- 结合具体数据说话（技能匹配、分数、差距）
+- 指出最大亮点和最需改进的1-2个方向
+- 结尾给出一句鼓励性总结
+- 直接输出段落文字，不要标题或标签"""
 
-        short_term = [a for a in action_items if a["priority"] == "high"][:10]
-        mid_term = [a for a in action_items if a["priority"] == "medium"][:10]
 
-        return {
-            "key": "action_plan",
-            "title": "行动计划",
-            "subtitle": "分阶段成长规划与评估周期",
-            "has_data": has_data,
-            "locked_hint": "完成 JD 诊断或面试复盘后解锁本章",
-            "data": {
-                "items": action_items[:20],
-                "short_term": short_term,
-                "mid_term": mid_term,
-                "checklist": checklist_data,
-                "evaluation_schedule": {
-                    "short_term_label": "4 周",
-                    "mid_term_label": "3 个月",
-                    "review_hint": "建议 4 周后重新进行 JD 诊断，评估短期技能提升成效；3 个月后重新生成完整报告，进行阶段性职业规划复盘。",
-                },
-            },
-        }
+def _generate_narrative(
+    target_label: str,
+    match_score: int,
+    four_dim: dict,
+    gap_skills: list[str],
+    market_info: dict | None,
+    growth_delta: float,
+) -> str:
+    """Call LLM to generate 200-300 char narrative. Falls back to template on error."""
+    try:
+        from backend.llm import get_llm_client, get_model
 
-    def _build_interview_chapter(self, review_rows: list, mock_rows: list | None = None) -> dict:
-        """Chapter 5: Interview Records — includes both single-Q reviews and full mock sessions."""
-        mock_sessions = []
-        for m in (mock_rows or [])[:3]:
-            analysis = json.loads(m.analysis_json or "{}")
-            mock_sessions.append({
-                "id": m.id,
-                "target_job": m.target_job,
-                "overall_score": analysis.get("overall_score", 0),
-                "overall_feedback": analysis.get("overall_feedback", ""),
-                "dimensions": analysis.get("dimensions", []),
-                "skill_gaps": analysis.get("skill_gaps", []),
-                "date": m.created_at.isoformat() if m.created_at else "",
-            })
+        dim_text = []
+        dim_labels = {"foundation": "基础要求", "skills": "职业技能",
+                      "qualities": "职业素养", "potential": "发展潜力"}
+        for k, label in dim_labels.items():
+            v = four_dim.get(k)
+            dim_text.append(f"- {label}: {v if v is not None else '暂无数据（需完成模拟面试）'}")
 
-        if not review_rows and not mock_sessions:
-            return {
-                "key": "interview",
-                "title": "面试记录",
-                "subtitle": "模拟面试与复盘历史",
-                "has_data": False,
-                "locked_hint": "完成模拟面试或单题复盘后解锁本章",
-                "data": {},
-            }
-
-        records = []
-        total_score = 0
-        for r in review_rows:
-            analysis = json.loads(r.analysis_json or "{}")
-            score = analysis.get("score", 0)
-            total_score += score
-            records.append({
-                "id": r.id,
-                "question": r.question_text[:100],
-                "target_job": r.target_job or "",
-                "score": score,
-                "strengths": analysis.get("strengths", [])[:3],
-                "weaknesses": analysis.get("weaknesses", [])[:3],
-                "date": r.created_at.isoformat() if r.created_at else "",
-            })
-
-        avg_score = round(total_score / len(records)) if records else 0
-
-        return {
-            "key": "interview",
-            "title": "面试记录",
-            "subtitle": "模拟面试与复盘历史",
-            "has_data": True,
-            "data": {
-                "records": records,
-                "avg_score": avg_score,
-                "total_count": len(records),
-                "mock_sessions": mock_sessions,
-            },
-        }
-
-    # ── LLM narrative ───────────────────────────────────────────────────
-
-    def _get_previous_report(self, user_id: int, db: Session) -> dict | None:
-        """Return key metrics from the user's most recent report."""
-        from backend.db_models import Report
-
-        prev = (
-            db.query(Report)
-            .filter(Report.user_id == user_id)
-            .order_by(Report.created_at.desc())
-            .first()
-        )
-        if not prev:
-            return None
-        data = json.loads(prev.data_json or "{}")
-        return {
-            "summary": prev.summary,
-            "match_score": data.get("match_score", 0),
-            "report_version": data.get("report_version", 1),
-            "created_at": str(prev.created_at),
-        }
-
-    def _generate_narrative(
-        self,
-        chapters: list[dict],
-        student_name: str,
-        target_job: str,
-        prev_report: dict | None,
-    ) -> dict | None:
-        """Call LLM to produce structured per-chapter narrative analysis.
-
-        Returns a dict like:
-          {"summary": "...", "comparison": "...|null",
-           "chapters": {"ability": "...", ...}, "actions": ["...", ...]}
-        or None on failure.
-        """
-        system_prompt = (
-            "你是一位资深职业发展顾问，擅长为大学生撰写专业的职业发展报告。\n"
-            "文风简洁专业、有洞察力，避免空话和鸡汤。\n"
-            "像经验丰富的学长/导师，直说问题不回避短板，建议具体到「去做什么」。\n\n"
-            "技能等级参考（须结合证据校准，不得直接接受自述）：\n"
-            "advanced≈高级(须有开源/竞赛/工作经验等硬性证据), intermediate≈中级(须有实质项目), familiar≈了解, beginner≈入门\n"
-            "注意：简历解析的技能等级来自自述，可能偏高。分析时须结合 experience_years 和项目深度校准；\n"
-            "对于 experience_years=0 的在校生，'advanced' 级别极少合理，应审慎使用'精通'等强词，\n"
-            "改用'简历标注较高，需项目实践验证'等表述，并指出需要补充的证据。\n\n"
-            "【严格禁止】：\n"
-            "- 若 target_job 为空或'未设定'，禁止自行推测或编造任何职业方向（如'自动驾驶算法工程师'等），\n"
-            "  应在 summary 中提示用户先在图谱页设定目标岗位，career_path 章节设为 null。\n"
-            "- 分析建议必须基于简历中实际存在的项目/技能/经历，不得引入简历未提及的能力方向。\n\n"
-            "返回 JSON，严格遵循以下结构：\n"
-            "{\n"
-            '  "summary": "3-4句总结（准备度评估+核心优势+最大缺口）",\n'
-            '  "comparison": "与上次对比分析（无上一版数据则设为null）",\n'
-            '  "chapters": {\n'
-            '    "ability": "能力分析200-300字（无数据则null）",\n'
-            '    "job_match": "匹配分析200-300字（无数据则null）",\n'
-            '    "career_path": "路径分析200-300字，需结合行业社会需求与AI时代趋势（基于zone数据），分析该职业的发展前景（target_job为空则null）",\n'
-            '    "action_plan": "行动计划分析200-300字，需明确短期（4周）和中期（3个月）的评估节点与成功指标，给出可量化的阶段性目标（无数据则null）",\n'
-            '    "interview": "面试分析200-300字，需综合模拟面试（mock_sessions）和单题复盘（records）两类数据，重点分析模拟面试的综合得分、维度表现与技能缺口（无数据则null）"\n'
-            "  },\n"
-            '  "actions": ["具体行动建议1（带优先级）", "建议2", "建议3"]\n'
-            "}\n\n"
-            "规则：\n"
-            "1. 无数据的章节值设为 null，不要编造\n"
-            "2. 分析数据背后的含义，不要简单复述数据\n"
-            "3. 建议要具体到「去做什么」，且必须基于简历中真实存在的背景\n"
-            "4. 全文不超过1500字"
-        )
-
-        user_content = json.dumps(
-            {
-                "student_name": student_name,
-                "target_job": target_job,
-                "chapters": [
-                    {
-                        "key": ch["key"],
-                        "title": ch["title"],
-                        "has_data": ch["has_data"],
-                        "data": ch["data"] if ch["has_data"] else None,
-                    }
-                    for ch in chapters
-                ],
-                "previous_report": prev_report,
-            },
-            ensure_ascii=False,
-            default=str,
-        )
-
-        try:
-            result = llm_chat(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_content},
-                ],
-                model=get_model("strong"),
-                temperature=0.5,
-                timeout=120,
+        market_text = ""
+        if market_info:
+            market_text = (
+                f"市场信号：该方向需求变化 {market_info.get('demand_change_pct', 0):+.0f}%，"
+                f"薪资年增 {market_info.get('salary_cagr', 0):.1f}%，"
+                f"入场时机：{market_info.get('timing_label', '良好')}。"
             )
-        except Exception as exc:
-            logger.warning("LLM narrative call failed: %s", exc)
-            return None
 
-        if not result:
-            return None
+        gap_text = "、".join(gap_skills[:4]) if gap_skills else "暂无明显差距"
 
-        parsed = parse_json_response(result)
-        if not isinstance(parsed, dict) or "summary" not in parsed:
-            logger.warning("LLM narrative returned invalid JSON (len=%d)", len(result))
-            return None
+        prompt = f"""学生职业发展报告综合评价：
 
-        return parsed
+目标岗位：{target_label}
+综合匹配分：{match_score}/100
+近期成长：readiness score 增长 {growth_delta:+.1f}%
 
-    @staticmethod
-    def _narrative_to_markdown(narrative: dict) -> str:
-        """Convert structured narrative dict to a markdown string (for export)."""
-        lines: list[str] = []
+四维评分：
+{chr(10).join(dim_text)}
 
-        if narrative.get("summary"):
-            lines.append(narrative["summary"])
-            lines.append("")
+核心技能差距：{gap_text}
 
-        if narrative.get("comparison"):
-            lines.append("## 与上次相比")
-            lines.append(narrative["comparison"])
-            lines.append("")
+{market_text}
 
-        chapter_titles = {
-            "ability": "能力画像",
-            "job_match": "岗位匹配",
-            "career_path": "发展路径",
-            "action_plan": "行动计划",
-            "interview": "面试记录",
-        }
-        for key, title in chapter_titles.items():
-            text = narrative.get("chapters", {}).get(key)
-            if text:
-                lines.append(f"## {title}")
-                lines.append(text)
-                lines.append("")
+请撰写200-300字的综合评价段落，包含：1)当前状态评估 2)最大优势 3)关键改进方向 4)鼓励性收尾。"""
 
-        actions = narrative.get("actions", [])
-        if actions:
-            lines.append("## 下一步行动")
-            for i, action in enumerate(actions, 1):
-                lines.append(f"{i}. {action}")
-            lines.append("")
-
-        return "\n".join(lines)
-
-    # ── Helpers ──────────────────────────────────────────────────────────
-
-    def _load_escape_routes(self, profile_id: int, user_id: int, db: Session) -> list[dict]:
-        """Compute escape routes dynamically from CareerGoal + graph service."""
-        from backend.db_models import CareerGoal
-        from backend.services.graph_service import get_graph_service
-
-        # Find user's active career goal to get from_node_id
-        goal = (
-            db.query(CareerGoal)
-            .filter_by(user_id=user_id, profile_id=profile_id, is_active=True)
-            .first()
+        client = get_llm_client(timeout=30)
+        resp = client.chat.completions.create(
+            model=get_model("fast"),
+            messages=[
+                {"role": "system", "content": _NARRATIVE_SYSTEM},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.5,
+            max_tokens=500,
         )
-        if not goal or not goal.from_node_id:
-            return []
+        return resp.choices[0].message.content.strip()
 
-        try:
-            graph = get_graph_service(db)
-            raw_routes = graph.find_escape_routes(goal.from_node_id, db_session=db)
-            return [
-                {
-                    "target_node_id": r.get("target", ""),
-                    "target_label": r.get("target_label", ""),
-                    "target_zone": r.get("target_zone", "transition"),
-                    "gap_skills": [g["name"] if isinstance(g, dict) else str(g) for g in r.get("gap_skills", [])],
-                    "estimated_hours": r.get("total_hours", 0),
-                    "safety_gain": r.get("safety_gain", 0),
-                    "salary_p50": r.get("salary_p50", 0),
-                    "tag": r.get("tag", ""),
-                }
-                for r in raw_routes
-            ]
-        except Exception as exc:
-            logger.warning("Failed to compute escape routes: %s", exc)
-            return []
+    except Exception as e:
+        logger.warning("Narrative generation failed: %s", e)
+        # Fallback template
+        dim_s = four_dim.get("skills", 0)
+        dim_p = four_dim.get("potential", 0)
+        return (
+            f"你在{target_label}方向的综合匹配度为 {match_score} 分，"
+            f"职业技能维度得分 {dim_s}，发展潜力 {dim_p}。"
+            f"{'核心差距技能：' + '、'.join(gap_skills[:3]) + '。' if gap_skills else ''}"
+            f"建议聚焦提升技术深度，保持当前成长势头，持续积累实战项目经验。"
+        )
 
-    @staticmethod
-    def _build_summary(
-        name: str, target_job: str, score: int, review_count: int
-    ) -> str:
-        """Generate report summary text."""
-        parts = [f"{name}的职业发展报告"]
-        if target_job:
-            parts.append(f"目标岗位「{target_job}」")
-        if score > 0:
-            parts.append(f"匹配度 {score}%")
-        if review_count > 0:
-            parts.append(f"已复盘 {review_count} 道面试题")
-        return "，".join(parts) + "。"
+
+# ── Main report generator ─────────────────────────────────────────────────────
+
+def generate_report(user_id: int, db) -> dict:
+    """
+    Generate a complete career development report for the current user.
+
+    Returns the report data dict (to be serialized into Report.data_json).
+    Raises ValueError if prerequisite data is missing.
+    """
+    _load_static()
+
+    from backend.db_models import (
+        Profile, CareerGoal, GrowthSnapshot,
+        MockInterviewSession, ProjectRecord,
+    )
+
+    # 1. Load profile
+    profile = db.query(Profile).filter(Profile.user_id == user_id).first()
+    if not profile:
+        raise ValueError("no_profile")
+
+    profile_data = _parse_profile(profile.profile_json)
+
+    # 2. Load active career goal
+    goal = (
+        db.query(CareerGoal)
+        .filter(
+            CareerGoal.user_id == user_id,
+            CareerGoal.profile_id == profile.id,
+            CareerGoal.is_active == True,
+        )
+        .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
+        .first()
+    )
+    if not goal:
+        raise ValueError("no_goal")
+
+    node_id = goal.target_node_id
+    node = _GRAPH_NODES.get(node_id)
+    if not node:
+        raise ValueError(f"unknown_node:{node_id}")
+
+    # 3. Load growth snapshots (for curve + potential scoring)
+    snapshots = (
+        db.query(GrowthSnapshot)
+        .filter(GrowthSnapshot.profile_id == profile.id)
+        .order_by(GrowthSnapshot.created_at.asc())
+        .limit(20)
+        .all()
+    )
+
+    current_readiness = float(snapshots[-1].readiness_score) if snapshots else 0.0
+    first_readiness = float(snapshots[0].readiness_score) if snapshots else 0.0
+    growth_delta = current_readiness - first_readiness
+
+    growth_curve = [
+        {
+            "date": s.created_at.strftime("%m/%d") if s.created_at else "",
+            "score": round(float(s.readiness_score), 1),
+        }
+        for s in snapshots
+    ]
+
+    # 4. Load mock interview sessions
+    mock_sessions = (
+        db.query(MockInterviewSession)
+        .filter(
+            MockInterviewSession.profile_id == profile.id,
+            MockInterviewSession.status == "finished",
+        )
+        .order_by(MockInterviewSession.created_at.desc())
+        .limit(5)
+        .all()
+    )
+
+    # 5. Load projects
+    projects = (
+        db.query(ProjectRecord)
+        .filter(ProjectRecord.user_id == user_id)
+        .all()
+    )
+
+    # 6. Compute four dimensions
+    foundation_score = _score_foundation(profile_data, node)
+    skills_score = _score_skills(profile_data, node)
+    qualities_score = _score_qualities(mock_sessions)
+    potential_score = _score_potential(
+        snapshots, projects, float(goal.transition_probability or 0)
+    )
+
+    four_dim = {
+        "foundation": foundation_score,
+        "skills": skills_score,
+        "qualities": qualities_score,
+        "potential": potential_score,
+    }
+    match_score = _weighted_match_score(four_dim)
+
+    # 7. Market signals
+    family_name = _NODE_TO_FAMILY.get(node_id)
+    market_info: dict | None = _MARKET.get(family_name) if family_name else None
+
+    # 8. Build promotion path with per-level gap skills
+    promotion_path = []
+    level_data = _LEVEL_SKILLS.get(node_id, {})
+    levels = level_data.get("levels", {})
+    user_skills = _user_skill_set(profile_data)
+
+    raw_pp = node.get("promotion_path") or []
+    for pp in raw_pp:
+        lv = pp.get("level", 0)
+        lv_info = levels.get(str(lv), {})
+        lv_skills = lv_info.get("skills", [])
+        gap = [s for s in lv_skills if s and not _skill_matches(s, user_skills)][:4]
+        # Fallback: if no level_skills, use career_goal gap_skills for level 2 only
+        if not gap and lv == 2:
+            gap = (goal.gap_skills or [])[:3]
+
+        # Approximate salary ranges from career_ceiling & salary_p50
+        salary_p50 = node.get("salary_p50", 0)
+        salary_ranges = {
+            1: f"{int(salary_p50 * 0.45 / 1000)}k–{int(salary_p50 * 0.7 / 1000)}k",
+            2: f"{int(salary_p50 * 0.7 / 1000)}k–{int(salary_p50 * 1.1 / 1000)}k",
+            3: f"{int(salary_p50 * 1.1 / 1000)}k–{int(salary_p50 * 1.8 / 1000)}k",
+            4: f"{int(salary_p50 * 1.8 / 1000)}k–{int(salary_p50 * 2.9 / 1000)}k",
+            5: f"{int(salary_p50 * 2.9 / 1000)}k+",
+        }
+        exp_ranges = {1: "0–1年", 2: "1–3年", 3: "3–5年", 4: "5–8年", 5: "8年+"}
+
+        promotion_path.append({
+            "level": lv,
+            "title": pp.get("title", f"Level {lv}"),
+            "current": lv == 1 and current_readiness < 40 or (
+                lv == 2 and 40 <= current_readiness < 65
+            ) or (
+                lv == 3 and 65 <= current_readiness < 80
+            ) or (
+                lv == 4 and 80 <= current_readiness < 92
+            ) or (
+                lv == 5 and current_readiness >= 92
+            ),
+            "salary": salary_ranges.get(lv, ""),
+            "years": exp_ranges.get(lv, ""),
+            "gap_skills": gap,
+        })
+
+    # 9. Skill gap analysis (replaces fake promotion_path in frontend)
+    skill_gap = _build_skill_gap(profile_data, node)
+
+    # 10. Action plan
+    action_plan = _build_action_plan(
+        gap_skills=goal.gap_skills or [],
+        node_id=node_id,
+        profile_data=profile_data,
+        current_readiness=current_readiness,
+    )
+
+    # 11. LLM narrative
+    narrative = _generate_narrative(
+        target_label=goal.target_label,
+        match_score=match_score,
+        four_dim=four_dim,
+        gap_skills=goal.gap_skills or [],
+        market_info=market_info,
+        growth_delta=growth_delta,
+    )
+
+    # 12. Assemble report payload
+    report_data = {
+        "version": "1.0",
+        "report_type": "long",
+        "student": {
+            "user_id": user_id,
+            "profile_id": profile.id,
+        },
+        "target": {
+            "node_id": node_id,
+            "label": goal.target_label,
+            "zone": goal.target_zone,
+        },
+        "match_score": match_score,
+        "four_dim": four_dim,
+        "narrative": narrative,
+        "market": {
+            "demand_change_pct": market_info.get("demand_change_pct", 0) if market_info else None,
+            "salary_cagr": market_info.get("salary_cagr", 0) if market_info else None,
+            "salary_p50": node.get("salary_p50", 0),
+            "timing": market_info.get("timing", "good") if market_info else "good",
+            "timing_label": market_info.get("timing_label", "") if market_info else "",
+        },
+        "promotion_path": promotion_path,
+        "skill_gap": skill_gap,
+        "growth_curve": growth_curve,
+        "action_plan": action_plan,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    return report_data
+
+
+# ── Polish (AI润色) ────────────────────────────────────────────────────────────
+
+def polish_narrative(narrative: str, target_label: str) -> str:
+    """Re-polish an existing narrative via LLM."""
+    try:
+        from backend.llm import get_llm_client, get_model
+
+        prompt = f"""以下是一段针对「{target_label}」职业方向的发展报告评价段落，请在保留核心信息的前提下进行润色优化：
+- 语言更流畅、专业
+- 保持200-300字
+- 保留所有具体数据
+- 结尾保持鼓励性语气
+
+原文：
+{narrative}
+
+请直接输出润色后的段落，不需要任何解释。"""
+
+        client = get_llm_client(timeout=30)
+        resp = client.chat.completions.create(
+            model=get_model("fast"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.4,
+            max_tokens=600,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        logger.warning("Polish failed: %s", e)
+        return narrative

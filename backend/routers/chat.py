@@ -23,6 +23,7 @@ from backend.db_models import (
     InterviewReview,
     JDDiagnosis,
     JobApplication,
+    LearningNote,
     Profile,
     ProjectRecord,
     Report,
@@ -307,7 +308,7 @@ def _hydrate_state(user: User, db: Session) -> dict:
     if profile:
         state["coach_memo"] = profile.coach_memo or ""
 
-    # 6. Growth log context — projects + active pursuits
+    # 6. Growth log context — lightweight metadata only (details via tools)
     try:
         projects = (
             db.query(ProjectRecord)
@@ -325,6 +326,14 @@ def _hydrate_state(user: User, db: Session) -> dict:
             .order_by(JobApplication.created_at.desc())
             .limit(5)
             .all()
+        )
+        # Learning notes: count + latest title only (content via get_learning_notes tool)
+        note_count = db.query(func.count(LearningNote.id)).filter_by(user_id=user.id).scalar() or 0
+        latest_note = (
+            db.query(LearningNote)
+            .filter_by(user_id=user.id)
+            .order_by(LearningNote.created_at.desc())
+            .first()
         )
         state["growth_context"] = {
             "projects": [
@@ -344,6 +353,8 @@ def _hydrate_state(user: User, db: Session) -> dict:
                 }
                 for a in pursuits
             ],
+            "learning_notes_count": note_count,
+            "latest_note_title": latest_note.title if latest_note else None,
         }
     except Exception:
         logger.exception("Failed to load growth context")
@@ -1016,15 +1027,17 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
         except (json.JSONDecodeError, Exception):
             pass
 
-    # ── Step 2.5: Emit market_cards — merge user message + AI response detections ──
+    # ── Step 2.5: Emit market_cards based on user's career goal (deterministic) ──
+    # Previously: parsed AI free text with keyword aliases → unreliable, context-blind
+    # Now: use career_goal.target_node_id → always accurate, no text parsing
     _DIRECTION_AGENTS = {"coach_agent", "navigator", "profile_agent", "growth_agent"}
     if agent_source in _DIRECTION_AGENTS:
-        ai_cards = _extract_market_cards(full_response) if full_response else []
-        # Merge: AI cards take priority (more context), user cards fill in gaps
-        seen_families = {c["family"] for c in ai_cards}
-        merged_cards = ai_cards + [c for c in user_detected_cards if c["family"] not in seen_families]
-        if merged_cards:
-            yield f"data: {json.dumps({'market_cards': merged_cards[:4]}, ensure_ascii=False)}\n\n"
+        goal_info = initial_state.get("career_goal")
+        goal_node_id = goal_info.get("node_id") if goal_info else None
+        if goal_node_id:
+            goal_card = _get_card_for_node(goal_node_id)
+            if goal_card:
+                yield f"data: {json.dumps({'market_cards': [goal_card]}, ensure_ascii=False)}\n\n"
 
     # ── Step 3: Save response + optionally create CoachResult card ──
     if session and full_response:

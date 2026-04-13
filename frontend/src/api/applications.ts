@@ -43,5 +43,8 @@ export const updateNotes = (id: number, notes: string): Promise<void> =>
 export const deleteApplication = (id: number): Promise<void> =>
   req(`${BASE}/${id}`, { method: 'DELETE' })
 
+export const updateReflection = (id: number, reflection: string): Promise<void> =>
+  req(`${BASE}/${id}/reflection`, { method: 'PATCH', body: JSON.stringify({ reflection }) })
+
 export const submitDebrief = (id: number, qa_list: QAItem[]) =>
   req(`${BASE}/${id}/debrief`, { method: 'POST', body: JSON.stringify({ qa_list }) })

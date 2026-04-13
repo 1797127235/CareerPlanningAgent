@@ -1,4 +1,4 @@
-"""成长档案路由 — 项目记录 / 面试记录 / 事件时间线。"""
+"""成长档案路由 — 项目记录 / 面试记录 / 学习记录。"""
 from __future__ import annotations
 
 import json
@@ -12,18 +12,15 @@ from sqlalchemy.orm import Session
 from backend.auth import get_current_user
 from backend.db import get_db
 from backend.db_models import (
-    GrowthEvent,
     InterviewRecord,
+    LearningNote,
     Profile,
     ProjectLog,
     ProjectRecord,
     User,
 )
 from backend.services.growth_log_service import (
-    create_growth_event,
     generate_interview_analysis,
-    get_monthly_summary,
-    get_timeline,
 )
 
 router = APIRouter()
@@ -94,37 +91,6 @@ class UpdateInterviewRequest(BaseModel):
 
 
 # ── Timeline ──────────────────────────────────────────────────────────────────
-
-@router.get("/timeline")
-def get_growth_timeline(
-    event_type: Optional[str] = None,
-    limit: int = 30,
-    offset: int = 0,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """获取成长事件时间线。"""
-    profile_id = _get_profile_id(user, db)
-    events = get_timeline(
-        user_id=user.id,
-        profile_id=profile_id,
-        event_type=event_type,
-        limit=limit,
-        offset=offset,
-        db=db,
-    )
-    return {"events": events, "total": len(events)}
-
-
-@router.get("/summary")
-def get_growth_summary(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """获取本月成长摘要。"""
-    profile_id = _get_profile_id(user, db)
-    return get_monthly_summary(user_id=user.id, profile_id=profile_id, db=db)
-
 
 @router.get("/dashboard")
 def get_growth_dashboard(
@@ -208,15 +174,8 @@ def get_growth_dashboard(
         for s in snapshots
     ]
 
-    # Days since journey started (earliest growth event or profile creation)
-    from backend.db_models import GrowthEvent as _GE
-    first_event = (
-        db.query(_GE)
-        .filter(_GE.user_id == user.id)
-        .order_by(_GE.created_at.asc())
-        .first()
-    )
-    start_date = first_event.created_at if first_event else profile.created_at
+    # Days since journey started (profile creation date)
+    start_date = profile.created_at
     days_since_start = (datetime.now(timezone.utc) - start_date.replace(tzinfo=timezone.utc)).days if start_date else 0
 
     return {
@@ -304,10 +263,6 @@ def create_project(
     )
     db.add(project)
     db.flush()
-
-    # 任何状态都创建成长事件（用户需要看到记录）
-    _trigger_project_event(project, user.id, profile_id, db)
-
     db.commit()
     db.refresh(project)
     return _serialize_project(project)
@@ -320,7 +275,7 @@ def update_project(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """更新项目记录。状态变为 completed 时自动触发成长事件。"""
+    """更新项目记录。"""
     project = db.query(ProjectRecord).filter(
         ProjectRecord.id == project_id,
         ProjectRecord.user_id == user.id,
@@ -350,12 +305,6 @@ def update_project(
             project.completed_at = datetime.now(timezone.utc)
 
     db.flush()
-
-    # 刚完成 → 触发成长事件
-    if req.status == "completed" and prev_status != "completed":
-        profile_id = project.profile_id or _get_profile_id(user, db)
-        _trigger_project_event(project, user.id, profile_id, db)
-
     db.commit()
     db.refresh(project)
     return _serialize_project(project)
@@ -373,33 +322,8 @@ def delete_project(
     ).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
-    # 级联删除关联的 GrowthEvent
-    db.query(GrowthEvent).filter(
-        GrowthEvent.source_table == "project_records",
-        GrowthEvent.source_id == project_id,
-    ).delete()
     db.delete(project)
     db.commit()
-
-
-def _trigger_project_event(project: ProjectRecord, user_id: int, profile_id: int | None, db: Session):
-    """项目创建/完成时创建 GrowthEvent。"""
-    skills_list = project.skills_used or []
-    status_label = {"planning": "规划", "in_progress": "开始", "completed": "完成"}.get(project.status, "记录")
-    summary = f"{status_label}项目「{project.name}」"
-    if skills_list:
-        summary += f" · 技能: {', '.join(skills_list[:3])}"
-
-    create_growth_event(
-        user_id=user_id,
-        profile_id=profile_id,
-        event_type="project_completed",
-        source_table="project_records",
-        source_id=project.id,
-        summary=summary,
-        skills_delta={"added": skills_list},
-        db=db,
-    )
 
 
 def _serialize_project(p: ProjectRecord) -> dict:
@@ -416,14 +340,60 @@ def _serialize_project(p: ProjectRecord) -> dict:
         "started_at": p.started_at.isoformat() if p.started_at else None,
         "completed_at": p.completed_at.isoformat() if p.completed_at else None,
         "created_at": p.created_at.isoformat(),
+        "graph_data": p.graph_data,
     }
+
+
+# ── Project Graph ─────────────────────────────────────────────────────────────
+
+class SaveGraphRequest(BaseModel):
+    nodes: list[dict]
+    edges: list[dict]
+
+
+@router.get("/projects/{project_id}/graph")
+def get_project_graph(
+    project_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取项目节点图数据。"""
+    project = db.query(ProjectRecord).filter(
+        ProjectRecord.id == project_id,
+        ProjectRecord.user_id == user.id,
+    ).first()
+    if not project:
+        raise HTTPException(404, "项目不存在")
+    data = project.graph_data or {"nodes": [], "edges": []}
+    return data
+
+
+@router.patch("/projects/{project_id}/graph")
+def save_project_graph(
+    project_id: int,
+    req: SaveGraphRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """保存项目节点图数据。"""
+    project = db.query(ProjectRecord).filter(
+        ProjectRecord.id == project_id,
+        ProjectRecord.user_id == user.id,
+    ).first()
+    if not project:
+        raise HTTPException(404, "项目不存在")
+    project.graph_data = {"nodes": req.nodes, "edges": req.edges}
+    db.commit()
+    return {"ok": True}
 
 
 # ── Project Logs ─────────────────────────────────────────────────────────────
 
 class CreateProjectLogRequest(BaseModel):
     content: str
-    log_type: str = "progress"  # progress | note
+    reflection: Optional[str] = None
+    task_status: str = "done"   # done | in_progress | blocked
+    log_type: str = "progress"
 
 
 @router.get("/projects/{project_id}/logs")
@@ -444,7 +414,18 @@ def list_project_logs(
         .order_by(ProjectLog.created_at.desc())
         .all()
     )
-    return {"logs": [{"id": l.id, "content": l.content, "log_type": getattr(l, 'log_type', 'progress'), "created_at": l.created_at.isoformat()} for l in logs]}
+    return {"logs": [_serialize_log(l) for l in logs]}
+
+
+def _serialize_log(l: ProjectLog) -> dict:
+    return {
+        "id": l.id,
+        "content": l.content,
+        "reflection": getattr(l, 'reflection', None),
+        "task_status": getattr(l, 'task_status', 'done'),
+        "log_type": getattr(l, 'log_type', 'progress'),
+        "created_at": l.created_at.isoformat(),
+    }
 
 
 @router.post("/projects/{project_id}/logs", status_code=201)
@@ -462,11 +443,51 @@ def create_project_log(
         raise HTTPException(404, "项目不存在")
     if not req.content.strip():
         raise HTTPException(400, "内容不能为空")
-    log = ProjectLog(project_id=project_id, content=req.content.strip(), log_type=req.log_type)
+    log = ProjectLog(
+        project_id=project_id,
+        content=req.content.strip(),
+        reflection=req.reflection.strip() if req.reflection else None,
+        task_status=req.task_status,
+        log_type=req.log_type,
+    )
     db.add(log)
     db.commit()
     db.refresh(log)
-    return {"id": log.id, "content": log.content, "log_type": log.log_type, "created_at": log.created_at.isoformat()}
+    return _serialize_log(log)
+
+
+class UpdateProjectLogRequest(BaseModel):
+    content: Optional[str] = None
+    reflection: Optional[str] = None
+    task_status: Optional[str] = None
+
+
+@router.patch("/projects/{project_id}/logs/{log_id}")
+def update_project_log(
+    project_id: int,
+    log_id: int,
+    req: UpdateProjectLogRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新项目进展记录。"""
+    project = db.query(ProjectRecord).filter(
+        ProjectRecord.id == project_id, ProjectRecord.user_id == user.id,
+    ).first()
+    if not project:
+        raise HTTPException(404, "项目不存在")
+    log = db.query(ProjectLog).filter(ProjectLog.id == log_id, ProjectLog.project_id == project_id).first()
+    if not log:
+        raise HTTPException(404, "记录不存在")
+    if req.content is not None:
+        log.content = req.content
+    if req.reflection is not None:
+        log.reflection = req.reflection or None
+    if req.task_status is not None:
+        log.task_status = req.task_status
+    db.commit()
+    db.refresh(log)
+    return _serialize_log(log)
 
 
 @router.delete("/projects/{project_id}/logs/{log_id}", status_code=204)
@@ -537,23 +558,6 @@ def create_interview(
     )
     db.add(record)
     db.flush()
-
-    # 创建成长事件
-    rating_label = {"good": "发挥不错", "medium": "正常发挥", "bad": "发挥一般"}.get(req.self_rating, "")
-    summary = f"{req.company} {req.round}"
-    if rating_label:
-        summary += f" · {rating_label}"
-
-    create_growth_event(
-        user_id=user.id,
-        profile_id=profile_id,
-        event_type="interview_done",
-        source_table="interview_records",
-        source_id=record.id,
-        summary=summary,
-        db=db,
-    )
-
     db.commit()
     db.refresh(record)
     return _serialize_interview(record)
@@ -628,11 +632,6 @@ def delete_interview(
     ).first()
     if not record:
         raise HTTPException(status_code=404, detail="面试记录不存在")
-    # 级联删除关联的 GrowthEvent
-    db.query(GrowthEvent).filter(
-        GrowthEvent.source_table == "interview_records",
-        GrowthEvent.source_id == interview_id,
-    ).delete()
     db.delete(record)
     db.commit()
 
@@ -658,4 +657,114 @@ def _serialize_interview(i: InterviewRecord) -> dict:
         "application_id": i.application_id,
         "interview_at": i.interview_at.isoformat() if i.interview_at else None,
         "created_at": i.created_at.isoformat(),
+    }
+
+
+# ── Learning Notes ───────────────────────────────────────────────────────────
+
+class CreateLearningNoteRequest(BaseModel):
+    title: str
+    summary: str = ""
+    tags: list[str] = []
+    linked_skill: Optional[str] = None
+
+
+class UpdateLearningNoteRequest(BaseModel):
+    title: Optional[str] = None
+    summary: Optional[str] = None
+    tags: Optional[list[str]] = None
+    linked_skill: Optional[str] = None
+
+
+@router.get("/learning-notes")
+def list_learning_notes(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取用户所有学习记录。"""
+    notes = (
+        db.query(LearningNote)
+        .filter(LearningNote.user_id == user.id)
+        .order_by(LearningNote.created_at.desc())
+        .all()
+    )
+    return {"notes": [_serialize_note(n) for n in notes]}
+
+
+@router.post("/learning-notes", status_code=201)
+def create_learning_note(
+    req: CreateLearningNoteRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """创建学习记录。"""
+    if not req.title.strip():
+        raise HTTPException(400, "标题不能为空")
+    profile_id = _get_profile_id(user, db)
+    note = LearningNote(
+        user_id=user.id,
+        profile_id=profile_id,
+        title=req.title.strip(),
+        summary=req.summary.strip(),
+        tags=req.tags,
+        linked_skill=req.linked_skill.strip() if req.linked_skill else None,
+    )
+    db.add(note)
+    db.commit()
+    db.refresh(note)
+    return _serialize_note(note)
+
+
+@router.patch("/learning-notes/{note_id}")
+def update_learning_note(
+    note_id: int,
+    req: UpdateLearningNoteRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """更新学习记录。"""
+    note = db.query(LearningNote).filter(
+        LearningNote.id == note_id,
+        LearningNote.user_id == user.id,
+    ).first()
+    if not note:
+        raise HTTPException(404, "学习记录不存在")
+    if req.title is not None:
+        note.title = req.title.strip()
+    if req.summary is not None:
+        note.summary = req.summary.strip()
+    if req.tags is not None:
+        note.tags = req.tags
+    if req.linked_skill is not None:
+        note.linked_skill = req.linked_skill.strip() or None
+    db.commit()
+    db.refresh(note)
+    return _serialize_note(note)
+
+
+@router.delete("/learning-notes/{note_id}", status_code=204)
+def delete_learning_note(
+    note_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """删除学习记录。"""
+    note = db.query(LearningNote).filter(
+        LearningNote.id == note_id,
+        LearningNote.user_id == user.id,
+    ).first()
+    if not note:
+        raise HTTPException(404, "学习记录不存在")
+    db.delete(note)
+    db.commit()
+
+
+def _serialize_note(n: LearningNote) -> dict:
+    return {
+        "id": n.id,
+        "title": n.title,
+        "summary": n.summary,
+        "tags": n.tags or [],
+        "linked_skill": n.linked_skill,
+        "created_at": n.created_at.isoformat(),
     }

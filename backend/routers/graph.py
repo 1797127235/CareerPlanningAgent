@@ -315,12 +315,6 @@ def set_career_goal(
         )
         db.add(goal)
         db.commit()
-        # Auto-record growth milestone: direction selected
-        try:
-            from backend.services.growth_log_service import record_direction_set
-            record_direction_set(user.id, profile_id, req.target_node_id, req.target_label, db)
-        except Exception:
-            pass
         return {"ok": True, "target_label": req.target_label, "target_zone": req.target_zone}
 
     goal.target_node_id = req.target_node_id
@@ -332,12 +326,6 @@ def set_career_goal(
     goal.salary_p50 = req.salary_p50
     goal.set_at = datetime.now(timezone.utc)
     db.commit()
-    # Also record when goal is updated (direction changed)
-    try:
-        from backend.services.growth_log_service import record_direction_set
-        record_direction_set(user.id, profile_id, req.target_node_id, req.target_label, db)
-    except Exception:
-        pass
     return {"ok": True, "target_label": req.target_label, "target_zone": req.target_zone}
 
 

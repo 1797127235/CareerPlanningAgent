@@ -4,28 +4,6 @@ const BASE = '/growth-log'
 
 /* ── Types ── */
 
-export type GrowthEventType =
-  | 'project_completed'
-  | 'interview_done'
-  | 'learning_completed'
-  | 'skill_added'
-  | 'profile_created'
-  | 'direction_set'
-  | 'jd_diagnosis_done'
-  | 'skill_confirmed'
-
-export interface GrowthEvent {
-  id: number
-  event_type: GrowthEventType
-  source_table: string
-  source_id: number
-  summary: string
-  skills_delta: { added?: string[]; improved?: string[]; confirmed?: string[] }
-  readiness_before: number | null
-  readiness_after: number | null
-  created_at: string
-}
-
 export interface ProjectRecord {
   id: number
   name: string
@@ -60,27 +38,6 @@ export interface InterviewRecord {
   interview_at: string | null
   created_at: string
 }
-
-export interface MonthlySummary {
-  month: string
-  projects: number
-  interviews: number
-  learnings: number
-  total_events: number
-  readiness_start: number | null
-  readiness_current: number | null
-  readiness_delta: number | null
-}
-
-/* ── Timeline ── */
-
-export const getTimeline = (params?: { event_type?: string; limit?: number; offset?: number }) =>
-  rawFetch<{ events: GrowthEvent[]; total: number }>(
-    `${BASE}/timeline${params ? '?' + new URLSearchParams(Object.entries(params).filter(([, v]) => v != null).map(([k, v]) => [k, String(v)])).toString() : ''}`
-  )
-
-export const getMonthlySummary = () =>
-  rawFetch<MonthlySummary>(`${BASE}/summary`)
 
 /* ── Growth Dashboard ── */
 
@@ -197,10 +154,15 @@ export interface ProjectLogEntry {
 export const listProjectLogs = (projectId: number) =>
   rawFetch<{ logs: ProjectLogEntry[] }>(`${BASE}/projects/${projectId}/logs`)
 
-export const createProjectLog = (projectId: number, content: string, log_type: 'progress' | 'note' = 'progress') =>
+export const createProjectLog = (projectId: number, data: {
+  content: string
+  reflection?: string
+  task_status?: 'done' | 'in_progress' | 'blocked'
+  log_type?: 'progress' | 'note'
+}) =>
   rawFetch<ProjectLogEntry>(`${BASE}/projects/${projectId}/logs`, {
     method: 'POST',
-    body: JSON.stringify({ content, log_type }),
+    body: JSON.stringify({ log_type: 'progress', ...data }),
   })
 
 export const deleteProjectLog = (projectId: number, logId: number) =>
@@ -208,3 +170,58 @@ export const deleteProjectLog = (projectId: number, logId: number) =>
 
 export const deleteInterview = (id: number) =>
   rawFetch<void>(`${BASE}/interviews/${id}`, { method: 'DELETE' })
+
+/* ── Learning Notes ── */
+
+export interface LearningNote {
+  id: number
+  title: string
+  summary: string
+  tags: string[]
+  linked_skill: string | null
+  created_at: string
+}
+
+export const listLearningNotes = () =>
+  rawFetch<{ notes: LearningNote[] }>(`${BASE}/learning-notes`)
+
+export const createLearningNote = (data: {
+  title: string
+  summary?: string
+  tags?: string[]
+  linked_skill?: string
+}) =>
+  rawFetch<LearningNote>(`${BASE}/learning-notes`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+
+export const updateLearningNote = (id: number, data: {
+  title?: string
+  summary?: string
+  tags?: string[]
+  linked_skill?: string
+}) =>
+  rawFetch<LearningNote>(`${BASE}/learning-notes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })
+
+export const deleteLearningNote = (id: number) =>
+  rawFetch<void>(`${BASE}/learning-notes/${id}`, { method: 'DELETE' })
+
+/* ── Project Graph ── */
+
+export interface GraphData {
+  nodes: Record<string, unknown>[]
+  edges: Record<string, unknown>[]
+}
+
+export const getProjectGraph = (id: number) =>
+  rawFetch<GraphData>(`${BASE}/projects/${id}/graph`)
+
+export const saveProjectGraph = (id: number, data: GraphData) =>
+  rawFetch<{ ok: boolean }>(`${BASE}/projects/${id}/graph`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  })

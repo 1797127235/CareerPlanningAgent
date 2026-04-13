@@ -6,6 +6,8 @@ import MatchDetailPage from '@/pages/MatchDetailPage'
 import GraphPage from '@/pages/GraphPage'
 import ReportPage from '@/pages/ReportPage'
 import GrowthLogPage from '@/pages/GrowthLogPage'
+import ProjectGraphPage from '@/pages/ProjectGraphPage'
+import PursuitDetailPage from '@/pages/PursuitDetailPage'
 import CoachResultPage from '@/pages/CoachResultPage'
 import RoleDetailPage from '@/pages/RoleDetailPage'
 import LoginPage from '@/pages/LoginPage'
@@ -34,11 +36,13 @@ export default function App() {
             {/* 学习路径已砍 — 旧路由重定向到成长档案，保证外部链接不 404 */}
             <Route path="/explore/:nodeId/learning" element={<Navigate to="/growth-log" replace />} />
             <Route path="/profile/learning" element={<Navigate to="/growth-log" replace />} />
-            <Route path="/jd" element={<Navigate to="/growth-log?tab=pursuits" replace />} />
+            <Route path="/jd" element={<Navigate to="/growth-log" replace />} />
             <Route path="/growth" element={<Navigate to="/growth-log" replace />} />
-            <Route path="/applications" element={<Navigate to="/growth-log?tab=pursuits" replace />} />
+            <Route path="/applications" element={<Navigate to="/growth-log" replace />} />
             <Route path="/report" element={<ReportPage />} />
             <Route path="/growth-log" element={<GrowthLogPage />} />
+            <Route path="/growth-log/projects/:id" element={<ProjectGraphPage />} />
+            <Route path="/growth-log/pursuits/:id" element={<PursuitDetailPage />} />
             <Route path="/coach/result/:id" element={<CoachResultPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

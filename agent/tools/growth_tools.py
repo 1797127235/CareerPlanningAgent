@@ -1,7 +1,12 @@
 """成长追踪工具 — GrowthAgent 使用的 @tool 函数。"""
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 from langchain_core.tools import tool
+
+# Injected by supervisor before calling growth_agent
+_injected_user_id: ContextVar[int | None] = ContextVar('_growth_user_id', default=None)
 
 
 @tool
@@ -74,3 +79,151 @@ def recommend_next_step(profile_id: int) -> str:
     header = f"当前阶段: {result['stage_label']}\n\n推荐下一步行动：\n"
     numbered = [f"{i + 1}. {r}" for i, r in enumerate(result["recommendations"])]
     return header + "\n".join(numbered)
+
+
+@tool
+def get_learning_notes(topic: str = "") -> str:
+    """查询用户的学习笔记。可按主题关键词过滤，不传则返回最近10条。
+    当用户问"我学了什么"、"我的笔记"、"某个主题的笔记"时调用。
+    """
+    user_id = _injected_user_id.get()
+    if not user_id:
+        return "无法获取用户信息。"
+
+    try:
+        from backend.db import SessionLocal
+        from backend.db_models import LearningNote
+
+        db = SessionLocal()
+        try:
+            q = db.query(LearningNote).filter_by(user_id=user_id)
+            if topic:
+                q = q.filter(LearningNote.title.contains(topic) | LearningNote.summary.contains(topic))
+            notes = q.order_by(LearningNote.created_at.desc()).limit(10).all()
+        finally:
+            db.close()
+    except Exception as e:
+        return f"查询学习笔记时出错：{e}"
+
+    if not notes:
+        return f"没有找到{'关于「' + topic + '」的' if topic else ''}学习笔记。"
+
+    lines = [f"学习笔记（共 {len(notes)} 条）：\n"]
+    for n in notes:
+        tag_str = f" [{', '.join(n.tags[:3])}]" if n.tags else ""
+        date_str = n.created_at.strftime("%m/%d") if n.created_at else ""
+        lines.append(f"· {n.title}{tag_str} — {(n.summary or '')[:80]}{'…' if len(n.summary or '') > 80 else ''} ({date_str})")
+
+    return "\n".join(lines)
+
+
+@tool
+def get_interview_records(company: str = "") -> str:
+    """查询用户的面试记录，包括每轮题目、回答要点和 AI 复盘。
+    可按公司名过滤。当用户问"我的面试"、"某家公司的面试情况"、"面试表现"时调用。
+    """
+    user_id = _injected_user_id.get()
+    if not user_id:
+        return "无法获取用户信息。"
+
+    try:
+        from backend.db import SessionLocal
+        from backend.db_models import InterviewRecord
+
+        db = SessionLocal()
+        try:
+            q = db.query(InterviewRecord).filter_by(user_id=user_id)
+            if company:
+                q = q.filter(InterviewRecord.company.contains(company))
+            records = q.order_by(InterviewRecord.created_at.desc()).limit(8).all()
+        finally:
+            db.close()
+    except Exception as e:
+        return f"查询面试记录时出错：{e}"
+
+    if not records:
+        return f"没有找到{'「' + company + '」的' if company else ''}面试记录。"
+
+    lines = [f"面试记录（{len(records)} 轮）：\n"]
+    rating_map = {"good": "发挥好", "medium": "正常", "bad": "较差"}
+
+    for r in records:
+        rating = rating_map.get(r.self_rating or "", "")
+        date_str = r.interview_at or (r.created_at.strftime("%m/%d") if r.created_at else "")
+        header = f"【{r.company} · {r.round}】{' · ' + rating if rating else ''} ({date_str})"
+        lines.append(header)
+
+        # Q/A summary (first 2 questions)
+        content = r.content_summary or ""
+        import re
+        questions = re.findall(r'Q\d+:\s*(.+?)(?=\nA\d+:|\nQ\d+:|$)', content, re.DOTALL)
+        for i, q_text in enumerate(questions[:2]):
+            lines.append(f"  Q{i+1}: {q_text.strip()[:60]}{'…' if len(q_text.strip()) > 60 else ''}")
+
+        # AI analysis summary
+        if r.ai_analysis:
+            overall = r.ai_analysis.get("overall", "")
+            if overall:
+                lines.append(f"  AI复盘: {overall[:80]}{'…' if len(overall) > 80 else ''}")
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+@tool
+def get_project_progress(project_name: str = "") -> str:
+    """查询用户的项目进展记录。可按项目名过滤，不传则返回所有进行中的项目的最新进展。
+    当用户问"我的项目"、"项目进展"、"某个项目做得怎样"时调用。
+    """
+    user_id = _injected_user_id.get()
+    if not user_id:
+        return "无法获取用户信息。"
+
+    try:
+        from backend.db import SessionLocal
+        from backend.db_models import ProjectRecord, ProjectLog
+
+        db = SessionLocal()
+        try:
+            q = db.query(ProjectRecord).filter_by(user_id=user_id)
+            if project_name:
+                q = q.filter(ProjectRecord.name.contains(project_name))
+            else:
+                q = q.filter(ProjectRecord.status == "in_progress")
+            projects = q.order_by(ProjectRecord.updated_at.desc()).limit(5).all()
+
+            result_lines = []
+            for p in projects:
+                status_map = {"planning": "规划中", "in_progress": "进行中", "completed": "已完成"}
+                skills_str = "、".join((p.skills_used or [])[:4])
+                result_lines.append(f"【{p.name}】{status_map.get(p.status, p.status)}")
+                if skills_str:
+                    result_lines.append(f"  技术栈: {skills_str}")
+                if p.description:
+                    result_lines.append(f"  简介: {p.description[:60]}{'…' if len(p.description) > 60 else ''}")
+
+                # Latest 3 logs
+                logs = (
+                    db.query(ProjectLog)
+                    .filter_by(project_id=p.id)
+                    .order_by(ProjectLog.created_at.desc())
+                    .limit(3)
+                    .all()
+                )
+                if logs:
+                    result_lines.append("  最近进展:")
+                    task_status_map = {"done": "✓", "in_progress": "→", "blocked": "✗"}
+                    for log in logs:
+                        mark = task_status_map.get(log.task_status or "done", "")
+                        result_lines.append(f"    {mark} {log.content[:50]}{'…' if len(log.content) > 50 else ''}")
+                result_lines.append("")
+        finally:
+            db.close()
+    except Exception as e:
+        return f"查询项目进展时出错：{e}"
+
+    if not result_lines:
+        return f"没有找到{'「' + project_name + '」的' if project_name else '进行中的'}项目。"
+
+    return "\n".join(result_lines)

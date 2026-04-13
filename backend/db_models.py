@@ -734,6 +734,7 @@ class JobApplication(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reflection: Mapped[str | None] = mapped_column(Text, nullable=True)
     reminder_sent: Mapped[bool] = mapped_column(Boolean, default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -824,6 +825,8 @@ class ProjectRecord(Base):
     linked_node_id: Mapped[str | None] = mapped_column(String(128), nullable=True)  # 关联图谱节点
     reflection: Mapped[str | None] = mapped_column(Text, nullable=True)  # 做完了有什么收获
 
+    graph_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # ReactFlow nodes+edges JSON
+
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
@@ -841,6 +844,8 @@ class ProjectLog(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     project_id: Mapped[int] = mapped_column(Integer, ForeignKey("project_records.id"), nullable=False, index=True)
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    reflection: Mapped[str | None] = mapped_column(Text, nullable=True)
+    task_status: Mapped[str] = mapped_column(String(20), default="done")  # done | in_progress | blocked
     log_type: Mapped[str] = mapped_column(String(20), default="progress")  # progress | note
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
@@ -872,28 +877,22 @@ class InterviewRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
-# ── 成长档案：统一事件表 ───────────────────────────────────────────
+# ── 学习记录 ─────────────────────────────────────────────────────
 
 
-class GrowthEvent(Base):
-    """统一成长事件表 — 聚合所有类型成长事件，用于时间线展示和叙事生成"""
+class LearningNote(Base):
+    """用户主动记录的学习笔记 — 标题 + 简短总结 + 标签 + 关联技能。"""
 
-    __tablename__ = "growth_events"
+    __tablename__ = "learning_notes"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    profile_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=True, index=True)
+    profile_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=True)
 
-    # project_completed | interview_done | learning_completed | skill_added
-    event_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    source_table: Mapped[str] = mapped_column(String(64), nullable=False)   # project_records | interview_records | learning_progress
-    source_id: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    summary: Mapped[str] = mapped_column(String(512), nullable=False, default="")  # 一行描述
-    skills_delta: Mapped[dict] = mapped_column(JSON, default=dict)  # {"added": ["React"], "improved": ["TS"]}
-
-    readiness_before: Mapped[float | None] = mapped_column(Float, nullable=True)
-    readiness_after: Mapped[float | None] = mapped_column(Float, nullable=True)
+    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tags: Mapped[list] = mapped_column(JSON, default=list)            # ["Redis", "数据库"]
+    linked_skill: Mapped[str | None] = mapped_column(String(128), nullable=True)  # 关联目标岗位技能
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 

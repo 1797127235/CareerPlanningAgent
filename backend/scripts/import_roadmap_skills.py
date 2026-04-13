@@ -19,10 +19,10 @@ from pathlib import Path
 
 ROADMAP_BASE = Path(os.environ.get(
     "ROADMAP_PATH",
-    "C:/Users/liu/Desktop/developer-roadmap/src/data/roadmaps",
+    str(Path(__file__).resolve().parent.parent.parent / "developer-roadmap" / "src" / "data" / "roadmaps"),
 ))
 
-# ── 33 CS career directions ────────────────────────────────────────────────
+# ── 43 CS career directions ────────────────────────────────────────────────
 PRIMARY_ROLES = [
     # Core engineering
     "backend", "frontend", "full-stack", "devops",
@@ -33,7 +33,13 @@ PRIMARY_ROLES = [
     # Architecture & Management
     "software-architect", "engineering-manager",
     # Specialized engineering
-    "game-developer", "qa", "cyber-security", "devsecops",
+    "game-developer", "server-side-game-developer", "qa", "cyber-security", "devsecops",
+    # Design & Product
+    "ux-design", "product-manager",
+    # AI specializations
+    "ai-data-scientist", "ai-agents", "ai-red-teaming",
+    # Other tech roles
+    "bi-analyst", "blockchain", "technical-writer", "devrel",
     # Language-specific
     "cpp", "rust", "python", "java", "golang", "kotlin", "php",
     # Framework-specific
@@ -78,6 +84,17 @@ ROLE_LABELS = {
     "linux": "Linux 工程师",
     "docker": "Docker 工程师",
     "postgresql-dba": "数据库工程师",
+    # Newly added roles
+    "server-side-game-developer": "游戏服务端工程师",
+    "ux-design": "UX 设计师",
+    "product-manager": "产品经理",
+    "ai-data-scientist": "AI 数据科学家",
+    "ai-agents": "AI Agent 工程师",
+    "ai-red-teaming": "AI 安全工程师",
+    "bi-analyst": "BI 分析师",
+    "blockchain": "区块链工程师",
+    "technical-writer": "技术文档工程师",
+    "devrel": "开发者关系工程师",
 }
 
 

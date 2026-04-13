@@ -155,14 +155,6 @@ def _build_router():
                 ],
             ),
             Route(
-                name="report_agent",
-                utterances=[
-                    "生成职业报告",
-                    "帮我出一份分析报告",
-                    "导出职业发展报告",
-                ],
-            ),
-            Route(
                 name="chat",
                 utterances=[
                     "不知道该往哪个方向发展",

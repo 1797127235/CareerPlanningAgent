@@ -83,6 +83,7 @@ def _app_to_dict(
         "interview_at": app.interview_at.isoformat() if app.interview_at else None,
         "completed_at": app.completed_at.isoformat() if app.completed_at else None,
         "notes": app.notes,
+        "reflection": app.reflection,
         "reminder_sent": app.reminder_sent,
         "created_at": app.created_at.isoformat(),
         "updated_at": app.updated_at.isoformat(),
@@ -310,6 +311,24 @@ def update_notes(
     return {"success": True}
 
 
+@router.patch("/{app_id}/reflection")
+def update_reflection(
+    app_id: int,
+    req: dict,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update reflection for an application."""
+    app = db.query(JobApplication).filter(
+        JobApplication.id == app_id, JobApplication.user_id == user.id
+    ).first()
+    if not app:
+        raise HTTPException(404, "投递记录不存在")
+    app.reflection = (req.get("reflection") or "")[:5000] or None
+    db.commit()
+    return {"success": True}
+
+
 @router.delete("/{app_id}")
 def delete_application(
     app_id: int,
@@ -322,15 +341,9 @@ def delete_application(
     ).first()
     if not app:
         raise HTTPException(404, "投递记录不存在")
-    # 级联删除：关联面试记录 + 面试的 GrowthEvent + debrief 的 GrowthEvent + debrief
-    from backend.db_models import GrowthEvent, InterviewRecord as IR
-    linked_ivs = db.query(IR).filter(IR.application_id == app_id).all()
-    for iv in linked_ivs:
-        db.query(GrowthEvent).filter(GrowthEvent.source_table == "interview_records", GrowthEvent.source_id == iv.id).delete()
-        db.delete(iv)
-    debrief_ids = [d.id for d in db.query(InterviewDebrief).filter(InterviewDebrief.application_id == app_id).all()]
-    if debrief_ids:
-        db.query(GrowthEvent).filter(GrowthEvent.source_table == "interview_debriefs", GrowthEvent.source_id.in_(debrief_ids)).delete(synchronize_session=False)
+    # 级联删除：关联面试记录 + debrief
+    from backend.db_models import InterviewRecord as IR
+    db.query(IR).filter(IR.application_id == app_id).delete()
     db.query(InterviewDebrief).filter(InterviewDebrief.application_id == app_id).delete()
     db.delete(app)
     db.commit()
@@ -382,30 +395,6 @@ def submit_debrief(
     # Auto-advance status to debriefed
     if app.status == "interviewed":
         app.status = "debriefed"
-
-    # Create growth event for the debrief
-    try:
-        from backend.services.growth_log_service import create_growth_event
-        profile_id = None
-        p = db.query(Profile).filter(Profile.user_id == user.id).order_by(Profile.id.desc()).first()
-        if p:
-            profile_id = p.id
-
-        position = app.position or app.jd_title or "未知岗位"
-        company = app.company or ""
-        summary = f"{company} {position} 面试复盘" if company else f"{position} 面试复盘"
-
-        create_growth_event(
-            user_id=user.id,
-            profile_id=profile_id,
-            event_type="interview_done",
-            source_table="interview_debriefs",
-            source_id=debrief.id,
-            summary=summary,
-            db=db,
-        )
-    except Exception:
-        pass  # Growth event creation should not block debrief
 
     db.commit()
     db.refresh(debrief)

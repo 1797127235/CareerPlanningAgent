@@ -50,13 +50,28 @@ def init_db() -> None:
         ChatSession, ChatMessage,
         MockInterviewSession,
         JobApplication, InterviewDebrief,
-        JobNodeIntro,
+        JobNodeIntro, LearningNote,
     )
     from backend.market_signal_model import MarketSignal  # noqa: F401
     from backend.city_market_signal_model import CityMarketSignal  # noqa: F401
     Base.metadata.create_all(bind=engine)
     # Migrate: add routine_score column if missing
     with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE project_records ADD COLUMN graph_data TEXT"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+        try:
+            conn.execute(text("ALTER TABLE project_logs ADD COLUMN task_status VARCHAR(20) DEFAULT 'done'"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+        try:
+            conn.execute(text("ALTER TABLE project_logs ADD COLUMN reflection TEXT"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
         try:
             conn.execute(text("ALTER TABLE job_nodes ADD COLUMN routine_score FLOAT"))
             conn.commit()
@@ -127,8 +142,11 @@ def init_db() -> None:
             conn.commit()
         except Exception:
             pass  # column already exists
-        # 成长档案: 扩展 GrowthEvent 事件类型注释（无结构变更，仅记录）
-        # 新增类型: profile_created | direction_set | jd_diagnosis_done | skill_confirmed
+        try:
+            conn.execute(text("ALTER TABLE job_applications ADD COLUMN reflection TEXT"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
 
 
 def get_db():

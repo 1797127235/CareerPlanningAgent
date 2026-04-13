@@ -212,7 +212,7 @@ function LogInput({ projectId, logType, placeholder, onAdded }: {
 /* ── Detail Modal ── */
 type ModalTab = 'progress' | 'notes' | 'coach'
 
-function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
+export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
   project: ProjectRecord
   onClose: () => void
   onDeleted: () => void
@@ -252,7 +252,7 @@ function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
     try {
       const { fetchProfile } = await import('@/api/profiles')
       const profile = await fetchProfile()
-      const goal = profile?.career_goals?.find(g => g.is_primary || g.is_active)
+      const goal = profile?.career_goals?.find(g => g.is_primary)
       if (goal) {
         goalLabel = goal.target_label || ''
         const gaps = goal.gap_skills || []
@@ -500,119 +500,78 @@ function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
 }
 
 /* ── Add Project Form ── */
-function AddProjectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
+export function AddProjectForm({ onSuccess, onCancel }: { onSuccess: () => void; onCancel: () => void }) {
   const [name, setName] = useState('')
-  const [skills, setSkills] = useState<string[]>([])
-  const [skillInput, setSkillInput] = useState('')
+  const [description, setDescription] = useState('')
+  const [techStack, setTechStack] = useState('')
+  const [githubUrl, setGithubUrl] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-
-  function addSkill(s: string) {
-    const t = s.trim()
-    if (t && !skills.includes(t)) setSkills([...skills, t])
-    setSkillInput('')
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!name.trim()) { setError('项目名称不能为空'); return }
     setSaving(true); setError('')
     try {
-      await createProject({ name: name.trim(), skills_used: skills })
+      const skills = techStack.split(/[,，、\s]+/).map(s => s.trim()).filter(Boolean)
+      await createProject({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        skills_used: skills,
+        github_url: githubUrl.trim() || undefined,
+      })
       onSuccess()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '保存失败')
     } finally { setSaving(false) }
   }
 
+  const inputCls = "w-full px-3.5 py-2.5 text-[13px] rounded-xl outline-none bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white transition-colors"
+
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.15 }}
-      className="rounded-[20px] p-5 mb-4"
-      style={{
-        background: 'rgba(255,255,255,0.7)',
-        backdropFilter: 'blur(20px)',
-        border: '1px solid rgba(255,255,255,0.7)',
-        boxShadow: '0 4px 16px rgba(0,0,0,0.06)',
-      }}
-    >
+    <div className="bg-white rounded-2xl p-6 shadow-xl">
+      <p className="text-[15px] font-bold text-slate-800 mb-5">新建项目</p>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div>
-          <input
-            value={name}
-            onChange={e => setName(e.target.value)}
-            placeholder="项目名称 *"
-            autoFocus
-            className="w-full px-3.5 py-2.5 text-[14px] font-semibold rounded-[12px] outline-none"
-            style={{
-              background: 'rgba(0,0,0,0.04)',
-              border: '1px solid rgba(0,0,0,0.06)',
-              color: '#1a1a1a',
-            }}
-            onFocus={e => { e.currentTarget.style.border = '1px solid rgba(37,99,235,0.4)'; e.currentTarget.style.background = '#fff' }}
-            onBlur={e => { e.currentTarget.style.border = '1px solid rgba(0,0,0,0.06)'; e.currentTarget.style.background = 'rgba(0,0,0,0.04)' }}
-          />
-        </div>
-
-        {/* Selected skills */}
-        {skills.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {skills.map(s => (
-              <span key={s}
-                className="flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-[8px] cursor-pointer"
-                style={{ background: 'rgba(37,99,235,0.08)', color: '#2563EB', border: '1px solid rgba(37,99,235,0.15)' }}
-                onClick={() => setSkills(skills.filter(x => x !== s))}>
-                {s} <X className="w-2.5 h-2.5" />
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Skill input */}
         <input
-          value={skillInput}
-          onChange={e => setSkillInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSkill(skillInput) } }}
-          placeholder="用到的技能（回车添加）"
-          className="w-full px-3.5 py-2 text-[12px] rounded-[10px] outline-none"
-          style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.06)', color: '#1a1a1a' }}
-          onFocus={e => { e.currentTarget.style.border = '1px solid rgba(37,99,235,0.4)'; e.currentTarget.style.background = '#fff' }}
-          onBlur={e => { e.currentTarget.style.border = '1px solid rgba(0,0,0,0.06)'; e.currentTarget.style.background = 'rgba(0,0,0,0.04)' }}
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="项目名称 *"
+          autoFocus
+          className={inputCls + ' font-semibold'}
         />
-
-        {/* Quick-pick skills */}
-        <div className="flex flex-wrap gap-1">
-          {SKILL_SUGGESTIONS.filter(s => !skills.includes(s)).slice(0, 10).map(s => (
-            <button key={s} type="button" onClick={() => addSkill(s)}
-              className="text-[10px] px-2 py-0.5 rounded cursor-pointer transition-colors"
-              style={{ background: 'rgba(0,0,0,0.04)', color: '#8E8E93', border: '1px dashed rgba(0,0,0,0.1)' }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(37,99,235,0.06)'; e.currentTarget.style.color = '#2563EB' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'rgba(0,0,0,0.04)'; e.currentTarget.style.color = '#8E8E93' }}>
-              + {s}
-            </button>
-          ))}
-        </div>
-
-        {error && <p className="text-[11px]" style={{ color: '#EF4444' }}>{error}</p>}
-
-        <div className="flex gap-2 pt-1">
+        <textarea
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          placeholder="项目介绍（做了什么、解决了什么问题）"
+          rows={3}
+          className={inputCls + ' resize-none'}
+        />
+        <input
+          value={techStack}
+          onChange={e => setTechStack(e.target.value)}
+          placeholder="技术栈（用逗号分隔，如 React, Node.js, Redis）"
+          className={inputCls}
+        />
+        <input
+          value={githubUrl}
+          onChange={e => setGithubUrl(e.target.value)}
+          placeholder="项目链接（GitHub / 演示地址）"
+          className={inputCls}
+        />
+        {error && <p className="text-[11px] text-red-500">{error}</p>}
+        <div className="flex gap-2 pt-2">
           <button type="submit" disabled={saving}
-            className="flex items-center gap-1.5 px-4 py-2 text-[12px] font-semibold text-white rounded-[10px] cursor-pointer"
+            className="flex-1 py-2.5 text-[13px] font-semibold text-white rounded-xl cursor-pointer transition-colors"
             style={{ background: saving ? 'rgba(37,99,235,0.5)' : '#2563EB' }}>
-            {saving ? <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-            {saving ? '保存中...' : '创建项目'}
+            {saving ? '创建中...' : '创建项目'}
           </button>
           <button type="button" onClick={onCancel}
-            className="px-4 py-2 text-[12px] font-medium rounded-[10px] cursor-pointer"
-            style={{ color: '#8E8E93', border: '1px solid rgba(0,0,0,0.08)' }}>
+            className="px-5 py-2.5 text-[13px] text-slate-500 rounded-xl cursor-pointer border border-slate-200 hover:bg-slate-50 transition-colors">
             取消
           </button>
         </div>
       </form>
-    </motion.div>
+    </div>
   )
 }
 

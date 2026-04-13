@@ -1,140 +1,13 @@
-"""成长档案服务 — 事件创建、readiness 估算、月度摘要。"""
+"""成长档案服务 — readiness 估算、面试分析。"""
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
-
-# readiness delta 估算（轻量规则，不调 matching_service）
-_DELTA_ESTIMATE = {
-    "project_completed": 3.0,
-    "interview_done": 1.0,
-    "learning_completed": 0.8,
-    "skill_added": 1.5,
-    "direction_set": 0.0,
-    "profile_created": 0.0,
-    "jd_diagnosis_done": 0.0,
-    "skill_confirmed": 1.5,
-}
-
-
-# ── 自动成长事件触发器 ────────────────────────────────────────────────────────
-
-def _auto_record(
-    user_id: int,
-    profile_id: int | None,
-    event_type: str,
-    summary: str,
-    db: Session,
-    skills_delta: dict | None = None,
-    readiness_before: float | None = None,
-    readiness_after: float | None = None,
-    source_id: int = 0,
-) -> None:
-    """Create a GrowthEvent record for system-generated milestones. Silent on failure."""
-    try:
-        from backend.db_models import GrowthEvent
-        event = GrowthEvent(
-            user_id=user_id,
-            profile_id=profile_id,
-            event_type=event_type,
-            source_table="system",
-            source_id=source_id,
-            summary=summary,
-            skills_delta=skills_delta or {},
-            readiness_before=readiness_before,
-            readiness_after=readiness_after,
-        )
-        db.add(event)
-        db.commit()
-        logger.info("growth_event recorded: user=%d type=%s", user_id, event_type)
-    except Exception as e:
-        logger.debug("_auto_record failed: %s", e)
-
-
-def record_profile_created(user_id: int, profile_id: int, skill_count: int, db: Session) -> None:
-    """Record milestone: first resume uploaded and profile built."""
-    _auto_record(
-        user_id, profile_id, "profile_created",
-        f"上传简历，识别到 {skill_count} 项技能，能力画像建立完成",
-        db,
-    )
-
-
-def record_direction_set(
-    user_id: int, profile_id: int, node_id: str, label: str, db: Session
-) -> None:
-    """Record milestone: student selected a career target direction."""
-    readiness = _compute_readiness_live(profile_id, db)
-    _auto_record(
-        user_id, profile_id, "direction_set",
-        f"选定目标方向：{label}",
-        db,
-        readiness_after=readiness,
-    )
-
-
-def record_jd_diagnosis(
-    user_id: int,
-    profile_id: int,
-    jd_title: str,
-    match_score: float,
-    gap_skills: list[str],
-    db: Session,
-) -> None:
-    """Record milestone: JD diagnosis completed with gap analysis."""
-    gap_str = "、".join(gap_skills[:3]) if gap_skills else "无明显缺口"
-    _auto_record(
-        user_id, profile_id, "jd_diagnosis_done",
-        f"JD诊断完成：{jd_title}，匹配度 {match_score:.0f}%，缺口技能：{gap_str}",
-        db,
-        readiness_after=match_score,
-    )
-
-
-def record_project_completed(
-    user_id: int,
-    profile_id: int,
-    project_id: int,
-    project_name: str,
-    skills_used: list[str],
-    db: Session,
-) -> None:
-    """Record milestone: project marked as completed."""
-    readiness_before = _compute_readiness_live(profile_id, db)
-    skills_str = "、".join(skills_used[:3]) if skills_used else ""
-    summary = f"项目完成：{project_name}"
-    if skills_str:
-        summary += f"（技能：{skills_str}）"
-    _auto_record(
-        user_id, profile_id, "project_completed",
-        summary, db,
-        skills_delta={"added": skills_used},
-        readiness_before=readiness_before,
-        source_id=project_id,
-    )
-
-
-def record_skill_confirmed(
-    user_id: int,
-    profile_id: int,
-    skill_name: str,
-    db: Session,
-) -> None:
-    """Record milestone: Coach validated a skill via calibration question."""
-    readiness_before = _compute_readiness_live(profile_id, db)
-    _auto_record(
-        user_id, profile_id, "skill_confirmed",
-        f"Coach 校准确认掌握：{skill_name}",
-        db,
-        skills_delta={"confirmed": [skill_name]},
-        readiness_before=readiness_before,
-    )
 
 
 def _skill_matches(skill_name: str, user_skills: set[str]) -> bool:
@@ -299,8 +172,6 @@ def get_current_readiness(profile_id: int, db: Session) -> float | None:
                     matched = sum(1 for s in must_skills if s in user_skills)
                     return round(matched / len(must_skills) * 100, 1)
                 else:
-                    # Node has no must_skills — use 0% rather than falling through
-                    # to tier 3 which would compute readiness against a different role
                     return 0.0
 
         # 3. Live compute from graph using real skill-gap ratio (NOT affinity_pct)
@@ -334,141 +205,6 @@ def get_current_readiness(profile_id: int, db: Session) -> float | None:
     except Exception as e:
         logger.debug("Could not get readiness: %s", e)
     return None
-
-
-def create_growth_event(
-    *,
-    user_id: int,
-    profile_id: int | None,
-    event_type: str,
-    source_table: str,
-    source_id: int,
-    summary: str,
-    skills_delta: dict | None = None,
-    readiness_before_override: float | None = None,
-    db: Session,
-) -> "GrowthEvent":
-    """创建成长事件，计算真实 readiness delta。
-
-    If readiness_before_override is provided, use it (caller captured before skill update).
-    Otherwise compute both before and after from current state.
-    """
-    from backend.db_models import GrowthEvent
-
-    if readiness_before_override is not None:
-        readiness_before = readiness_before_override
-    else:
-        readiness_before = get_current_readiness(profile_id, db) if profile_id else None
-
-    readiness_after = get_current_readiness(profile_id, db) if profile_id else None
-
-    # Fallback: if readiness didn't change (no skills change), use small estimate
-    if readiness_before is not None and readiness_after is not None and readiness_after <= readiness_before:
-        est = _DELTA_ESTIMATE.get(event_type, 0.0)
-        if est > 0:
-            readiness_after = round(readiness_before + est, 1)
-
-    event = GrowthEvent(
-        user_id=user_id,
-        profile_id=profile_id,
-        event_type=event_type,
-        source_table=source_table,
-        source_id=source_id,
-        summary=summary,
-        skills_delta=skills_delta or {},
-        readiness_before=readiness_before,
-        readiness_after=readiness_after,
-    )
-    db.add(event)
-    db.flush()
-    return event
-
-
-def get_timeline(
-    *,
-    user_id: int,
-    profile_id: int | None = None,
-    event_type: str | None = None,
-    limit: int = 30,
-    offset: int = 0,
-    db: Session,
-) -> list[dict]:
-    """获取成长事件时间线，返回序列化的事件列表。"""
-    from backend.db_models import GrowthEvent
-
-    q = db.query(GrowthEvent).filter(GrowthEvent.user_id == user_id)
-    if profile_id:
-        q = q.filter(GrowthEvent.profile_id == profile_id)
-    if event_type:
-        q = q.filter(GrowthEvent.event_type == event_type)
-    q = q.order_by(GrowthEvent.created_at.desc()).offset(offset).limit(limit)
-
-    events = q.all()
-    return [_serialize_event(e) for e in events]
-
-
-def _serialize_event(event: "GrowthEvent") -> dict:
-    return {
-        "id": event.id,
-        "event_type": event.event_type,
-        "source_table": event.source_table,
-        "source_id": event.source_id,
-        "summary": event.summary,
-        "skills_delta": event.skills_delta or {},
-        "readiness_before": event.readiness_before,
-        "readiness_after": event.readiness_after,
-        "created_at": event.created_at.isoformat(),
-    }
-
-
-def get_monthly_summary(
-    *,
-    user_id: int,
-    profile_id: int | None = None,
-    db: Session,
-) -> dict:
-    """生成本月成长摘要统计。"""
-    from backend.db_models import GrowthEvent
-
-    now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    events = (
-        db.query(GrowthEvent)
-        .filter(
-            GrowthEvent.user_id == user_id,
-            GrowthEvent.created_at >= month_start,
-        )
-        .all()
-    )
-
-    counts = {"project_completed": 0, "interview_done": 0, "learning_completed": 0, "skill_added": 0}
-    readiness_start: float | None = None
-    readiness_end: float | None = None
-
-    for e in sorted(events, key=lambda x: x.created_at):
-        counts[e.event_type] = counts.get(e.event_type, 0) + 1
-        if e.readiness_before is not None and readiness_start is None:
-            readiness_start = e.readiness_before
-        if e.readiness_after is not None:
-            readiness_end = e.readiness_after
-
-    readiness_delta = None
-    if readiness_start is not None and readiness_end is not None:
-        readiness_delta = round(readiness_end - readiness_start, 1)
-
-    current_readiness = get_current_readiness(profile_id, db) if profile_id else readiness_end
-
-    return {
-        "month": now.strftime("%Y年%m月"),
-        "projects": counts["project_completed"],
-        "interviews": counts["interview_done"],
-        "learnings": counts["learning_completed"],
-        "total_events": len(events),
-        "readiness_start": readiness_start,
-        "readiness_current": current_readiness,
-        "readiness_delta": readiness_delta,
-    }
 
 
 def generate_interview_analysis(
@@ -535,7 +271,7 @@ def on_learning_completed(
     topic_title: str,
     role_id: str,
 ) -> None:
-    """学习主题完成后的后台处理：技能匹配 → 更新画像 → 创建成长事件。
+    """学习主题完成后的后台处理：技能匹配 → 更新画像 → 创建 GrowthSnapshot。
 
     此函数设计为在 BackgroundTask 中运行，不阻塞 HTTP 响应。
     所有异常都被捕获，不影响主流程。
@@ -627,24 +363,7 @@ def on_learning_completed(
                         profile_id, readiness_before or 0, readiness_after_live, topic_title,
                     )
 
-            # Create GrowthEvent (whether or not a skill was added)
-            summary = f"完成学习「{topic_title}」"
-            if added_skills:
-                summary += f" · 掌握: {', '.join(added_skills)}"
-
-            create_growth_event(
-                user_id=user_id,
-                profile_id=profile_id,
-                event_type="learning_completed",
-                source_table="learning_progress",
-                source_id=0,
-                summary=summary,
-                skills_delta={"added": added_skills} if added_skills else {},
-                readiness_before_override=readiness_before,
-                db=db,
-            )
             db.commit()
-            logger.info("GrowthEvent created for learning '%s' (profile %d)", topic_title, profile_id)
 
         finally:
             db.close()
