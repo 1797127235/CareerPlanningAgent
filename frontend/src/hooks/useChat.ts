@@ -71,6 +71,14 @@ export interface PageContext {
   data?: Record<string, unknown>
 }
 
+/** Unified logout handler for chat layer */
+function chatLogout() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  window.dispatchEvent(new Event('auth-change'))
+  window.location.href = '/login'
+}
+
 export function useChat(onComplete?: () => void): UseChatReturn {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
@@ -131,6 +139,11 @@ export function useChat(onComplete?: () => void): UseChatReturn {
             }),
             signal: controller.signal,
           })
+
+          if (res.status === 401) {
+            chatLogout()
+            return
+          }
 
           if (!res.ok) {
             const err = await res.json().catch(() => ({}))
@@ -212,7 +225,11 @@ export function useChat(onComplete?: () => void): UseChatReturn {
             ...prev,
             { id: genId(), role: 'ai', text: finalText, agent: pendingAgent, card: pendingCard, jdCards: pendingJdCards, marketCards: pendingMarketCards },
           ])
-        } catch {
+        } catch (e) {
+          if (e instanceof Error && e.name === 'AbortError') {
+            // User cancelled — do nothing
+            return
+          }
           /* Backend unavailable - use fallback */
           setMessages((prev) => [
             ...prev,
@@ -249,6 +266,10 @@ export function useChat(onComplete?: () => void): UseChatReturn {
       const res = await fetch(`${API_BASE}/chat/sessions/${id}/messages`, {
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (res.status === 401) {
+        chatLogout()
+        return
+      }
       if (!res.ok) return
       const data = await res.json() as Array<{ role: string; content: string }>
       const msgs: ChatMessage[] = data.map((m, i) => ({

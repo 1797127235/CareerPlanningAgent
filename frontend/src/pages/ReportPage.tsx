@@ -17,7 +17,9 @@ import {
 import {
   fetchReportList, fetchReportDetail, generateReport,
   editReport, polishReport, deleteReport,
+  fetchPlan, updatePlanCheck,
 } from '@/api/report'
+import type { PlanStage } from '@/api/report'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -69,9 +71,12 @@ interface ActionItem {
   skill_name?: string
   priority: 'high' | 'medium'
   done: boolean
+  phase?: number
+  deliverable?: string
 }
 
 interface ActionPlan {
+  stages?: PlanStage[]
   skills: ActionItem[]
   project: ActionItem[]
   job_prep: ActionItem[]
@@ -92,29 +97,44 @@ interface ReportData {
   growth_curve: { date: string; score: number }[]
   action_plan: ActionPlan
   target: { node_id: string; label: string; zone: string }
+  delta?: {
+    prev_score: number
+    score_change: number
+    prev_date: string
+    gained_skills: string[]
+    still_missing: string[]
+    plan_progress: { done: number; total: number } | null
+    next_action: string | null
+  } | null
+  promotion_path?: { level: number; title: string }[]
+  soft_skills?: Record<string, number>
+  positioning?: string
+  positioning_level?: 'junior' | 'mid' | 'senior'
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function ScoreRing({ score }: { score: number }) {
-  const r = 54
+function ScoreRing({ score, size = 136 }: { score: number; size?: number }) {
+  const r = size * 0.4
   const circ = 2 * Math.PI * r
   const offset = circ * (1 - score / 100)
   const color = score >= 75 ? '#16a34a' : score >= 50 ? '#2563eb' : '#f59e0b'
+  const center = size / 2
+  const fontSize = size >= 120 ? 'text-3xl' : 'text-xl'
 
   return (
-    <div className="relative flex items-center justify-center" style={{ width: 136, height: 136 }}>
-      <svg width={136} height={136} className="-rotate-90">
-        <circle cx={68} cy={68} r={r} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={10} />
+    <div className="relative flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <circle cx={center} cy={center} r={r} fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth={size >= 120 ? 10 : 7} />
         <circle
-          cx={68} cy={68} r={r} fill="none"
-          stroke={color} strokeWidth={10} strokeLinecap="round"
+          cx={center} cy={center} r={r} fill="none"
+          stroke={color} strokeWidth={size >= 120 ? 10 : 7} strokeLinecap="round"
           strokeDasharray={circ} strokeDashoffset={offset}
           style={{ transition: 'stroke-dashoffset 1.2s ease' }}
         />
       </svg>
       <div className="absolute flex flex-col items-center">
-        <span className="text-3xl font-bold text-slate-800 tabular-nums">{score}</span>
+        <span className={`${fontSize} font-bold text-slate-800 tabular-nums`}>{score}</span>
         <span className="text-[11px] text-slate-500 font-medium">匹配分</span>
       </div>
     </div>
@@ -174,6 +194,10 @@ const POSITIONING_META = {
   senior: { color: '#16a34a', bg: 'rgba(22,163,74,0.10)',  border: 'rgba(22,163,74,0.30)'  },
 }
 
+const POSITIONING_FALLBACK = {
+  color: '#64748b', bg: 'rgba(100,116,139,0.10)', border: 'rgba(100,116,139,0.30)'
+}
+
 function TierBar({ tier, stats, hasProjectData }: { tier: keyof typeof TIER_META; stats: SkillGapTier; hasProjectData: boolean }) {
   const m = TIER_META[tier]
   const practicedPct = stats.matched > 0 ? Math.round((stats.practiced_count / stats.total) * 100) : 0
@@ -222,7 +246,7 @@ const STATUS_META = {
 }
 
 function SkillGapSection({ gap }: { gap: SkillGap }) {
-  const pm = POSITIONING_META[gap.positioning_level]
+  const pm = POSITIONING_META[gap.positioning_level] || POSITIONING_FALLBACK
   const maxFreq = Math.max(...gap.top_missing.map(s => s.freq), 0.01)
 
   return (
@@ -392,7 +416,6 @@ export default function ReportPage() {
   const queryClient = useQueryClient()
   const [editingNarrative, setEditingNarrative] = useState(false)
   const [narrativeDraft, setNarrativeDraft] = useState('')
-  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set())
   // activeReportId is derived from reports list — no local state needed.
   // Always show the most recent report; generation invalidates the list and picks up the new one.
   const [overrideReportId, setOverrideReportId] = useState<number | null>(null)
@@ -453,6 +476,22 @@ export default function ReportPage() {
     },
   })
 
+  // Fetch staged plan with persistent check state
+  const planQuery = useQuery({
+    queryKey: ['report-plan', activeReportId],
+    queryFn: () => fetchPlan(activeReportId!),
+    enabled: !!activeReportId,
+  })
+
+  // Mutation for toggling plan check items
+  const checkMut = useMutation({
+    mutationFn: ({ itemId, done }: { itemId: string; done: boolean }) =>
+      updatePlanCheck(activeReportId!, itemId, done),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['report-plan', activeReportId] })
+    },
+  })
+
   const isLoading = listLoading || detailLoading
 
   if (isLoading) {
@@ -477,36 +516,67 @@ export default function ReportPage() {
     )
   }
 
-  const data = reportDetail.data as ReportData
+  const rawData = reportDetail.data as Partial<ReportData> | undefined
+  const data: ReportData | null =
+    rawData && typeof rawData.match_score === 'number'
+      ? (rawData as ReportData)
+      : null
+
+  if (!data) {
+    return (
+      <div className="max-w-[900px] mx-auto px-4 py-8 text-center">
+        <p className="text-slate-500 mb-4">报告数据异常，请尝试重新生成</p>
+        <button
+          onClick={() => generateMut.mutate()}
+          className="btn-cta px-4 py-2 text-[14px] font-semibold cursor-pointer"
+        >
+          重新生成报告
+        </button>
+      </div>
+    )
+  }
+
   const narrative = editingNarrative ? narrativeDraft : (data.narrative ?? '')
 
-  const radarData = [
-    { dim: '基础要求', value: data.four_dim?.foundation ?? 0, fullMark: 100 },
-    { dim: '职业技能', value: data.four_dim?.skills ?? 0, fullMark: 100 },
-    { dim: '职业素养', value: data.four_dim?.qualities ?? 0, fullMark: 100 },
-    { dim: '发展潜力', value: data.four_dim?.potential ?? 0, fullMark: 100 },
+  const radarAllDims = [
+    { dim: '基础要求', value: data.four_dim?.foundation, fullMark: 100 },
+    { dim: '职业技能', value: data.four_dim?.skills,     fullMark: 100 },
+    { dim: '职业素养', value: data.four_dim?.qualities,  fullMark: 100 },
+    { dim: '发展潜力', value: data.four_dim?.potential,  fullMark: 100 },
   ]
+  const radarData = radarAllDims.filter(d => d.value !== null && d.value !== undefined) as { dim: string; value: number; fullMark: number }[]
+  const radarMissingDims = radarAllDims.filter(d => d.value === null || d.value === undefined).map(d => d.dim)
 
-  const allActionItems = [
-    ...(data.action_plan?.skills ?? []),
-    ...(data.action_plan?.project ?? []),
-    ...(data.action_plan?.job_prep ?? []),
-  ]
+  // Derive checked set from plan API (persistent) — no local state needed
+  const checkedItems = new Set(
+    Object.entries(planQuery.data?.checked ?? {})
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+  )
+
+  const planStages = planQuery.data?.stages ?? data.action_plan?.stages
+  const allActionItems = planStages
+    ? planStages.flatMap(s => s.items)
+    : [
+        ...(data.action_plan?.skills ?? []),
+        ...(data.action_plan?.project ?? []),
+        ...(data.action_plan?.job_prep ?? []),
+      ]
   const doneCount = allActionItems.filter(a => checkedItems.has(a.id)).length
 
   function toggleCheck(id: string) {
-    setCheckedItems(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    if (checkMut.isPending) return
+    const newDone = !checkedItems.has(id)
+    checkMut.mutate({ itemId: id, done: newDone })
   }
 
   return (
     <div className="relative min-h-screen">
       <style>{`
         @media print {
+          body * { visibility: hidden; }
+          #report-print-area, #report-print-area * { visibility: visible; }
+          #report-print-area { position: absolute; left: 0; top: 0; width: 100%; }
           .no-print { display: none !important; }
           .glass, .glass-static { backdrop-filter: none !important; background: white !important;
             box-shadow: none !important; border: 1px solid #e2e8f0 !important; }
@@ -514,7 +584,7 @@ export default function ReportPage() {
         }
       `}</style>
 
-      <div id="report-content" className="max-w-[900px] mx-auto px-4 py-8">
+      <div id="report-print-area" className="max-w-[900px] mx-auto px-4 py-8">
         <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-6">
 
           {/* ── Title + toolbar ── */}
@@ -525,7 +595,7 @@ export default function ReportPage() {
               <div className="flex items-center gap-1.5">
                 {reports.length > 1 ? (
                   <select
-                    value={activeReportId ?? ''}
+                    value={String(activeReportId ?? '')}
                     onChange={e => setOverrideReportId(Number(e.target.value))}
                     className="text-[12px] text-slate-500 bg-transparent border border-slate-200 rounded-md px-2 py-0.5 cursor-pointer w-fit"
                   >
@@ -534,7 +604,7 @@ export default function ReportPage() {
                       const ts = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
                       const score = r.match_score != null ? ` · ${r.match_score}分` : ''
                       return (
-                        <option key={r.id} value={r.id}>
+                        <option key={r.id} value={String(r.id)}>
                           {i === 0 ? `最新${score} · ${ts}` : `${ts}${score}`}
                         </option>
                       )
@@ -583,14 +653,14 @@ export default function ReportPage() {
                 className="btn-glass flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-medium text-slate-600 cursor-pointer disabled:opacity-60"
               >
                 <RefreshCw size={14} className={generateMut.isPending ? 'animate-spin' : ''} />
-                重新生成
+                {reports && reports.length > 0 ? '更新报告' : '生成报告'}
               </button>
               <button
                 onClick={() => window.print()}
                 className="btn-cta flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold cursor-pointer"
               >
                 <Download size={14} />
-                导出 PDF
+                导出报告
               </button>
             </div>
           </motion.div>
@@ -626,20 +696,31 @@ export default function ReportPage() {
             </div>
           </motion.div>
 
-          {/* ── Hero: score + market + 4D dims ── */}
+          {/* ── Hero: Positioning + score ── */}
           <motion.div variants={fadeUp} className="glass p-6">
-            <div className="g-inner flex flex-col sm:flex-row gap-6 items-start">
-              <div className="flex flex-col items-center gap-3 min-w-[160px]">
-                <ScoreRing score={data.match_score ?? 0} />
-                <div className="flex flex-col items-center gap-1.5">
-                  <span className="text-[15px] font-bold text-slate-800">{data.target?.label}</span>
+            <div className="g-inner flex flex-col gap-6">
+              {/* Hero: Positioning */}
+              <div className="flex items-center gap-6">
+                <div className="flex-1">
+                  <p className="text-[11px] text-slate-400 mb-1">你的市场定位</p>
+                  <h2 className="text-xl font-bold text-slate-800">
+                    {data.positioning || `${data.target?.label}`}
+                  </h2>
+                  <p className="text-[13px] text-slate-500 mt-1">
+                    {data.skill_gap?.core && `核心技能覆盖 ${data.skill_gap.core.pct}%`}
+                    {data.skill_gap?.top_missing && data.skill_gap.top_missing.length > 0 &&
+                      `，补齐 ${data.skill_gap.top_missing.slice(0, 2).map(s => s.name).join('、')} 即可进阶`}
+                  </p>
                   {data.market && (
-                    <TimingBadge timing={data.market.timing} label={data.market.timing_label} />
+                    <div className="mt-2">
+                      <TimingBadge timing={data.market.timing} label={data.market.timing_label} />
+                    </div>
                   )}
                 </div>
+                <ScoreRing score={data.match_score ?? 0} size={100} />
               </div>
 
-              <div className="hidden sm:block w-px self-stretch bg-white/40" />
+              <div className="hidden sm:block h-px w-full bg-white/40" />
 
               <div className="flex-1 space-y-5">
                 {/* Market row — always show all 3 cards */}
@@ -712,6 +793,81 @@ export default function ReportPage() {
             </div>
           </motion.div>
 
+          {/* ── Delta change summary ── */}
+          {data.delta && (
+            <motion.div variants={fadeUp} className="glass p-5">
+              <div className="g-inner">
+                <div className="flex items-center gap-2 mb-4">
+                  <BarChart2 size={15} className="text-slate-500" />
+                  <p className="text-[13px] font-semibold text-slate-700">
+                    本次更新（vs {new Date(data.delta.prev_date).toLocaleDateString('zh-CN')}）
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Progress */}
+                  <div className="rounded-xl p-3" style={{ background: 'rgba(22,163,74,0.06)', border: '1px solid rgba(22,163,74,0.12)' }}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <TrendingUp size={13} className="text-green-600" />
+                      <p className="text-[12px] font-semibold text-green-700">进步</p>
+                    </div>
+                    {data.delta.score_change !== 0 && (
+                      <p className="text-[12px] text-slate-600 mb-1">
+                        匹配度 {data.delta.prev_score} → {data.delta.prev_score + data.delta.score_change}
+                        <span className={`font-semibold ml-1 ${data.delta.score_change > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                          {data.delta.score_change > 0 ? '+' : ''}{data.delta.score_change}
+                        </span>
+                      </p>
+                    )}
+                    {data.delta.gained_skills.length > 0 && (
+                      <p className="text-[12px] text-slate-600 mb-1">新增：{data.delta.gained_skills.join('、')}</p>
+                    )}
+                    {data.delta.plan_progress && (
+                      <p className="text-[12px] text-slate-600">
+                        计划 {data.delta.plan_progress.done}/{data.delta.plan_progress.total} 项完成
+                      </p>
+                    )}
+                    {data.delta.score_change === 0 && data.delta.gained_skills.length === 0 && (
+                      <p className="text-[12px] text-slate-400">暂无新增变化</p>
+                    )}
+                  </div>
+
+                  {/* Gaps */}
+                  <div className="rounded-xl p-3" style={{ background: 'rgba(217,119,6,0.06)', border: '1px solid rgba(217,119,6,0.12)' }}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <AlertCircle size={13} className="text-amber-600" />
+                      <p className="text-[12px] font-semibold text-amber-700">待提升</p>
+                    </div>
+                    {data.delta.still_missing.length > 0 ? (
+                      <ul className="space-y-1.5">
+                        {data.delta.still_missing.map((s, i) => (
+                          <li key={i} className="text-[12px] text-slate-600 leading-relaxed">
+                            {s}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[12px] text-slate-400">核心技能已覆盖</p>
+                    )}
+                  </div>
+
+                  {/* Next action */}
+                  <div className="rounded-xl p-3" style={{ background: 'rgba(37,99,235,0.06)', border: '1px solid rgba(37,99,235,0.12)' }}>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <ArrowUpRight size={13} className="text-blue-600" />
+                      <p className="text-[12px] font-semibold text-blue-700">下一步</p>
+                    </div>
+                    {data.delta.next_action ? (
+                      <p className="text-[12px] text-slate-600 leading-relaxed">{data.delta.next_action}</p>
+                    ) : (
+                      <p className="text-[12px] text-slate-400">查看下方成长计划</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* ── Radar + Growth curve ── */}
           <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div className="glass p-5">
@@ -724,6 +880,7 @@ export default function ReportPage() {
                       dataKey="dim"
                       tick={{ fontSize: 11, fill: '#64748b', fontFamily: 'Plus Jakarta Sans' }}
                     />
+
                     <Radar
                       name="匹配度" dataKey="value"
                       stroke="#2563eb" fill="#2563eb" fillOpacity={0.18} strokeWidth={2}
@@ -734,6 +891,11 @@ export default function ReportPage() {
                     />
                   </RadarChart>
                 </ResponsiveContainer>
+                {radarMissingDims.length > 0 && (
+                  <p className="text-[11px] text-slate-400 mt-2 text-center">
+                    {radarMissingDims.join('、')}暂无数据·完成模拟面试后解锁
+                  </p>
+                )}
               </div>
             </div>
 
@@ -789,8 +951,86 @@ export default function ReportPage() {
             </motion.div>
           )}
 
+          {/* ── Promotion path timeline ── */}
+          {data.promotion_path && data.promotion_path.length > 0 && (
+            <motion.div variants={fadeUp} className="glass p-5">
+              <div className="g-inner">
+                <p className="text-[13px] font-semibold text-slate-700 mb-4">职业发展路径（参考）</p>
+                <div className="flex items-center gap-0 overflow-x-auto pb-2">
+                  {data.promotion_path.map((step, i) => {
+                    const isCurrentLevel = data.positioning_level === 'junior' ? i === 0
+                      : data.positioning_level === 'mid' ? i === 1
+                      : data.positioning_level === 'senior' ? i === 2 : false
+                    const currentIdx = data.positioning_level === 'junior' ? 0 : data.positioning_level === 'mid' ? 1 : 2
+                    return (
+                      <div key={i} className="flex items-center flex-shrink-0">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                            i <= currentIdx
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-slate-100 text-slate-400'
+                          }`}>
+                            {i + 1}
+                          </div>
+                          <span className={`text-[10px] mt-1.5 max-w-[72px] text-center leading-tight ${
+                            isCurrentLevel ? 'text-blue-600 font-semibold' : 'text-slate-500'
+                          }`}>
+                            {step.title}
+                            {isCurrentLevel && <span className="block text-[9px] text-blue-400">← 你在这里</span>}
+                          </span>
+                        </div>
+                        {i < data.promotion_path!.length - 1 && (
+                          <div className={`w-8 h-0.5 mx-1 mt-[-16px] ${
+                            i < currentIdx
+                              ? 'bg-blue-400' : 'bg-slate-200'
+                          }`} />
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* ── Soft skills ── */}
+          {data.soft_skills && Object.keys(data.soft_skills).length > 0 && (
+            <motion.div variants={fadeUp} className="glass p-5">
+              <div className="g-inner">
+                <p className="text-[13px] font-semibold text-slate-700 mb-3">通用素质要求</p>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  {Object.entries(data.soft_skills).map(([key, value]) => {
+                    const labels: Record<string, string> = {
+                      communication: '沟通能力',
+                      learning: '学习能力',
+                      resilience: '抗压能力',
+                      innovation: '创新能力',
+                      collaboration: '协作能力',
+                    }
+                    const level = value as number
+                    return (
+                      <div key={key} className="text-center">
+                        <p className="text-[11px] text-slate-500 mb-1">{labels[key] || key}</p>
+                        <div className="flex justify-center gap-0.5">
+                          {[1, 2, 3, 4, 5].map(i => (
+                            <div key={i} className={`w-2.5 h-2.5 rounded-full ${
+                              i <= level ? 'bg-blue-500' : 'bg-slate-200'
+                            }`} />
+                          ))}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-0.5">
+                          {level <= 2 ? '基础' : level <= 3 ? '重要' : '核心'}
+                        </p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {/* ── Action Plan ── */}
-          {data.action_plan && (
+          {(data.action_plan || planQuery.data) && (
             <motion.div variants={fadeUp} className="glass p-6">
               <div className="g-inner">
                 {/* Header */}
@@ -815,9 +1055,100 @@ export default function ReportPage() {
                   </div>
                 )}
 
-                <div className="space-y-5">
-                  {/* Section renderer */}
-                  {([
+                {/* ── 个性化成长计划 ── */}
+                {(() => {
+                  // Prefer staged format from plan API, fallback to old format from report data
+                  const stages = planQuery.data?.stages ?? data.action_plan?.stages
+
+                  if (stages && stages.length > 0) {
+                    // New staged display
+                    return stages.map((stage) => {
+                      const stageItems = stage.items || []
+                      const stageDone = stageItems.filter(a => checkedItems.has(a.id)).length
+                      const stageTotal = stageItems.length
+                      const stageComplete = stageTotal > 0 && stageDone === stageTotal
+
+                      return (
+                        <div key={stage.stage} className="mb-6">
+                          {/* Stage header */}
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold text-white ${stageComplete ? 'bg-green-500' : 'bg-blue-500'}`}>
+                                {stage.stage}
+                              </span>
+                              <span className="text-[13px] font-semibold text-slate-700">{stage.label}</span>
+                              <span className="text-[11px] text-slate-400">{stage.duration}</span>
+                            </div>
+                            <span className="text-[11px] tabular-nums text-slate-400">
+                              {stageDone}/{stageTotal}
+                            </span>
+                          </div>
+
+                          {/* Stage progress bar */}
+                          <div className="h-1.5 bg-slate-100 rounded-full mb-2 overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-500"
+                              style={{
+                                width: `${stageTotal > 0 ? (stageDone / stageTotal) * 100 : 0}%`,
+                                background: stageComplete ? '#16a34a' : '#2563eb',
+                              }}
+                            />
+                          </div>
+
+                          {/* Milestone */}
+                          <p className="text-[11px] text-slate-400 mb-3 flex items-center gap-1">
+                            <Target size={11} />
+                            阶段目标：{stage.milestone}
+                          </p>
+
+                          {/* Stage complete banner */}
+                          {stageComplete && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-2.5 mb-3 text-[12px] text-green-700 font-medium text-center">
+                              本阶段已完成！
+                            </div>
+                          )}
+
+                          {/* Task items */}
+                          <div className="space-y-2">
+                            {stageItems.map(item => {
+                              const done = checkedItems.has(item.id)
+                              return (
+                                <button key={item.id} onClick={() => toggleCheck(item.id)}
+                                  className="w-full text-left flex items-start gap-3 p-3 rounded-xl transition-all duration-200 cursor-pointer"
+                                  style={{ background: done ? 'rgba(22,163,74,0.06)' : 'rgba(255,255,255,0.5)' }}
+                                >
+                                  <div className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${done ? 'bg-green-500 border-green-500' : 'border-slate-300'}`}>
+                                    {done && <Check size={12} className="text-white" />}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className={`text-[13px] leading-relaxed ${done ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                      {item.text}
+                                    </p>
+                                    <div className="flex items-center gap-2 mt-1.5">
+                                      <span className="chip text-[10px]" style={{
+                                        background: item.priority === 'high' ? 'rgba(239,68,68,0.08)' : 'rgba(37,99,235,0.08)',
+                                        color: item.priority === 'high' ? '#dc2626' : '#2563eb',
+                                      }}>
+                                        {item.tag}
+                                      </span>
+                                      {item.deliverable && (
+                                        <span className="text-[10px] text-slate-400">
+                                          产出物：{item.deliverable}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )
+                    })
+                  }
+
+                  // Fallback to old category-based format
+                  return ([
                     { key: 'skills' as const,   label: '技能补强', icon: <Target size={13} className="text-blue-500" />,    color: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.15)' },
                     { key: 'project' as const,  label: '实战项目', icon: <FolderGit2 size={13} className="text-violet-500" />, color: 'rgba(139,92,246,0.08)', border: 'rgba(139,92,246,0.15)' },
                     { key: 'job_prep' as const, label: '求职准备', icon: <ClipboardList size={13} className="text-emerald-500" />, color: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.15)' },
@@ -870,8 +1201,8 @@ export default function ReportPage() {
                         </div>
                       </div>
                     )
-                  })}
-                </div>
+                  })
+                })()}
               </div>
             </motion.div>
           )}

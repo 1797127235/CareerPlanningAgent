@@ -3,15 +3,17 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import Report, User
+from backend.db_models import ActionPlanV2, ActionProgress, Profile, Report, User
 
 router = APIRouter()
 
@@ -40,6 +42,11 @@ class ReportDetail(BaseModel):
 class EditReportBody(BaseModel):
     narrative_summary: str | None = None
     chapter_narratives: dict[str, str] | None = None
+
+
+class CheckBody(BaseModel):
+    item_id: str
+    done: bool
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -103,14 +110,33 @@ def generate_report(
     narrative = data.get("narrative", "")
     summary_text = narrative[:80] + "…" if len(narrative) > 80 else narrative
 
+    report_key_str = str(uuid.uuid4())
+
     report = Report(
-        report_key=str(uuid.uuid4()),
+        report_key=report_key_str,
         user_id=user.id,
         title=f"{target_label} — 职业发展报告",
         summary=summary_text,
         data_json=json.dumps(data, ensure_ascii=False),
     )
     db.add(report)
+
+    # Write staged action plan to ActionPlanV2
+    action_plan = data.get("action_plan", {})
+    profile_id = data.get("student", {}).get("profile_id")
+    if profile_id:
+        for stage_data in action_plan.get("stages", []):
+            plan_row = ActionPlanV2(
+                profile_id=profile_id,
+                report_key=report_key_str,
+                stage=stage_data["stage"],
+                status="ready",
+                content=stage_data,
+                time_budget={"duration": stage_data["duration"]},
+                generated_at=datetime.now(timezone.utc),
+            )
+            db.add(plan_row)
+
     db.commit()
     db.refresh(report)
 
@@ -225,5 +251,89 @@ def delete_report(
     if not report:
         raise HTTPException(404, "报告不存在")
     db.delete(report)
+    db.commit()
+    return {"ok": True}
+
+
+# ── Plan endpoints ───────────────────────────────────────────────────────────
+
+
+@router.get("/{report_id}/plan")
+def get_plan(
+    report_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get staged action plan for a report."""
+    report = db.query(Report).filter(
+        Report.id == report_id,
+        Report.user_id == user.id,
+    ).first()
+    if not report:
+        raise HTTPException(404, "报告不存在")
+
+    data = _parse_data(report.data_json)
+    profile_id = data.get("student", {}).get("profile_id")
+
+    stages_query = db.query(ActionPlanV2).filter(
+        ActionPlanV2.report_key == report.report_key,
+    )
+    if profile_id:
+        stages_query = stages_query.filter(ActionPlanV2.profile_id == profile_id)
+    stages = stages_query.order_by(ActionPlanV2.stage).all()
+
+    # Also get checked state
+    progress_query = db.query(ActionProgress).filter(
+        ActionProgress.report_key == report.report_key,
+    )
+    if profile_id:
+        progress_query = progress_query.filter(ActionProgress.profile_id == profile_id)
+    progress = progress_query.first()
+    checked = progress.checked if progress else {}
+
+    return {
+        "stages": [
+            s.content if isinstance(s.content, dict) else json.loads(s.content or "{}")
+            for s in stages
+        ],
+        "checked": checked,
+    }
+
+
+@router.patch("/{report_id}/plan/check")
+def update_plan_check(
+    report_id: int,
+    body: CheckBody,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Toggle task check status."""
+    report = db.query(Report).filter(
+        Report.id == report_id,
+        Report.user_id == user.id,
+    ).first()
+    if not report:
+        raise HTTPException(404, "报告不存在")
+
+    data = _parse_data(report.data_json)
+    profile_id = data.get("student", {}).get("profile_id")
+    if not profile_id:
+        raise HTTPException(400, "报告缺少 profile_id")
+
+    progress = db.query(ActionProgress).filter(
+        ActionProgress.profile_id == profile_id,
+        ActionProgress.report_key == report.report_key,
+    ).first()
+    if not progress:
+        progress = ActionProgress(
+            profile_id=profile_id,
+            report_key=report.report_key,
+            checked={},
+        )
+        db.add(progress)
+        db.flush()
+
+    progress.checked[body.item_id] = body.done
+    flag_modified(progress, "checked")
     db.commit()
     return {"ok": True}

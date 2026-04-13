@@ -322,8 +322,8 @@ function buildNextSteps(
   const gapNames = (highPriGaps.length > 0 ? highPriGaps : gaps).slice(0, 3).map(g => g.skill).join('、')
 
   const goCoach = (prompt: string) => {
+    sendToCoach(prompt)
     navigate(-1)
-    setTimeout(() => sendToCoach(prompt), 200)
   }
 
   return [

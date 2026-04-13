@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Paperclip, ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, Mic, MicOff, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { marked } from 'marked'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { useChat } from '@/hooks/useChat'
 import type { ChatMessage, CardData, JdCardData, MarketCardData, PageContext } from '@/hooks/useChat'
 import { API_BASE } from '@/api/client'
@@ -35,16 +36,11 @@ const defaultChips: Chip[] = [
 ]
 
 /* ── Markdown renderer for AI messages ── */
-const markedRenderer = new marked.Renderer()
-marked.setOptions({ breaks: true, gfm: true })
-
 function AIMarkdown({ text }: { text: string }) {
-  const html = marked.parse(text) as string
   return (
-    <div
-      className="prose-ai"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
+    <div className="prose-ai">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+    </div>
   )
 }
 
@@ -177,6 +173,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const userScrolledUpRef = useRef(false)
 
   const inChat = messages.length > 0 || isStreaming
 
@@ -192,16 +189,26 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
     return () => clearInterval(timer)
   }, [])
 
-  /* ── Auto-scroll ── */
+  /* ── Auto-scroll (respect user manual scroll) ── */
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
-    }
+    const el = scrollRef.current
+    if (!el) return
+    if (userScrolledUpRef.current) return
+    el.scrollTop = el.scrollHeight
   }, [messages, currentStreamText])
+
+  const handleScroll = useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60
+    userScrolledUpRef.current = !nearBottom
+  }, [])
 
   /* ── Drag handling ── */
   const onDragStart = useCallback((e: React.MouseEvent) => {
-    const rect = (e.currentTarget.closest('[data-chat-panel]') as HTMLElement).getBoundingClientRect()
+    const el = e.currentTarget.closest('[data-chat-panel]') as HTMLElement | null
+    if (!el) return
+    const rect = el.getBoundingClientRect()
     dragRef.current = { startX: e.clientX, startY: e.clientY, origX: rect.left, origY: rect.top }
     const onMove = (ev: MouseEvent) => {
       if (!dragRef.current) return
@@ -233,6 +240,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
     if (!inputText.trim()) return
     sendMessage(inputText)
     setInputText('')
+    userScrolledUpRef.current = false
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }, [inputText, sendMessage])
 
@@ -354,7 +362,8 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
                         <span className="truncate flex-1">{item.title}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSessionDelete(item.id) }}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-400 hover:text-red-500 transition-all shrink-0"
+                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 p-0.5 rounded text-slate-400 hover:text-red-500 transition-all shrink-0"
+                          aria-label="删除会话"
                         >
                           <Trash2 className="w-3 h-3" />
                         </button>
@@ -388,7 +397,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
       )}
 
       {/* ── Messages ── */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-4 py-4">
         {!inChat ? (
           /* Clean empty state */
           <div className="flex flex-col h-full select-none">
@@ -638,7 +647,7 @@ function MarketCards({ cards }: { cards: MarketCardData[] }) {
             <div
               key={card.family}
               className={`flex-1 min-w-[130px] max-w-[180px] rounded-lg border ${c.border} ${c.bg} p-2.5 ${card.node_id ? 'cursor-pointer hover:shadow-sm' : ''} transition-shadow`}
-              onClick={() => card.node_id && navigate(`/roles/${card.node_id}`)}
+              onClick={() => card.node_id && navigate(`/roles/${encodeURIComponent(card.node_id)}`)}
             >
               <div className="flex items-start justify-between gap-1 mb-2">
                 <span className="font-medium text-xs text-slate-700 leading-tight">{card.family}</span>
@@ -686,9 +695,9 @@ function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose:
         <Search className="w-3 h-3" />
         搜到 {cards.length} 份招聘
       </div>
-      {cards.map((jd, i) => (
+      {cards.map((jd) => (
         <div
-          key={i}
+          key={jd.url}
           className="p-3 rounded-xl bg-white/50 border border-slate-200/60 hover:border-blue-200 transition-all"
         >
           <span className="text-[13px] font-semibold text-slate-800 leading-tight line-clamp-2 block mb-1">
@@ -707,15 +716,15 @@ function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose:
           {/* JD content preview */}
           {jd.requirements && (
             <div className="mb-2">
-              <p className={`text-[11px] text-slate-500 leading-relaxed whitespace-pre-line ${expandedIdx === i ? '' : 'line-clamp-3'}`}>
+              <p className={`text-[11px] text-slate-500 leading-relaxed whitespace-pre-line ${expandedIdx === jd.url ? '' : 'line-clamp-3'}`}>
                 {jd.requirements}
               </p>
               {jd.requirements.length > 100 && (
                 <button
-                  onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
+                  onClick={() => setExpandedIdx(expandedIdx === jd.url ? null : jd.url)}
                   className="text-[11px] text-[var(--blue)] font-medium mt-0.5 cursor-pointer"
                 >
-                  {expandedIdx === i ? '收起' : '展开全部'}
+                  {expandedIdx === jd.url ? '收起' : '展开全部'}
                 </button>
               )}
             </div>
@@ -867,9 +876,10 @@ function PanelBubble({
             className={`ml-auto p-1 rounded transition-all cursor-pointer ${
               isTTSPlaying
                 ? 'text-blue-500 bg-blue-50'
-                : 'text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100'
+                : 'text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
             }`}
             title={isTTSPlaying ? '停止朗读' : '朗读'}
+            aria-label={isTTSPlaying ? '停止朗读' : '朗读'}
           >
             {isTTSPlaying ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>

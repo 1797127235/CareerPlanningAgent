@@ -2,16 +2,20 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from backend.auth import get_current_user
 from backend.db import get_db
 from backend.db_models import (
+    ActionPlanV2,
+    ActionProgress,
     InterviewRecord,
     LearningNote,
     Profile,
@@ -22,6 +26,8 @@ from backend.db_models import (
 from backend.services.growth_log_service import (
     generate_interview_analysis,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -45,6 +51,88 @@ def _get_profile_skills(profile_id: int | None, db: Session) -> list[str]:
         return [s for s in skills if isinstance(s, str)]
     except Exception:
         return []
+
+
+def _auto_complete_plan_tasks(
+    db: Session,
+    user_id: int,
+    project_name: str | None = None,
+    skills: list[str] | None = None,
+    record_type: str = "project",
+) -> None:
+    """Scan active ActionPlanV2 tasks and auto-check matching ones."""
+    try:
+        profile = db.query(Profile).filter(Profile.user_id == user_id).first()
+        if not profile:
+            return
+
+        # Find the latest report_key with ActionPlanV2 data
+        latest_plan = (
+            db.query(ActionPlanV2)
+            .filter(ActionPlanV2.profile_id == profile.id)
+            .order_by(ActionPlanV2.generated_at.desc())
+            .first()
+        )
+        if not latest_plan:
+            return
+
+        report_key = latest_plan.report_key
+        plans = (
+            db.query(ActionPlanV2)
+            .filter(
+                ActionPlanV2.profile_id == profile.id,
+                ActionPlanV2.report_key == report_key,
+            )
+            .all()
+        )
+
+        progress = (
+            db.query(ActionProgress)
+            .filter(
+                ActionProgress.profile_id == profile.id,
+                ActionProgress.report_key == report_key,
+            )
+            .first()
+        )
+        if not progress:
+            progress = ActionProgress(
+                profile_id=profile.id,
+                report_key=report_key,
+                checked={},
+            )
+            db.add(progress)
+            db.flush()
+
+        changed = False
+        for plan in plans:
+            content = plan.content if isinstance(plan.content, dict) else json.loads(plan.content or "{}")
+            for item in content.get("items", []):
+                item_id = item.get("id", "")
+                if progress.checked.get(item_id):
+                    continue  # already done
+
+                # Match by type
+                if record_type == "project" and item.get("type") == "project":
+                    progress.checked[item_id] = True
+                    changed = True
+                elif record_type == "learning" and item.get("type") == "skill" and item.get("sub_type") == "learn":
+                    # Check if skill name matches
+                    skill_name = item.get("skill_name", "").lower()
+                    if skills and any(
+                        s.lower() in skill_name or skill_name in s.lower()
+                        for s in skills
+                    ):
+                        progress.checked[item_id] = True
+                        changed = True
+                elif record_type == "application" and item.get("id", "").startswith("prep_apply"):
+                    progress.checked[item_id] = True
+                    changed = True
+
+        if changed:
+            flag_modified(progress, "checked")
+            db.commit()
+    except Exception as e:
+        logger.warning("_auto_complete_plan_tasks failed: %s", e)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -265,6 +353,12 @@ def create_project(
     db.flush()
     db.commit()
     db.refresh(project)
+
+    # Auto-complete matching action plan tasks
+    _auto_complete_plan_tasks(
+        db, user.id, project_name=req.name, skills=req.skills_used, record_type="project",
+    )
+
     return _serialize_project(project)
 
 
@@ -712,6 +806,15 @@ def create_learning_note(
     db.add(note)
     db.commit()
     db.refresh(note)
+
+    # Auto-complete matching action plan tasks
+    learning_skills = list(req.tags)
+    if req.linked_skill:
+        learning_skills.append(req.linked_skill.strip())
+    _auto_complete_plan_tasks(
+        db, user.id, skills=learning_skills, record_type="learning",
+    )
+
     return _serialize_note(note)
 
 

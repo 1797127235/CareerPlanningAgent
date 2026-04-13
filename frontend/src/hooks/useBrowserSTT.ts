@@ -2,7 +2,7 @@
  * Browser-native STT hook — wraps SpeechRecognition (Chrome).
  * Ref: OpenMAIC lib/hooks/use-browser-asr.ts
  */
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useInsertionEffect } from 'react'
 
 interface UseBrowserSTTReturn {
   start: () => void
@@ -13,17 +13,27 @@ interface UseBrowserSTTReturn {
   supported: boolean
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+function getSpeechRecognition() {
+  if (typeof window === 'undefined') return null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition || null
+}
 
 export function useBrowserSTT(onFinal?: (text: string) => void): UseBrowserSTTReturn {
   const [listening, setListening] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [interimTranscript, setInterimTranscript] = useState('')
-  const supported = !!SpeechRecognition
-  const recRef = useRef<InstanceType<typeof SpeechRecognition> | null>(null)
+  const [supported, setSupported] = useState(false)
+  const recRef = useRef<InstanceType<ReturnType<typeof getSpeechRecognition>> | null>(null)
   const onFinalRef = useRef(onFinal)
-  onFinalRef.current = onFinal
+
+  useInsertionEffect(() => {
+    onFinalRef.current = onFinal
+  }, [onFinal])
+
+  useEffect(() => {
+    setSupported(!!getSpeechRecognition())
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -35,13 +45,14 @@ export function useBrowserSTT(onFinal?: (text: string) => void): UseBrowserSTTRe
   }, [])
 
   const start = useCallback(() => {
-    if (!supported) return
+    const SR = getSpeechRecognition()
+    if (!SR) return
     // Stop any existing recognition
     if (recRef.current) {
       try { recRef.current.stop() } catch { /* ignore */ }
     }
 
-    const rec = new SpeechRecognition()
+    const rec = new SR()
     rec.lang = 'zh-CN'
     rec.continuous = false       // Single utterance
     rec.interimResults = true    // Show partial results
@@ -81,14 +92,16 @@ export function useBrowserSTT(onFinal?: (text: string) => void): UseBrowserSTTRe
       }
     }
 
-    rec.onerror = () => {
+    rec.onerror = (event: { error: string }) => {
       setListening(false)
       setInterimTranscript('')
+      // eslint-disable-next-line no-console
+      console.warn('SpeechRecognition error:', event.error)
     }
 
     recRef.current = rec
     rec.start()
-  }, [supported])
+  }, [])
 
   const stop = useCallback(() => {
     if (recRef.current) {

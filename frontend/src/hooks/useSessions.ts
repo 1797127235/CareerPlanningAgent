@@ -60,13 +60,18 @@ export function useSessions() {
     const token = localStorage.getItem('token')
     if (!token) return
     try {
-      await fetch(`${API_BASE}/chat/sessions/${id}`, {
+      const res = await fetch(`${API_BASE}/chat/sessions/${id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error((err as { detail?: string }).detail || `删除失败 (${res.status})`)
+      }
       setSessions((prev) => prev.filter((s) => s.id !== id))
-    } catch {
-      /* silently fail */
+    } catch (e) {
+      /* rethrow so caller can show error if needed */
+      throw e
     }
   }, [])
 

@@ -360,6 +360,49 @@ def _hydrate_state(user: User, db: Session) -> dict:
         logger.exception("Failed to load growth context")
         state["growth_context"] = None
 
+    # 7. Action plan context — current stage tasks from ActionPlanV2
+    state["action_plan_context"] = None
+    if profile:
+        try:
+            from backend.db_models import ActionPlanV2, ActionProgress
+            latest_plan = (
+                db.query(ActionPlanV2)
+                .filter(ActionPlanV2.profile_id == profile.id)
+                .order_by(ActionPlanV2.generated_at.desc())
+                .first()
+            )
+            if latest_plan:
+                report_key = latest_plan.report_key
+                stages = (
+                    db.query(ActionPlanV2)
+                    .filter(ActionPlanV2.profile_id == profile.id, ActionPlanV2.report_key == report_key)
+                    .order_by(ActionPlanV2.stage)
+                    .all()
+                )
+                progress = (
+                    db.query(ActionProgress)
+                    .filter(ActionProgress.profile_id == profile.id, ActionProgress.report_key == report_key)
+                    .first()
+                )
+                checked = progress.checked if progress else {}
+                plan_stages = []
+                for s in stages:
+                    content = s.content if isinstance(s.content, dict) else json.loads(s.content or "{}")
+                    items = content.get("items", [])
+                    total = len(items)
+                    done = sum(1 for it in items if checked.get(it.get("id", "")))
+                    pending = [it.get("text", "")[:40] for it in items if not checked.get(it.get("id", ""))]
+                    plan_stages.append({
+                        "stage": content.get("stage", s.stage),
+                        "label": content.get("label", ""),
+                        "total": total,
+                        "done": done,
+                        "pending_preview": pending[:2],
+                    })
+                state["action_plan_context"] = {"stages": plan_stages}
+        except Exception:
+            logger.debug("Failed to load action plan context", exc_info=True)
+
     return state
 
 
@@ -1157,12 +1200,11 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                 yield f"data: {json.dumps(card_data, ensure_ascii=False)}\n\n"
         except Exception:
             logger.exception("Failed to emit CoachResult card")
-    elif full_response and agent_source in ("report_agent",) and len(full_response) > 300:
-        # Only auto-save CoachResult for report agent (JD uses structured save via tool)
+    elif full_response and agent_source in ("growth_agent", "navigator", "profile_agent") and len(full_response) > 300:
+        # Auto-save CoachResult for agents with substantial responses
         try:
             result_type_map = {
                 "jd_agent": "jd_diagnosis",
-                "report_agent": "career_report",
                 "growth_agent": "growth_analysis",
                 "navigator": "career_exploration",
                 "profile_agent": "profile_analysis",

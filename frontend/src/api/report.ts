@@ -80,3 +80,47 @@ export async function editReport(
 export async function polishReport(reportId: number): Promise<{ ok: boolean; polished: Record<string, string> }> {
   return rawFetch(`/report/${reportId}/polish`, { method: 'POST' })
 }
+
+// ── Plan (staged action plan with persistent checks) ─────────────────────────
+
+export interface PlanActionItem {
+  id: string
+  type: 'skill' | 'project' | 'job_prep'
+  sub_type?: 'validate' | 'learn'
+  text: string
+  tag: string
+  skill_name?: string
+  priority: 'high' | 'medium'
+  done: boolean
+  phase?: number
+  deliverable?: string
+}
+
+export interface PlanStage {
+  stage: number
+  label: string
+  duration: string
+  milestone: string
+  items: PlanActionItem[]
+}
+
+export interface PlanData {
+  stages: PlanStage[]
+  checked: Record<string, boolean>
+}
+
+export async function fetchPlan(reportId: number): Promise<PlanData> {
+  return rawFetch<PlanData>(`/report/${reportId}/plan`)
+}
+
+export async function updatePlanCheck(
+  reportId: number,
+  itemId: string,
+  done: boolean,
+): Promise<{ ok: boolean }> {
+  return rawFetch(`/report/${reportId}/plan/check`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ item_id: itemId, done }),
+  })
+}

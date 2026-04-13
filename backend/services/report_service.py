@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import json
 import logging
-import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -84,6 +83,16 @@ def _load_static() -> None:
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _parse_data(data_json: str) -> dict:
+    """Parse a report's data_json field into a dict."""
+    try:
+        if isinstance(data_json, dict):
+            return data_json
+        return json.loads(data_json or "{}")
+    except Exception:
+        return {}
+
 
 def _parse_profile(profile_json: str) -> dict:
     try:
@@ -514,9 +523,59 @@ def _skill_action(skill: str, proj: str | None = None) -> str:
             elif "{proj}" in v:
                 return v.replace("{proj}", "现有项目")
             return v
+    # Not in hardcoded dict — caller should use _generate_skill_actions_llm batch instead.
     if proj:
         return f"结合『{proj}』，深入学习 {skill}，完成一个可量化效果的实验并录入成长档案"
     return f"针对 {skill} 选一个最核心的子方向，完成一个能量化效果的小型项目并录入成长档案"
+
+
+def _has_hardcoded_guidance(skill: str) -> bool:
+    """Return True if _SKILL_GUIDANCE has an entry for this skill."""
+    key = skill.lower()
+    return any(k in key for k in _SKILL_GUIDANCE)
+
+
+def _generate_skill_actions_llm(
+    skills: list[str],
+    node_label: str,
+    proj_names: list[str],
+) -> dict[str, str]:
+    """
+    Single LLM call to generate personalized action text for skills not in _SKILL_GUIDANCE.
+    Returns dict: skill → action text (20–60 chars, imperative, references projects when possible).
+    Falls back to empty dict on any error (caller uses _skill_action fallback).
+    """
+    if not skills:
+        return {}
+    try:
+        from backend.llm import get_llm_client, get_model
+        proj_ctx = "、".join(f"『{p}』" for p in proj_names[:3]) if proj_names else "（暂无项目）"
+        skills_list = "\n".join(f"- {s}" for s in skills)
+        prompt = f"""你是职业规划顾问，为一名 {node_label} 方向的学生生成技能成长建议。
+学生现有项目：{proj_ctx}
+
+请为以下每个技能生成一条具体行动建议（20-60字，祈使句，尽量结合现有项目，强调可量化结果）：
+{skills_list}
+
+输出 JSON 对象，key 为技能名，value 为建议文本。只输出 JSON，不要解释。"""
+
+        resp = get_llm_client(timeout=15).chat.completions.create(
+            model=get_model("fast"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=600,
+        )
+        raw = resp.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+        if isinstance(result, dict):
+            return {k: str(v) for k, v in result.items() if v}
+    except Exception as e:
+        logger.warning("_generate_skill_actions_llm failed: %s", e)
+    return {}
 
 
 def _cosine_sim(a: list[float], b: list[float]) -> float:
@@ -688,7 +747,19 @@ def _build_action_plan(
     skill_pool.sort(key=lambda x: (tier_order.get(x["tier"], 1), -x["freq"]))
 
     remaining_slots = max(0, 3 - len(skill_tasks))
-    for i, s in enumerate(skill_pool[:remaining_slots]):
+    candidate_pool = skill_pool[:remaining_slots]
+
+    # Pre-generate LLM guidance for skills not in hardcoded dict (single batch call)
+    llm_uncovered = [
+        s["name"] for s in candidate_pool
+        if not _find_related_project(s["name"])[1] in ("recorded", "inferred")
+        and not _has_hardcoded_guidance(s["name"])
+    ]
+    llm_guidance: dict[str, str] = _generate_skill_actions_llm(
+        llm_uncovered, node_label, any_proj_names
+    ) if llm_uncovered else {}
+
+    for i, s in enumerate(candidate_pool):
         name = s["name"]
         freq_pct = int(s["freq"] * 100) if s["freq"] else 0
         freq_tag = f"JD 出现率 {freq_pct}%" if freq_pct > 0 else "目标岗位所需"
@@ -709,11 +780,13 @@ def _build_action_plan(
             })
         else:
             proj_ctx = any_proj_names[0] if any_proj_names else None
+            # Use LLM-generated text if available, otherwise hardcoded dict / fallback
+            action_text = llm_guidance.get(name) or _skill_action(name, proj=proj_ctx)
             skill_tasks.append({
                 "id": f"skill_{name[:10].replace(' ', '_')}",
                 "type": "skill",
                 "sub_type": "learn",
-                "text": _skill_action(name, proj=proj_ctx),
+                "text": action_text,
                 "tag": freq_tag,
                 "skill_name": name,
                 "priority": priority,
@@ -801,7 +874,100 @@ def _build_action_plan(
         "done": False,
     })
 
+    # ── Assign phase and deliverable to each task, then group into stages ────
+
+    all_tasks = skill_tasks + project_tasks + job_prep_tasks
+
+    app_count = len(applications or [])
+
+    # Assign phase + deliverable to each task
+    for t in all_tasks:
+        tid = t.get("id", "")
+        ttype = t.get("type", "")
+        sub = t.get("sub_type", "")
+
+        # Deliverable
+        if sub == "validate":
+            t["deliverable"] = "更新后的简历技能栏截图"
+        elif sub == "learn":
+            t["deliverable"] = "学习笔记录入成长档案"
+        elif ttype == "project":
+            t["deliverable"] = "GitHub 仓库链接 + README"
+        elif tid == "prep_resume":
+            t["deliverable"] = "更新后的简历 PDF"
+        elif tid.startswith("prep_apply"):
+            t["deliverable"] = "投递记录（成长档案中可查）"
+
+        # Phase assignment
+        if sub == "validate" or tid == "prep_resume":
+            t["phase"] = 1
+        elif tid.startswith("prep_apply") and app_count == 0:
+            t["phase"] = 1
+        elif sub == "learn":
+            t["phase"] = 2
+        elif ttype == "project":
+            t["phase"] = 3
+        elif tid.startswith("prep_apply") and app_count > 0:
+            t["phase"] = 3
+        else:
+            # Fallback: job_prep tasks without specific rule go to stage 1
+            t["phase"] = 1
+
+    # Group into stages
+    stage_items: dict[int, list[dict]] = {1: [], 2: [], 3: []}
+    for t in all_tasks:
+        stage_items[t["phase"]].append(t)
+
+    # Build milestone text referencing user projects when available
+    proj_name_ref = (
+        completed_proj_names[0] if completed_proj_names
+        else any_proj_names[0] if any_proj_names
+        else None
+    )
+
+    if proj_name_ref:
+        milestone_1 = f"『{proj_name_ref}』README 补全 + 简历更新"
+    else:
+        milestone_1 = "简历更新完成，已有项目补全 README"
+
+    missing_skill_names = [s["name"] for s in skill_pool[:2]]
+    if missing_skill_names:
+        milestone_2 = f"补齐 {'、'.join(missing_skill_names)} 等核心技能缺口，有可量化学习产出"
+    else:
+        milestone_2 = "填补核心技能缺口，有可量化学习产出"
+
+    if proj_name_ref:
+        milestone_3 = f"『{proj_name_ref}』推上 GitHub，投递 10 家以上"
+    else:
+        milestone_3 = "项目推上 GitHub，投递 10 家以上"
+
+    stages = [
+        {
+            "stage": 1,
+            "label": "立即整理",
+            "duration": "0-2周",
+            "milestone": milestone_1,
+            "items": stage_items[1],
+        },
+        {
+            "stage": 2,
+            "label": "技能补强",
+            "duration": "2-6周",
+            "milestone": milestone_2,
+            "items": stage_items[2],
+        },
+        {
+            "stage": 3,
+            "label": "项目冲刺+求职",
+            "duration": "6-12周",
+            "milestone": milestone_3,
+            "items": stage_items[3],
+        },
+    ]
+
     return {
+        "stages": stages,
+        # Keep old format for backward compatibility
         "skills":   skill_tasks,
         "project":  project_tasks,
         "job_prep": job_prep_tasks,
@@ -934,6 +1100,157 @@ def _generate_narrative(
             f"{'核心差距技能：' + '、'.join(gap_skills[:3]) + '。' if gap_skills else ''}"
             f"建议聚焦提升技术深度，保持当前成长势头，持续积累实战项目经验。"
         )
+
+
+# ── Profile diagnosis (档案体检) ─────────────────────────────────────────────
+
+import re as _re_diag
+
+_HOLLOW_PATTERNS = [
+    {
+        "id": "no_numbers",
+        "detect": lambda text: not _re_diag.search(r'\d', text),
+        "label": "缺少量化数据",
+    },
+    {
+        "id": "no_result",
+        "detect": lambda text: not any(w in text for w in [
+            '提升', '降低', '优化', '减少', '增加', '支撑', '处理',
+            '完成', 'QPS', 'TPS', '延迟', '吞吐', '并发', '覆盖率',
+            'improve', 'reduce', 'increase', 'optimize',
+        ]),
+        "label": "缺少成果描述",
+    },
+    {
+        "id": "too_short",
+        "detect": lambda text: len(text.strip()) < 30,
+        "label": "描述过于简短",
+    },
+    {
+        "id": "vague_participation",
+        "detect": lambda text: '参与' in text and '负责' not in text and '实现' not in text and '开发' not in text,
+        "label": "只说参与未说明职责",
+    },
+]
+
+
+def _diagnose_profile(
+    profile_data: dict,
+    projects: list,
+    node_label: str,
+) -> list[dict]:
+    """
+    Scan profile projects/experience for hollow statements.
+    Returns list of diagnosis items, each with:
+      - source: project name or "简历"
+      - status: "pass" | "needs_improvement"
+      - highlight: what's good (亮点)
+      - issues: list of detected problems
+      - suggestion: specific text to add (from LLM)
+    """
+    # Collect all describable items: resume projects + growth log projects
+    items_to_check: list[dict] = []
+
+    # Resume-extracted projects
+    raw_projects = profile_data.get("projects", [])
+    for p in raw_projects:
+        if isinstance(p, str) and p.strip():
+            items_to_check.append({"name": p[:20], "text": p, "source": "resume"})
+        elif isinstance(p, dict):
+            name = p.get("name", "")
+            desc = p.get("description", "") or name
+            if desc:
+                items_to_check.append({"name": name or desc[:20], "text": desc, "source": "resume"})
+
+    # Growth log projects
+    for p in (projects or []):
+        desc = getattr(p, "description", "") or ""
+        name = getattr(p, "name", "") or ""
+        text = desc if desc else name
+        if text and not any(i["text"] == text for i in items_to_check):
+            items_to_check.append({"name": name or text[:20], "text": text, "source": "growth_log"})
+
+    if not items_to_check:
+        return []
+
+    # Step 1: Rule-based detection
+    needs_fix: list[dict] = []
+    passed: list[dict] = []
+
+    for item in items_to_check:
+        text = item["text"]
+        issues = [p["label"] for p in _HOLLOW_PATTERNS if p["detect"](text)]
+        if issues:
+            needs_fix.append({**item, "issues": issues})
+        else:
+            passed.append(item)
+
+    # Step 2: LLM generates specific suggestions for items with issues
+    suggestions: dict[str, dict] = {}  # name -> {highlight, suggestion}
+    if needs_fix:
+        try:
+            from backend.llm import get_llm_client, get_model
+
+            items_text = "\n".join(
+                f"- 项目「{it['name']}」: {it['text'][:100]}\n  问题: {', '.join(it['issues'])}"
+                for it in needs_fix
+            )
+
+            prompt = f"""你是简历优化专家。学生目标岗位是「{node_label}」。
+
+以下项目/经历存在描述问题，请为每个项目输出：
+1. highlight: 一句话总结亮点（肯定学生做了什么）
+2. suggestion: 具体建议补充的文字（包含具体数字占位符如 XX，让学生填入真实数据）
+
+{items_text}
+
+输出 JSON 数组，每项包含 name、highlight、suggestion。只输出 JSON。"""
+
+            resp = get_llm_client(timeout=20).chat.completions.create(
+                model=get_model("fast"),
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3,
+                max_tokens=800,
+            )
+            raw = resp.choices[0].message.content.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            parsed = json.loads(raw.strip())
+            if isinstance(parsed, list):
+                for item in parsed:
+                    if isinstance(item, dict) and item.get("name"):
+                        suggestions[item["name"]] = {
+                            "highlight": item.get("highlight", ""),
+                            "suggestion": item.get("suggestion", ""),
+                        }
+        except Exception as e:
+            logger.warning("Profile diagnosis LLM failed: %s", e)
+
+    # Step 3: Assemble results
+    results: list[dict] = []
+
+    for item in needs_fix:
+        s = suggestions.get(item["name"], {})
+        results.append({
+            "source": item["name"],
+            "status": "needs_improvement",
+            "highlight": s.get("highlight", ""),
+            "issues": item["issues"],
+            "suggestion": s.get("suggestion", ""),
+        })
+
+    for item in passed:
+        results.append({
+            "source": item["name"],
+            "status": "pass",
+            "highlight": "",
+            "issues": [],
+            "suggestion": "",
+        })
+
+    return results
 
 
 # ── Main report generator ─────────────────────────────────────────────────────
@@ -1245,6 +1562,106 @@ def generate_report(user_id: int, db) -> dict:
         applications=applications,
     )
 
+    # 10b. Profile diagnosis (档案体检 — content completeness check)
+    diagnosis = _diagnose_profile(
+        profile_data=profile_data,
+        projects=projects,
+        node_label=goal.target_label,
+    )
+
+    # 11. Delta vs previous report
+    delta = None
+    from backend.db_models import Report
+    prev_report = (
+        db.query(Report)
+        .filter(Report.user_id == user_id)
+        .order_by(Report.created_at.desc())
+        .first()
+    )
+    if prev_report:
+        prev_data = _parse_data(prev_report.data_json)
+        prev_score = prev_data.get("match_score", 0)
+        prev_skills_matched = set()
+        for m in (prev_data.get("skill_gap", {}).get("matched_skills", [])):
+            prev_skills_matched.add(m.get("name", "").lower())
+
+        new_skills_matched = set()
+        for m in (skill_gap.get("matched_skills", [])):
+            new_skills_matched.add(m.get("name", "").lower())
+
+        gained_skills = [s for s in new_skills_matched if s not in prev_skills_matched and s]
+
+        # Plan progress from ActionPlanV2
+        plan_progress = None
+        try:
+            from backend.db_models import ActionPlanV2, ActionProgress
+            latest_plan = (
+                db.query(ActionPlanV2)
+                .filter(ActionPlanV2.profile_id == profile.id)
+                .order_by(ActionPlanV2.generated_at.desc())
+                .first()
+            )
+            if latest_plan:
+                all_plans = db.query(ActionPlanV2).filter(
+                    ActionPlanV2.profile_id == profile.id,
+                    ActionPlanV2.report_key == latest_plan.report_key,
+                ).all()
+                progress = db.query(ActionProgress).filter(
+                    ActionProgress.profile_id == profile.id,
+                    ActionProgress.report_key == latest_plan.report_key,
+                ).first()
+                checked = progress.checked if progress else {}
+                total_items = 0
+                done_items = 0
+                for p in all_plans:
+                    content = p.content if isinstance(p.content, dict) else json.loads(p.content or "{}")
+                    items = content.get("items", [])
+                    total_items += len(items)
+                    done_items += sum(1 for it in items if checked.get(it.get("id", "")))
+                plan_progress = {"done": done_items, "total": total_items}
+        except Exception:
+            pass
+
+        # First pending SKILL/PROJECT task (prefer actionable over prep tasks)
+        next_action = None
+        _fallback_action = None
+        stages = action_plan.get("stages", [])
+        for stg in stages:
+            for item in stg.get("items", []):
+                if item.get("done", False):
+                    continue
+                if item.get("type") in ("skill", "project"):
+                    next_action = item.get("text", "")
+                    break
+                elif not _fallback_action:
+                    _fallback_action = item.get("text", "")
+            if next_action:
+                break
+        if not next_action:
+            next_action = _fallback_action
+
+        # Pending improvement items: pull concrete task text, not abstract skill names
+        pending_improvements: list[str] = []
+        for stg in stages:
+            for item in stg.get("items", []):
+                if item.get("done", False):
+                    continue
+                if item.get("type") in ("skill", "project") and len(pending_improvements) < 3:
+                    pending_improvements.append(item.get("text", ""))
+        # Fallback: if no skill/project tasks, use skill names
+        if not pending_improvements:
+            pending_improvements = [s["name"] for s in skill_gap.get("top_missing", [])[:3]]
+
+        delta = {
+            "prev_score": prev_score,
+            "score_change": match_score - prev_score,
+            "prev_date": prev_report.created_at.isoformat() if prev_report.created_at else "",
+            "gained_skills": gained_skills[:5],
+            "still_missing": pending_improvements,
+            "plan_progress": plan_progress,
+            "next_action": next_action,
+        }
+
     # 12. Assemble report payload
     report_data = {
         "version": "1.0",
@@ -1261,6 +1678,7 @@ def generate_report(user_id: int, db) -> dict:
         "match_score": match_score,
         "four_dim": four_dim,
         "narrative": narrative,
+        "diagnosis": diagnosis,
         "market": {
             "demand_change_pct": market_info.get("demand_change_pct", 0) if market_info else None,
             "salary_cagr": market_info.get("salary_cagr", 0) if market_info else None,
@@ -1271,6 +1689,11 @@ def generate_report(user_id: int, db) -> dict:
         "skill_gap": skill_gap,
         "growth_curve": growth_curve,
         "action_plan": action_plan,
+        "delta": delta,
+        "promotion_path": node.get("promotion_path", []),
+        "soft_skills": node.get("soft_skills", {}),
+        "positioning": skill_gap.get("positioning", "") if skill_gap else "",
+        "positioning_level": skill_gap.get("positioning_level", "junior") if skill_gap else "junior",
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

@@ -39,24 +39,24 @@ export function useDeleteReportMutation() {
   })
 }
 
-export function useEditReportMutation(reportId: number) {
+export function useEditReportMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: (edits: { narrative_summary?: string; chapter_narratives?: Record<string, string> }) =>
+    mutationFn: ({ reportId, edits }: { reportId: number; edits: { narrative_summary?: string; chapter_narratives?: Record<string, string> } }) =>
       editReport(reportId, edits),
-    onSuccess: () => {
+    onSuccess: (_, { reportId }) => {
       queryClient.invalidateQueries({ queryKey: ['report-detail', reportId] })
     },
   })
 }
 
-export function usePolishReportMutation(reportId: number) {
+export function usePolishReportMutation() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: () => polishReport(reportId),
-    onSuccess: () => {
+    mutationFn: (reportId: number) => polishReport(reportId),
+    onSuccess: (_, reportId) => {
       queryClient.invalidateQueries({ queryKey: ['report-detail', reportId] })
     },
   })

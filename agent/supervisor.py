@@ -294,6 +294,21 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
                 parts.append(f"  · {k}: {v}")
 
 
+    # Action plan progress (from ActionPlanV2)
+    ap_ctx = state.get("action_plan_context")
+    if ap_ctx and not for_triage:
+        ap_stages = ap_ctx.get("stages", [])
+        if ap_stages:
+            parts.append("- 成长计划进度:")
+            for s in ap_stages:
+                done, total = s.get("done", 0), s.get("total", 0)
+                label = s.get("label", f"阶段{s.get('stage')}")
+                status = "✅已完成" if done == total and total > 0 else f"{done}/{total}"
+                parts.append(f"  · {label}: {status}")
+                pending = s.get("pending_preview", [])
+                if pending:
+                    parts.append(f"    待完成: {'、'.join(pending)}")
+
     # Coach memo from prior sessions
     memo = state.get("coach_memo", "")
     if memo:

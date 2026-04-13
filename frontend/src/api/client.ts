@@ -1,9 +1,19 @@
 export const API_BASE = '/api'
 
+let _isRedirecting = false
+
 /** Clear auth state and redirect to login page */
 function handleUnauthorized(): never {
+  if (_isRedirecting) {
+    // Prevent race condition: if already redirecting, just stall
+    while (true) {
+      /* busy-wait until navigation completes */
+    }
+  }
+  _isRedirecting = true
   localStorage.removeItem('token')
   localStorage.removeItem('user')
+  window.dispatchEvent(new Event('auth-change'))
   window.location.href = '/login'
   throw new Error('Unauthorized')
 }
@@ -29,7 +39,7 @@ export async function rawFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   // 204 No Content — no body to parse
-  if (res.status === 204) return undefined as T
+  if (res.status === 204) return undefined as unknown as T
 
   return res.json() as Promise<T>
 }
@@ -45,22 +55,10 @@ export async function apiUpload<T = unknown>(
   path: string,
   file: File,
 ): Promise<{ success: boolean; data?: T; message?: string }> {
-  const token = localStorage.getItem('token')
   const form = new FormData()
   form.append('file', file)
-
-  const res = await fetch(`${API_BASE}${path}`, {
+  return rawFetch<{ success: boolean; data?: T; message?: string }>(path, {
     method: 'POST',
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: form,
   })
-
-  if (res.status === 401) handleUnauthorized()
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error((err as { detail?: string }).detail || `上传失败 (${res.status})`)
-  }
-
-  return res.json()
 }

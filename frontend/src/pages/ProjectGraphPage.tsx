@@ -30,6 +30,7 @@ const COLORS = ['#7C3AED', '#2563EB', '#0891B2', '#16A34A', '#EA580C', '#DB2777'
 
 function fmtDate(iso: string) {
   const d = new Date(iso)
+  if (isNaN(d.getTime())) return '--'
   const yyyy = d.getFullYear()
   const mm = d.getMonth() + 1
   const dd = d.getDate()
@@ -137,6 +138,9 @@ function AddForm({ projectId, onClose }: { projectId: number; onClose: () => voi
       qc.invalidateQueries({ queryKey: ['project-logs', projectId] })
       onClose()
     },
+    onError: () => {
+      alert('保存失败，请重试')
+    },
   })
 
   const inputCls = "w-full px-3.5 py-2.5 text-[13px] rounded-xl outline-none bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white transition-colors"
@@ -205,7 +209,7 @@ export default function ProjectGraphPage() {
   const { data: logsData, isLoading } = useQuery({
     queryKey: ['project-logs', projectId],
     queryFn: () => listProjectLogs(projectId),
-    enabled: !!projectId,
+    enabled: Number.isFinite(projectId),
     staleTime: 0,
   })
   const logs: LogEntry[] = (logsData?.logs ?? []) as LogEntry[]
@@ -221,6 +225,17 @@ export default function ProjectGraphPage() {
       await deleteProjectLog(projectId, id)
       qc.invalidateQueries({ queryKey: ['project-logs', projectId] })
     } finally { setDeleting(null) }
+  }
+
+  if (!Number.isFinite(projectId)) {
+    return (
+      <div className="max-w-[760px] mx-auto px-4 py-6 md:px-8 text-center">
+        <p className="text-slate-500 mb-4">无效的项目 ID</p>
+        <button onClick={() => navigate('/growth-log')} className="text-[var(--blue)] font-medium cursor-pointer">
+          返回成长档案
+        </button>
+      </div>
+    )
   }
 
   return (

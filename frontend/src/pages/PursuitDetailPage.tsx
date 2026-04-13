@@ -64,12 +64,14 @@ const COLORS = ['#2563EB', '#7C3AED', '#0891B2', '#EA580C', '#16A34A', '#D97706'
 
 function fmtDate(iso: string) {
   const d = new Date(iso)
+  if (isNaN(d.getTime())) return '--'
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
 function fmtDay(dateStr: string) {
   // interview_at is YYYY-MM-DD; show as YYYY/M/D
   const [y, m, d] = dateStr.split('-')
+  if (!y || !m || !d) return '--'
   return `${y}/${Number(m)}/${Number(d)}`
 }
 
@@ -496,7 +498,7 @@ function ReflectionSection({ appId, initial, rounds }: {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
   const handleAI = () => {
-    const roundSummary = rounds.map((r, i) => {
+    const roundSummary = rounds.slice(0, 3).map((r, i) => {
       const pairs = parseQA(r.content_summary)
       const qa = pairs.filter(p => p.q).map((p, j) =>
         `  Q${j + 1}: ${p.q}${p.a && p.a !== '(未填写)' ? `\n  A${j + 1}: ${p.a}` : ''}`
@@ -570,7 +572,7 @@ export default function PursuitDetailPage() {
   const { data: ivData, isLoading } = useQuery({
     queryKey: ['pursuit-rounds', appId],
     queryFn: listInterviews,
-    enabled: !!appId,
+    enabled: Number.isFinite(appId),
     staleTime: 0,
   })
   const rounds = (ivData?.interviews ?? [])
@@ -590,6 +592,17 @@ export default function PursuitDetailPage() {
     await deleteApplication(appId)
     qc.invalidateQueries({ queryKey: ['pursuits-apps'] })
     navigate('/growth-log')
+  }
+
+  if (!Number.isFinite(appId)) {
+    return (
+      <div className="max-w-[720px] mx-auto px-4 py-6 md:px-8 text-center">
+        <p className="text-slate-500 mb-4">无效的投递 ID</p>
+        <button onClick={() => navigate('/growth-log')} className="text-[var(--blue)] font-medium cursor-pointer">
+          返回成长档案
+        </button>
+      </div>
+    )
   }
 
   if (!app) return null

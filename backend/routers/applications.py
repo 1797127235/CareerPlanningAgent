@@ -212,6 +212,14 @@ def create_application(
     db.add(app)
     db.commit()
     db.refresh(app)
+
+    # Auto-complete matching action plan tasks
+    try:
+        from backend.routers.growth_log import _auto_complete_plan_tasks
+        _auto_complete_plan_tasks(db, user.id, record_type="application")
+    except Exception:
+        pass  # non-critical
+
     return _app_to_dict(app, None, _get_jd_title(db, app.jd_diagnosis_id))
 
 

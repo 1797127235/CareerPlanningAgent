@@ -192,16 +192,24 @@ export default function RoleDetailPage() {
 
   const [data, setData] = useState<RoleDetail | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [showGoalConfirm, setShowGoalConfirm] = useState(false)
 
   useEffect(() => {
-    if (!roleId) return
+    if (!roleId) {
+      setLoading(false)
+      setError('岗位ID不能为空')
+      return
+    }
     setLoading(true)
-    rawFetch<RoleDetail>(`/graph/node/${roleId}`)
-      .then(setData)
-      .catch(console.error)
-      .finally(() => setLoading(false))
+    setError(null)
+    let cancelled = false
+    rawFetch<RoleDetail>(`/graph/node/${encodeURIComponent(roleId)}`)
+      .then((d) => { if (!cancelled) setData(d) })
+      .catch((e) => { if (!cancelled) setError(e instanceof Error ? e.message : '加载失败') })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [roleId])
 
   const hasRealProfile = !!(
@@ -253,10 +261,10 @@ export default function RoleDetailPage() {
     )
   }
 
-  if (!data) {
+  if (error || !data) {
     return (
       <div className="max-w-[680px] mx-auto px-4 py-16 text-center">
-        <p className="text-slate-500 mb-4">岗位不存在</p>
+        <p className="text-slate-500 mb-4">{error || '岗位不存在'}</p>
         <button onClick={() => navigate(-1)} className="text-[var(--blue)] font-medium cursor-pointer">返回</button>
       </div>
     )
