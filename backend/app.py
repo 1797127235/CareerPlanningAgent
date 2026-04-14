@@ -79,7 +79,6 @@ def create_app() -> FastAPI:
         chat,
         coach_results,
         dashboard,
-        extension,
         graph,
         growth_log,
         guidance,
@@ -94,7 +93,6 @@ def create_app() -> FastAPI:
     app.include_router(profiles.router, prefix="/api/profiles", tags=["画像"])
     app.include_router(graph.router, prefix="/api/graph", tags=["图谱"])
     app.include_router(jd.router, prefix="/api/jd", tags=["JD诊断"])
-    app.include_router(extension.router, prefix="/api/extension", tags=["浏览器扩展"])
     # 面试练习已砍 — 轻量校准改走 Coach 对话，不再需要独立 /practice 路由
     app.include_router(chat.router, prefix="/api/chat", tags=["AI对话"])
     app.include_router(report.router, prefix="/api/report", tags=["报告"])

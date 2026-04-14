@@ -496,47 +496,85 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      {/* ── Top toolbar: zone filters + profile selector ── */}
-      <div className="absolute top-4 left-4 right-4 z-30 flex items-center gap-1.5 flex-wrap">
-        {/* Zone filter pills */}
-        {ZONE_FILTERS.map(f => (
-          <button
-            key={String(f.key)}
-            onClick={() => setZoneFilter(f.key)}
-            className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all cursor-pointer ${
-              zoneFilter === f.key
-                ? 'bg-[var(--blue)] text-white shadow-sm'
-                : 'bg-white/60 backdrop-blur-sm border border-white/50 text-slate-600 hover:bg-white/80'
-            }`}
-          >
-            {f.label}
-            {f.key === null && <span className="ml-1 text-slate-400 font-normal">{filteredNodes.length}</span>}
-          </button>
-        ))}
-        {fromNodeId && (
-          <button
-            onClick={jumpToMyPosition}
-            title="回到我的位置"
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-white/60 backdrop-blur-sm border border-white/50 text-slate-600 hover:bg-white/80 transition-all cursor-pointer"
-          >
-            <MapPin className="w-3.5 h-3.5 text-[var(--blue)]" />
-            我的位置
-          </button>
-        )}
-        {targetNodeId && (
-          <button
-            onClick={jumpToTarget}
-            title="跳到目标岗位"
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-amber-50/80 backdrop-blur-sm border border-amber-200/60 text-amber-700 hover:bg-amber-100/80 transition-all cursor-pointer"
-          >
-            <Target className="w-3.5 h-3.5" />
-            目标岗位
-          </button>
-        )}
+      {/* ── Top toolbar: zone filters + search + profile selector ── */}
+      <div className="absolute top-4 left-4 right-4 z-30 flex items-start gap-3">
+        {/* Left: zone filter pills */}
+        <div className="flex items-center gap-1.5 flex-wrap shrink-0 max-w-[40%]">
+          {ZONE_FILTERS.map(f => (
+            <button
+              key={String(f.key)}
+              onClick={() => setZoneFilter(f.key)}
+              className={`px-3 py-1.5 rounded-full text-[12px] font-semibold transition-all cursor-pointer ${
+                zoneFilter === f.key
+                  ? 'bg-[var(--blue)] text-white shadow-sm'
+                  : 'bg-white/60 backdrop-blur-sm border border-white/50 text-slate-600 hover:bg-white/80'
+              }`}
+            >
+              {f.label}
+              {f.key === null && <span className="ml-1 text-slate-400 font-normal">{filteredNodes.length}</span>}
+            </button>
+          ))}
+          {fromNodeId && (
+            <button
+              onClick={jumpToMyPosition}
+              title="回到我的位置"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-white/60 backdrop-blur-sm border border-white/50 text-slate-600 hover:bg-white/80 transition-all cursor-pointer"
+            >
+              <MapPin className="w-3.5 h-3.5 text-[var(--blue)]" />
+              我的位置
+            </button>
+          )}
+          {targetNodeId && (
+            <button
+              onClick={jumpToTarget}
+              title="跳到目标岗位"
+              className="flex items-center gap-1 px-3 py-1.5 rounded-full text-[12px] font-semibold bg-amber-50/80 backdrop-blur-sm border border-amber-200/60 text-amber-700 hover:bg-amber-100/80 transition-all cursor-pointer"
+            >
+              <Target className="w-3.5 h-3.5" />
+              目标岗位
+            </button>
+          )}
+        </div>
 
-        {/* Profile selector — only when multiple profiles */}
+        {/* Center: search */}
+        <div className="flex-1 flex justify-center min-w-0">
+          <div ref={searchRef} className="relative w-full max-w-[360px]">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => handleSearchChange(e.target.value)}
+              onCompositionStart={() => { isComposing.current = true }}
+              onCompositionEnd={handleCompositionEnd}
+              placeholder="搜索岗位..."
+              className="w-full pl-10 pr-10 py-3 rounded-[20px] text-[13px] font-medium text-[var(--text-1)] bg-white/[0.38] backdrop-blur-[24px] backdrop-saturate-[140%] border-[1.5px] border-white/50 outline-none transition-all focus:bg-white/60 focus:border-[var(--blue)]/30 focus:shadow-[0_8px_32px_rgba(37,99,235,.10)] placeholder:text-[var(--text-3)]"
+              style={{ fontFamily: "'Plus Jakarta Sans', 'Noto Sans SC', sans-serif", boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}
+            />
+            {searchQuery && (
+              <button onClick={() => { setSearchQuery(''); setSearchResults([]); setSearchOpen(false) }}
+                className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer">
+                <X className="w-4 h-4 text-slate-400 hover:text-slate-600" />
+              </button>
+            )}
+            {searchOpen && searchResults.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white/80 backdrop-blur-xl border-[1.5px] border-white/60 rounded-[20px] max-h-60 overflow-y-auto z-40"
+                style={{ boxShadow: '0 8px 32px rgba(99,102,241,.10)' }}>
+                {searchResults.map(r => (
+                  <button key={r.node_id} onClick={() => handleSearchSelect(r.node_id)}
+                    className="w-full text-left px-5 py-3 hover:bg-[var(--blue)]/[0.06] transition-colors flex items-center gap-2.5 cursor-pointer first:rounded-t-[20px] last:rounded-b-[20px]">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ZONE_DOT[r.zone] ?? ZONE_DOT[DEFAULT_ZONE] }} />
+                    <span className="text-[13px] font-semibold text-slate-800">{r.label}</span>
+                    <span className="text-[11px] text-slate-400 ml-auto">{r.role_family}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right: profile selector — only when multiple profiles */}
         {profiles && profiles.length > 1 && onProfileChange && (
-          <div className="ml-auto flex items-center gap-1.5 bg-white/70 backdrop-blur-sm border border-white/60 rounded-full px-3 py-1.5">
+          <div className="flex items-center gap-1.5 bg-white/70 backdrop-blur-sm border border-white/60 rounded-full px-3 py-1.5 shrink-0">
             <span className="text-[11px] text-slate-400 shrink-0">画像</span>
             <select
               value={activeProfileId ?? ''}
@@ -549,42 +587,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
             </select>
           </div>
         )}
-      </div>
-
-      {/* ── Floating Search Bar (same card system) ── */}
-      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 w-full max-w-[360px] px-4">
-        <div ref={searchRef} className="relative">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => handleSearchChange(e.target.value)}
-            onCompositionStart={() => { isComposing.current = true }}
-            onCompositionEnd={handleCompositionEnd}
-            placeholder="搜索岗位..."
-            className="w-full pl-10 pr-10 py-3 rounded-[20px] text-[13px] font-medium text-[var(--text-1)] bg-white/[0.38] backdrop-blur-[24px] backdrop-saturate-[140%] border-[1.5px] border-white/50 outline-none transition-all focus:bg-white/60 focus:border-[var(--blue)]/30 focus:shadow-[0_8px_32px_rgba(37,99,235,.10)] placeholder:text-[var(--text-3)]"
-            style={{ fontFamily: "'Plus Jakarta Sans', 'Noto Sans SC', sans-serif", boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}
-          />
-          {searchQuery && (
-            <button onClick={() => { setSearchQuery(''); setSearchResults([]); setSearchOpen(false) }}
-              className="absolute right-4 top-1/2 -translate-y-1/2 cursor-pointer">
-              <X className="w-4 h-4 text-slate-400 hover:text-slate-600" />
-            </button>
-          )}
-          {searchOpen && searchResults.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white/80 backdrop-blur-xl border-[1.5px] border-white/60 rounded-[20px] max-h-60 overflow-y-auto z-40"
-              style={{ boxShadow: '0 8px 32px rgba(99,102,241,.10)' }}>
-              {searchResults.map(r => (
-                <button key={r.node_id} onClick={() => handleSearchSelect(r.node_id)}
-                  className="w-full text-left px-5 py-3 hover:bg-[var(--blue)]/[0.06] transition-colors flex items-center gap-2.5 cursor-pointer first:rounded-t-[20px] last:rounded-b-[20px]">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: ZONE_DOT[r.zone] ?? ZONE_DOT[DEFAULT_ZONE] }} />
-                  <span className="text-[13px] font-semibold text-slate-800">{r.label}</span>
-                  <span className="text-[11px] text-slate-400 ml-auto">{r.role_family}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* ── Coverflow Area ── */}

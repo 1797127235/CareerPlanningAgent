@@ -121,6 +121,8 @@ def get_chat_model(temperature: float = 0.3, timeout: int = 30, purpose: str = "
         temperature=temperature,
         request_timeout=timeout,
         max_retries=1,
+        streaming=True,
+        stream_usage=False,
     )
 
 

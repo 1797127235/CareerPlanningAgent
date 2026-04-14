@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { X, FolderGit2, Briefcase, BookOpen } from 'lucide-react'
+import { X, FolderGit2, Briefcase } from 'lucide-react'
 import type { RecordType } from './RecordRow'
 
 export function NewRecordDialog({
@@ -23,13 +23,6 @@ export function NewRecordDialog({
       color: '#2563EB',
       title: '追踪岗位',
       desc: '记录投递的公司和岗位进展',
-    },
-    {
-      type: 'learning',
-      icon: BookOpen,
-      color: '#16A34A',
-      title: '学习记录',
-      desc: '记录今天学了什么、心得总结',
     },
   ]
 

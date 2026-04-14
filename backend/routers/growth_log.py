@@ -1,4 +1,4 @@
-"""成长档案路由 — 项目记录 / 面试记录 / 学习记录。"""
+"""成长档案路由 — 项目记录 / 求职追踪。"""
 from __future__ import annotations
 
 import json
@@ -17,7 +17,6 @@ from backend.db_models import (
     ActionPlanV2,
     ActionProgress,
     InterviewRecord,
-    LearningNote,
     Profile,
     ProjectLog,
     ProjectRecord,
@@ -754,120 +753,4 @@ def _serialize_interview(i: InterviewRecord) -> dict:
     }
 
 
-# ── Learning Notes ───────────────────────────────────────────────────────────
 
-class CreateLearningNoteRequest(BaseModel):
-    title: str
-    summary: str = ""
-    tags: list[str] = []
-    linked_skill: Optional[str] = None
-
-
-class UpdateLearningNoteRequest(BaseModel):
-    title: Optional[str] = None
-    summary: Optional[str] = None
-    tags: Optional[list[str]] = None
-    linked_skill: Optional[str] = None
-
-
-@router.get("/learning-notes")
-def list_learning_notes(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """获取用户所有学习记录。"""
-    notes = (
-        db.query(LearningNote)
-        .filter(LearningNote.user_id == user.id)
-        .order_by(LearningNote.created_at.desc())
-        .all()
-    )
-    return {"notes": [_serialize_note(n) for n in notes]}
-
-
-@router.post("/learning-notes", status_code=201)
-def create_learning_note(
-    req: CreateLearningNoteRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """创建学习记录。"""
-    if not req.title.strip():
-        raise HTTPException(400, "标题不能为空")
-    profile_id = _get_profile_id(user, db)
-    note = LearningNote(
-        user_id=user.id,
-        profile_id=profile_id,
-        title=req.title.strip(),
-        summary=req.summary.strip(),
-        tags=req.tags,
-        linked_skill=req.linked_skill.strip() if req.linked_skill else None,
-    )
-    db.add(note)
-    db.commit()
-    db.refresh(note)
-
-    # Auto-complete matching action plan tasks
-    learning_skills = list(req.tags)
-    if req.linked_skill:
-        learning_skills.append(req.linked_skill.strip())
-    _auto_complete_plan_tasks(
-        db, user.id, skills=learning_skills, record_type="learning",
-    )
-
-    return _serialize_note(note)
-
-
-@router.patch("/learning-notes/{note_id}")
-def update_learning_note(
-    note_id: int,
-    req: UpdateLearningNoteRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """更新学习记录。"""
-    note = db.query(LearningNote).filter(
-        LearningNote.id == note_id,
-        LearningNote.user_id == user.id,
-    ).first()
-    if not note:
-        raise HTTPException(404, "学习记录不存在")
-    if req.title is not None:
-        note.title = req.title.strip()
-    if req.summary is not None:
-        note.summary = req.summary.strip()
-    if req.tags is not None:
-        note.tags = req.tags
-    if req.linked_skill is not None:
-        note.linked_skill = req.linked_skill.strip() or None
-    db.commit()
-    db.refresh(note)
-    return _serialize_note(note)
-
-
-@router.delete("/learning-notes/{note_id}", status_code=204)
-def delete_learning_note(
-    note_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """删除学习记录。"""
-    note = db.query(LearningNote).filter(
-        LearningNote.id == note_id,
-        LearningNote.user_id == user.id,
-    ).first()
-    if not note:
-        raise HTTPException(404, "学习记录不存在")
-    db.delete(note)
-    db.commit()
-
-
-def _serialize_note(n: LearningNote) -> dict:
-    return {
-        "id": n.id,
-        "title": n.title,
-        "summary": n.summary,
-        "tags": n.tags or [],
-        "linked_skill": n.linked_skill,
-        "created_at": n.created_at.isoformat(),
-    }

@@ -15,7 +15,6 @@ from backend.db_models import (
     InterviewDebrief,
     JDDiagnosis,
     JobApplication,
-    MockInterviewSession,
     Profile,
     User,
 )
@@ -69,7 +68,6 @@ def _app_to_dict(
     debrief: InterviewDebrief | None = None,
     jd_title: str | None = None,
     jd_diagnosis: JDDiagnosis | None = None,
-    mock_sessions: list[MockInterviewSession] | None = None,
 ) -> dict:
     d: dict = {
         "id": app.id,
@@ -89,7 +87,6 @@ def _app_to_dict(
         "updated_at": app.updated_at.isoformat(),
         "debrief": None,
         "jd_diagnosis": None,
-        "mock_sessions": [],
     }
     if debrief:
         d["debrief"] = {
@@ -105,16 +102,6 @@ def _app_to_dict(
             "gap_skills": result.get("gap_skills", []),
             "matched_skills": result.get("matched_skills", []),
         }
-    if mock_sessions:
-        d["mock_sessions"] = [
-            {
-                "id": ms.id,
-                "overall_score": json.loads(ms.analysis_json or "{}").get("overall_score", 0),
-                "status": ms.status,
-                "created_at": ms.created_at.isoformat() if ms.created_at else "",
-            }
-            for ms in mock_sessions
-        ]
     return d
 
 
@@ -148,14 +135,7 @@ def list_applications(
             .first()
         )
         jd = db.query(JDDiagnosis).filter(JDDiagnosis.id == app.jd_diagnosis_id).first() if app.jd_diagnosis_id else None
-        mocks = (
-            db.query(MockInterviewSession)
-            .filter(MockInterviewSession.application_id == app.id)
-            .order_by(MockInterviewSession.created_at.desc())
-            .limit(5)
-            .all()
-        )
-        result.append(_app_to_dict(app, debrief, jd.jd_title if jd else None, jd, mocks))
+        result.append(_app_to_dict(app, debrief, jd.jd_title if jd else None, jd))
     return result
 
 
@@ -242,14 +222,7 @@ def get_application(
         .first()
     )
     jd = db.query(JDDiagnosis).filter(JDDiagnosis.id == app.jd_diagnosis_id).first() if app.jd_diagnosis_id else None
-    mocks = (
-        db.query(MockInterviewSession)
-        .filter(MockInterviewSession.application_id == app.id)
-        .order_by(MockInterviewSession.created_at.desc())
-        .limit(5)
-        .all()
-    )
-    return _app_to_dict(app, debrief, jd.jd_title if jd else None, jd, mocks)
+    return _app_to_dict(app, debrief, jd.jd_title if jd else None, jd)
 
 
 @router.patch("/{app_id}/status")

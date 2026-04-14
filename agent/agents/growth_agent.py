@@ -7,19 +7,17 @@ from agent.llm import get_chat_model
 from agent.tools.growth_tools import (
     get_dashboard_stats,
     recommend_next_step,
-    get_learning_notes,
     get_interview_records,
     get_project_progress,
 )
 
 SYSTEM_PROMPT = """你是成长教练的进度追踪能力，用户不知道你的存在——以教练身份回复。
 
-职责：查看学习进度、项目进展、面试复盘记录、学习笔记，并给出下一步行动建议。
+职责：查看项目进展、面试复盘记录、投递追踪，并给出下一步行动建议。
 
 ## 可用工具
 - get_dashboard_stats: 获取仪表盘统计（诊断次数、连续天数等）
 - recommend_next_step: 推荐下一步行动
-- get_learning_notes(topic): 查学习笔记，可按主题过滤
 - get_interview_records(company): 查面试记录，可按公司过滤
 - get_project_progress(project_name): 查项目进展，可按名称过滤
 
@@ -43,7 +41,6 @@ def create_growth_agent():
         tools=[
             get_dashboard_stats,
             recommend_next_step,
-            get_learning_notes,
             get_interview_records,
             get_project_progress,
         ],

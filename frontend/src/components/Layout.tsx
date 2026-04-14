@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { Bot, PanelRightOpen } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useJustUploaded } from '@/hooks/useResumeUpload'
@@ -14,7 +14,6 @@ export function Layout() {
   const [coachOpen, setCoachOpen] = useState(true)
   const [panelWidth, setPanelWidth] = useState(380)
   const resizing = useRef(false)
-  const location = useLocation()
   const navigate = useNavigate()
 
   /* ── Resize handle drag ── */
@@ -59,14 +58,6 @@ export function Layout() {
     }
   }, [justUploaded, navigate])
 
-  // Global ext_session guard
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const extSession = params.get('ext_session')
-    if (extSession && location.pathname !== '/applications') {
-      navigate(`/applications?ext_session=${extSession}`, { replace: true })
-    }
-  }, [location.search, location.pathname, navigate])
 
   return (
     <div className="h-screen overflow-hidden flex text-[var(--text-1)] font-sans relative z-[1]">

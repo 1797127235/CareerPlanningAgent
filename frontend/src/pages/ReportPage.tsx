@@ -3,16 +3,18 @@
  * Fetches real data from /api/report/. Falls back to generation prompt if no report exists.
  */
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
-  Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer,
+  ResponsiveContainer,
   Area, AreaChart, XAxis, YAxis, Tooltip,
 } from 'recharts'
 import {
   Sparkles, Download, Edit3, Check, Zap, BookOpen,
-  Briefcase, ArrowUpRight, AlertCircle, RefreshCw, TrendingUp, BarChart2,
-  Target, FolderGit2, ClipboardList, Trash2,
+  ArrowUpRight, AlertCircle, RefreshCw, TrendingUp, BarChart2,
+  Target, FolderGit2, ClipboardList, Trash2, ArrowRight, CircleAlert,
+  Cpu, Wrench, Repeat,
 } from 'lucide-react'
 import {
   fetchReportList, fetchReportDetail, generateReport,
@@ -42,6 +44,8 @@ interface MissingSkill {
   name: string
   freq: number   // 0.0–1.0 JD frequency
   tier: 'core' | 'important' | 'bonus'
+  fill_path?: 'learn' | 'practice' | 'both'
+  covered_by_project?: boolean
 }
 
 interface MatchedSkill {
@@ -58,8 +62,6 @@ interface SkillGap {
   top_missing: MissingSkill[]
   matched_skills: MatchedSkill[]
   has_project_data: boolean
-  positioning: string
-  positioning_level: 'junior' | 'mid' | 'senior'
 }
 
 interface ActionItem {
@@ -82,6 +84,20 @@ interface ActionPlan {
   job_prep: ActionItem[]
 }
 
+interface AlignmentItem {
+  node_id: string
+  label: string
+  score: number        // 0-1
+  evidence: string
+  gap: string
+}
+
+interface CareerAlignment {
+  observations: string
+  alignments: AlignmentItem[]
+  cannot_judge: string[]
+}
+
 interface ReportData {
   match_score: number
   four_dim: FourDim
@@ -96,6 +112,16 @@ interface ReportData {
   skill_gap?: SkillGap
   growth_curve: { date: string; score: number }[]
   action_plan: ActionPlan
+  diagnosis?: {
+    source: string
+    source_type: 'resume' | 'growth_log'
+    source_id: number | string
+    current_text: string
+    status: 'pass' | 'needs_improvement'
+    highlight: string
+    issues: string[]
+    suggestion: string
+  }[]
   target: { node_id: string; label: string; zone: string }
   delta?: {
     prev_score: number
@@ -106,10 +132,16 @@ interface ReportData {
     plan_progress: { done: number; total: number } | null
     next_action: string | null
   } | null
-  promotion_path?: { level: number; title: string }[]
   soft_skills?: Record<string, number>
-  positioning?: string
-  positioning_level?: 'junior' | 'mid' | 'senior'
+  career_alignment?: CareerAlignment | null
+  differentiation_advice?: string
+  ai_impact_narrative?: string
+  project_recommendations?: {
+    name: string
+    why: string
+    covered_skills?: string[]
+  }[]
+  project_mismatch?: boolean
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -141,27 +173,6 @@ function ScoreRing({ score, size = 136 }: { score: number; size?: number }) {
   )
 }
 
-function DimBadge({ label, value }: { label: string; value: number | null }) {
-  if (value === null) {
-    return (
-      <div className="flex flex-col items-center gap-1">
-        <div className="flex items-center gap-1 text-slate-400">
-          <AlertCircle size={12} />
-          <span className="text-[11px]">暂无数据</span>
-        </div>
-        <span className="text-[11px] font-semibold text-slate-400">{label}</span>
-      </div>
-    )
-  }
-  const color = value >= 75 ? '#16a34a' : value >= 50 ? '#2563eb' : '#f59e0b'
-  return (
-    <div className="flex flex-col items-center gap-1">
-      <span className="text-xl font-bold tabular-nums" style={{ color }}>{value}</span>
-      <span className="text-[11px] font-semibold text-slate-500">{label}</span>
-    </div>
-  )
-}
-
 function TimingBadge({ timing, label }: { timing: string; label: string }) {
   const map: Record<string, { bg: string; text: string; border: string }> = {
     best:    { bg: 'rgba(22,163,74,0.12)',   text: '#15803d', border: 'rgba(22,163,74,0.25)' },
@@ -180,22 +191,138 @@ function TimingBadge({ timing, label }: { timing: string; label: string }) {
   )
 }
 
+// ── Career alignment section ─────────────────────────────────────────────────
+
+function CareerAlignmentSection({ alignment }: { alignment: CareerAlignment | null | undefined }) {
+  const navigate = useNavigate()
+
+  // 兜底态：即使 alignment 为空，也显示基于目标方向的观察卡片，不写死「数据不足」
+  if (!alignment) {
+    return (
+      <motion.div variants={fadeUp} className="glass p-5">
+        <div className="g-inner">
+          <div className="flex items-center gap-2 mb-2">
+            <Target size={15} className="text-slate-400" />
+            <p className="text-[13px] font-semibold text-slate-700">职业发展路径</p>
+          </div>
+          <p className="text-[12px] text-slate-500 leading-relaxed">
+            基于当前档案标签与目标岗位做初步对齐观察。完善项目量化数据和技术文档后，分析精度会进一步提升。
+          </p>
+        </div>
+      </motion.div>
+    )
+  }
+
+  return (
+    <motion.div variants={fadeUp} className="glass p-5">
+      <div className="g-inner space-y-4">
+        {/* Header with honesty label */}
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <Target size={15} className="text-indigo-500" />
+            <p className="text-[13px] font-semibold text-slate-700">职业发展路径</p>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500">
+              AI 观察 · 非预测
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400">
+            基于你的项目数据和技能画像做的事实对齐，不包含时间表或级别预测
+          </p>
+        </div>
+
+        {/* Observations */}
+        {alignment.observations && (
+          <div className="text-[12.5px] text-slate-700 leading-relaxed px-3 py-2.5 bg-slate-50/60 rounded-lg">
+            {alignment.observations}
+          </div>
+        )}
+
+        {/* Alignments */}
+        {alignment.alignments.length > 0 && (
+          <div className="space-y-2.5">
+            <p className="text-[11px] text-slate-500 font-medium">可能对齐的方向：</p>
+            {alignment.alignments.map((a) => (
+              <button
+                key={a.node_id}
+                onClick={() => navigate(`/roles/${a.node_id}`)}
+                className="w-full text-left rounded-xl p-3.5 transition-all duration-200 hover:shadow-md cursor-pointer"
+                style={{
+                  background: 'rgba(99,102,241,0.06)',
+                  border: '1px solid rgba(99,102,241,0.18)',
+                }}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[13px] font-semibold text-slate-800">{a.label}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-indigo-600 tabular-nums">
+                      对齐度 {Math.round(a.score * 100)}%
+                    </span>
+                    <ArrowRight size={12} className="text-indigo-400" />
+                  </div>
+                </div>
+                {a.evidence && (
+                  <p className="text-[11.5px] text-slate-600 leading-relaxed">
+                    <span className="text-emerald-600">证据：</span>{a.evidence}
+                  </p>
+                )}
+                {a.gap && (
+                  <p className="text-[11.5px] text-slate-600 leading-relaxed mt-1">
+                    <span className="text-amber-600">缺口：</span>{a.gap}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Cannot judge */}
+        {alignment.cannot_judge.length > 0 && (
+          <div className="pt-3 border-t border-slate-100">
+            <div className="flex items-start gap-1.5">
+              <CircleAlert size={12} className="text-slate-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-[11px] text-slate-500 mb-1">系统无法判断的（需要你自己决策）：</p>
+                <ul className="text-[11.5px] text-slate-600 space-y-0.5">
+                  {alignment.cannot_judge.map((s, i) => (
+                    <li key={i}>· {s}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  )
+}
+
+function AIImpactText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false)
+  const isLong = text.length > 250
+  const displayText = expanded || !isLong ? text : text.slice(0, 200)
+
+  return (
+    <div className="text-[12.5px] text-slate-700 leading-relaxed px-3 py-2.5 bg-violet-50/40 rounded-lg border border-violet-100/60">
+      {displayText}
+      {isLong && !expanded && '…'}
+      {isLong && (
+        <button
+          onClick={() => setExpanded(v => !v)}
+          className="ml-1 text-[11px] text-violet-600 hover:underline"
+        >
+          {expanded ? '收起' : '展开更多'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 // ── Skill gap section ─────────────────────────────────────────────────────────
 
 const TIER_META = {
-  core:      { label: '核心技能', color: '#dc2626', bg: 'rgba(220,38,38,0.10)',  border: 'rgba(220,38,38,0.25)',  badge: 'rgba(220,38,38,0.10)'  },
+  core:      { label: '核心技能', color: '#64748b', bg: 'rgba(100,116,139,0.10)',  border: 'rgba(100,116,139,0.25)',  badge: 'rgba(100,116,139,0.10)'  },
   important: { label: '重要技能', color: '#d97706', bg: 'rgba(217,119,6,0.10)',  border: 'rgba(217,119,6,0.25)',  badge: 'rgba(217,119,6,0.10)'  },
   bonus:     { label: '加分技能', color: '#2563eb', bg: 'rgba(37,99,235,0.08)',  border: 'rgba(37,99,235,0.25)',  badge: 'rgba(37,99,235,0.08)'  },
-}
-
-const POSITIONING_META = {
-  junior: { color: '#d97706', bg: 'rgba(217,119,6,0.10)',  border: 'rgba(217,119,6,0.30)'  },
-  mid:    { color: '#2563eb', bg: 'rgba(37,99,235,0.10)',  border: 'rgba(37,99,235,0.30)'  },
-  senior: { color: '#16a34a', bg: 'rgba(22,163,74,0.10)',  border: 'rgba(22,163,74,0.30)'  },
-}
-
-const POSITIONING_FALLBACK = {
-  color: '#64748b', bg: 'rgba(100,116,139,0.10)', border: 'rgba(100,116,139,0.30)'
 }
 
 function TierBar({ tier, stats, hasProjectData }: { tier: keyof typeof TIER_META; stats: SkillGapTier; hasProjectData: boolean }) {
@@ -245,24 +372,36 @@ const STATUS_META = {
   claimed:   { label: '待验证',   color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', border: 'rgba(148,163,184,0.25)' },
 }
 
-function SkillGapSection({ gap }: { gap: SkillGap }) {
-  const pm = POSITIONING_META[gap.positioning_level] || POSITIONING_FALLBACK
-  const maxFreq = Math.max(...gap.top_missing.map(s => s.freq), 0.01)
+function SkillChip({
+  skill,
+  accent,
+}: {
+  skill: MissingSkill
+  accent: 'slate' | 'amber' | 'indigo' | 'violet'
+}) {
+  const styles = {
+    slate: 'bg-slate-50 border-slate-200 text-slate-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-900',
+    indigo: 'bg-indigo-50 border-indigo-200 text-indigo-900',
+    violet: 'bg-violet-50 border-violet-200 text-violet-900',
+  }
+  return (
+    <span className={`relative inline-flex items-center px-2 py-1 rounded-md text-[11.5px] border ${styles[accent]}`}>
+      {skill.covered_by_project && (
+        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500" />
+      )}
+      <span className={skill.covered_by_project ? 'pr-1' : ''}>{skill.name}</span>
+    </span>
+  )
+}
 
+function SkillGapSection({ gap }: { gap: SkillGap }) {
   return (
     <div className="space-y-5">
-      {/* Header + positioning */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          <BarChart2 size={15} className="text-blue-500" />
-          <span className="text-[13px] font-semibold text-slate-700">市场竞争力分析</span>
-        </div>
-        <span
-          className="text-[12px] font-semibold px-3 py-1 rounded-full"
-          style={{ background: pm.bg, color: pm.color, border: `1px solid ${pm.border}` }}
-        >
-          当前定位：{gap.positioning}
-        </span>
+      {/* Header */}
+      <div className="flex items-center gap-2">
+        <BarChart2 size={15} className="text-blue-500" />
+        <span className="text-[13px] font-semibold text-slate-700">市场竞争力分析</span>
       </div>
 
       {/* Tier coverage bars */}
@@ -286,7 +425,7 @@ function SkillGapSection({ gap }: { gap: SkillGap }) {
         </div>
       )}
 
-      {/* Matched skills — show what user has with proficiency badges */}
+      {/* Matched skills — simplified with left vertical line */}
       {gap.matched_skills && gap.matched_skills.length > 0 && (
         <div>
           <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2.5">
@@ -295,24 +434,18 @@ function SkillGapSection({ gap }: { gap: SkillGap }) {
           <div className="flex flex-wrap gap-2">
             {gap.matched_skills.map(skill => {
               const sm = STATUS_META[skill.status]
-              const tm = TIER_META[skill.tier]
               return (
-                <div
+                <span
                   key={skill.name}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl"
-                  style={{ background: 'rgba(255,255,255,0.35)', border: '1px solid rgba(255,255,255,0.45)' }}
-                  title={`${tm.label} · JD出现率${Math.round(skill.freq * 100)}%`}
+                  className="relative px-2.5 py-1 rounded-md bg-white/60 text-[12px] text-slate-700 border border-slate-100"
+                  title={`${TIER_META[skill.tier].label} · JD出现率${Math.round(skill.freq * 100)}%`}
                 >
-                  <span className="text-[12px] font-medium text-slate-700">{skill.name}</span>
-                  {gap.has_project_data && (
-                    <span
-                      className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full"
-                      style={{ background: sm.bg, color: sm.color, border: `1px solid ${sm.border}` }}
-                    >
-                      {sm.label}
-                    </span>
-                  )}
-                </div>
+                  <span
+                    className="absolute left-0 top-1.5 bottom-1.5 w-[2.5px] rounded-r-full"
+                    style={{ background: sm.color }}
+                  />
+                  <span className="pl-1.5">{skill.name}</span>
+                </span>
               )
             })}
           </div>
@@ -325,45 +458,114 @@ function SkillGapSection({ gap }: { gap: SkillGap }) {
         </div>
       )}
 
-      {/* Top missing skills */}
-      {gap.top_missing.length > 0 && (
-        <div>
-          <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-3">
-            优先补强技能（按岗位需求频率排序）
-          </p>
-          <div className="space-y-2.5">
-            {gap.top_missing.map(skill => {
-              const m = TIER_META[skill.tier]
-              const barPct = Math.round((skill.freq / maxFreq) * 100)
-              return (
-                <div key={skill.name} className="flex items-center gap-3">
-                  <div className="w-24 flex-shrink-0 text-[12px] font-medium text-slate-700 truncate">
-                    {skill.name}
-                  </div>
-                  <div className="flex-1 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(148,163,184,0.15)' }}>
-                      <div
-                        className="h-full rounded-full transition-all duration-700"
-                        style={{ width: `${barPct}%`, background: m.color, opacity: 0.65 }}
-                      />
+      {/* 缺口补法路径地图 */}
+      {gap.top_missing && gap.top_missing.length > 0 && (
+        <div className="space-y-4 mt-6 pt-4 border-t border-slate-100">
+          <p className="text-[12px] font-semibold text-slate-700">缺口补法路径地图</p>
+
+          {(() => {
+            const learnSkills = gap.top_missing.filter((m: MissingSkill) => m.fill_path === 'learn')
+            const practiceSkills = gap.top_missing.filter((m: MissingSkill) => m.fill_path === 'practice')
+            const bothSkills = gap.top_missing.filter((m: MissingSkill) => m.fill_path === 'both')
+            const coveredByProjectCount = gap.top_missing.filter((m: MissingSkill) => m.covered_by_project).length
+            const totalMissing = gap.top_missing.length
+
+            return (
+              <>
+                {/* 学习组 */}
+                {learnSkills.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <BookOpen size={14} className="text-slate-500" />
+                      <p className="text-[12.5px] font-semibold text-slate-700">
+                        需要系统学习的概念（{learnSkills.length} 个）
+                      </p>
                     </div>
-                    <span className="text-[11px] tabular-nums text-slate-500 w-10 text-right">
-                      {Math.round(skill.freq * 100)}%
-                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {learnSkills.map(s => (
+                        <SkillChip key={s.name} skill={s} accent="slate" />
+                      ))}
+                    </div>
+                    <div className="mt-2 p-2 rounded-md bg-slate-50/50 border border-slate-100 space-y-1">
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        <span className="font-medium text-slate-700">搜索建议：</span>
+                        把上方概念换成「
+                        {learnSkills.slice(0, 2).map(s => s.name).join(' / ')}
+                        」+ 教程 / 面试 / 基础，在任意搜索引擎或技术社区检索即可。
+                      </p>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        系统路线图可参考开源项目
+                        <a
+                          href="https://github.com/jwasham/coding-interview-university/blob/main/translations/README-cn.md"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-blue-600 hover:underline"
+                        >
+                          coding-interview-university（中文版）
+                        </a>
+                        —— GitHub 341k star 的 CS 自学大纲，含数据结构、算法、系统等完整章节。
+                      </p>
+                    </div>
                   </div>
-                  <span
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0"
-                    style={{ background: m.bg, color: m.color, border: `1px solid ${m.border}` }}
-                  >
-                    {m.label}
-                  </span>
+                )}
+
+                {/* 实践组 */}
+                {practiceSkills.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wrench size={14} className="text-amber-600" />
+                      <p className="text-[12.5px] font-semibold text-slate-700">
+                        需要项目实践才能掌握（{practiceSkills.length} 个）
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {practiceSkills.map(s => (
+                        <SkillChip key={s.name} skill={s} accent="amber" />
+                      ))}
+                    </div>
+                    {coveredByProjectCount > 0 && (
+                      <p className="text-[11px] text-amber-700 mt-1">
+                        上方推荐的实战项目能覆盖其中 {coveredByProjectCount} 个
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* 混合组 */}
+                {bothSkills.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Repeat size={14} className="text-violet-500" />
+                      <p className="text-[12.5px] font-semibold text-slate-700">
+                        先学后做（{bothSkills.length} 个）
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {bothSkills.map(s => (
+                        <SkillChip key={s.name} skill={s} accent="violet" />
+                      ))}
+                    </div>
+                    <div className="mt-2 p-2 rounded-md bg-violet-50/40 border border-violet-100/50">
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        <span className="font-medium text-slate-700">搜索建议：</span>
+                        先搜索「
+                        {bothSkills.slice(0, 2).map(s => s.name).join(' / ')}
+                        入门 / docs」理解概念，再通过项目落地。
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* 底部总结诚实话术 */}
+                <div className="pt-3 border-t border-slate-100">
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    共 {totalMissing} 个缺口 · {coveredByProjectCount} 个可通过上方推荐项目补实践 ·{' '}
+                    {totalMissing - coveredByProjectCount} 个需要通过系统学习或其他项目补齐。
+                  </p>
                 </div>
-              )
-            })}
-          </div>
-          <p className="text-[11px] text-slate-400 mt-3">
-            频率 = 该技能出现在目标岗位 JD 中的比例，越高越优先掌握
-          </p>
+              </>
+            )
+          })()}
         </div>
       )}
     </div>
@@ -413,6 +615,7 @@ const fadeUp = { hidden: { opacity: 0, y: 18 }, show: { opacity: 1, y: 0 } }
 const container = { hidden: {}, show: { transition: { staggerChildren: 0.07 } } }
 
 export default function ReportPage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [editingNarrative, setEditingNarrative] = useState(false)
   const [narrativeDraft, setNarrativeDraft] = useState('')
@@ -537,15 +740,6 @@ export default function ReportPage() {
   }
 
   const narrative = editingNarrative ? narrativeDraft : (data.narrative ?? '')
-
-  const radarAllDims = [
-    { dim: '基础要求', value: data.four_dim?.foundation, fullMark: 100 },
-    { dim: '职业技能', value: data.four_dim?.skills,     fullMark: 100 },
-    { dim: '职业素养', value: data.four_dim?.qualities,  fullMark: 100 },
-    { dim: '发展潜力', value: data.four_dim?.potential,  fullMark: 100 },
-  ]
-  const radarData = radarAllDims.filter(d => d.value !== null && d.value !== undefined) as { dim: string; value: number; fullMark: number }[]
-  const radarMissingDims = radarAllDims.filter(d => d.value === null || d.value === undefined).map(d => d.dim)
 
   // Derive checked set from plan API (persistent) — no local state needed
   const checkedItems = new Set(
@@ -696,100 +890,64 @@ export default function ReportPage() {
             </div>
           </motion.div>
 
-          {/* ── Hero: Positioning + score ── */}
+          {/* ── Hero: 目标岗位 + 事实覆盖率 + 匹配分 ── */}
           <motion.div variants={fadeUp} className="glass p-6">
-            <div className="g-inner flex flex-col gap-6">
-              {/* Hero: Positioning */}
-              <div className="flex items-center gap-6">
-                <div className="flex-1">
-                  <p className="text-[11px] text-slate-400 mb-1">你的市场定位</p>
-                  <h2 className="text-xl font-bold text-slate-800">
-                    {data.positioning || `${data.target?.label}`}
-                  </h2>
-                  <p className="text-[13px] text-slate-500 mt-1">
-                    {data.skill_gap?.core && `核心技能覆盖 ${data.skill_gap.core.pct}%`}
-                    {data.skill_gap?.top_missing && data.skill_gap.top_missing.length > 0 &&
-                      `，补齐 ${data.skill_gap.top_missing.slice(0, 2).map(s => s.name).join('、')} 即可进阶`}
-                  </p>
-                  {data.market && (
-                    <div className="mt-2">
-                      <TimingBadge timing={data.market.timing} label={data.market.timing_label} />
-                    </div>
-                  )}
-                </div>
-                <ScoreRing score={data.match_score ?? 0} size={100} />
-              </div>
-
-              <div className="hidden sm:block h-px w-full bg-white/40" />
-
-              <div className="flex-1 space-y-5">
-                {/* Market row — always show all 3 cards */}
-                {data.market && (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="glass-static px-3 py-3 flex items-center gap-2">
-                      <TrendingUp size={14} className={
-                        data.market.demand_change_pct === null ? 'text-slate-400'
-                        : data.market.demand_change_pct >= 0 ? 'text-green-600' : 'text-red-500'
-                      } />
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-slate-500 whitespace-nowrap">市场需求变化</p>
-                        {data.market.demand_change_pct !== null ? (
-                          <p className={`text-[13px] font-bold tabular-nums ${data.market.demand_change_pct >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                            {data.market.demand_change_pct > 0 ? '+' : ''}{data.market.demand_change_pct.toFixed(0)}%
-                          </p>
-                        ) : (
-                          <p className="text-[13px] font-bold text-slate-400">—</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="glass-static px-3 py-3 flex items-center gap-2">
-                      <ArrowUpRight size={14} className={data.market.salary_cagr === null ? 'text-slate-400' : 'text-blue-600'} />
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-slate-500 whitespace-nowrap">薪资年增长率</p>
-                        {data.market.salary_cagr !== null ? (
-                          <p className="text-[13px] font-bold text-blue-700 tabular-nums">{data.market.salary_cagr.toFixed(1)}%</p>
-                        ) : (
-                          <p className="text-[13px] font-bold text-slate-400">—</p>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="glass-static px-3 py-3 flex items-center gap-2">
-                      <Briefcase size={14} className="text-slate-500" />
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-slate-500 whitespace-nowrap">市场中位月薪</p>
-                        <p className="text-[13px] font-bold text-slate-700 tabular-nums">
-                          {data.market.salary_p50 ? `${Math.round(data.market.salary_p50 / 1000)}k` : '—'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* 4D dims */}
+            <div className="g-inner flex flex-col gap-5">
+              {/* 顶部：岗位名 + 匹配分小角落 + 核心覆盖 */}
+              <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-[11px] text-slate-400 font-medium mb-2.5">四维匹配详情</p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {([
-                      ['基础要求', data.four_dim?.foundation],
-                      ['职业技能', data.four_dim?.skills],
-                      ['职业素养', data.four_dim?.qualities],
-                      ['发展潜力', data.four_dim?.potential],
-                    ] as [string, number | null][]).map(([label, val]) => (
-                      <div key={label} className="glass-static py-3 px-2 flex flex-col items-center">
-                        <DimBadge label={label} value={val ?? null} />
-                      </div>
-                    ))}
-                  </div>
-                  {data.four_dim?.qualities === null && (
-                    <p className="text-[11px] text-slate-400 mt-2 flex items-center gap-1">
-                      <AlertCircle size={11} />
-                      「职业素养」需完成模拟面试后显示
+                  <p className="text-[11px] text-slate-400 mb-1">目标岗位</p>
+                  <h2 className="text-xl font-bold text-slate-800">
+                    {data.target?.label || '未设定'}
+                  </h2>
+                  {data.skill_gap?.core && (
+                    <p className="text-[13px] text-slate-500 mt-1">
+                      核心技能 {data.skill_gap.core.matched}/{data.skill_gap.core.total} 覆盖
+                      {data.skill_gap.has_project_data && ` · ${data.skill_gap.core.practiced_count} 个有项目证据`}
                     </p>
                   )}
                 </div>
+                <div className="flex flex-col items-end">
+                  <ScoreRing score={data.match_score ?? 0} size={60} />
+                  <p className="text-[10px] text-slate-400 mt-1">匹配度</p>
+                </div>
               </div>
+
+              {/* 中轴：AI 影响与护城河（Hero 核心内容） */}
+              {data.ai_impact_narrative && (
+                <div className="space-y-2 rounded-xl p-3.5 border border-violet-200/60 bg-violet-50/30">
+                  <div className="flex items-center gap-2">
+                    <Cpu size={13} className="text-violet-500" />
+                    <p className="text-[12px] font-semibold text-slate-700">AI 影响与护城河</p>
+                  </div>
+                  <AIImpactText text={data.ai_impact_narrative} />
+                </div>
+              )}
+
+              {/* mismatch 分支：诚实话术 */}
+              {data.project_mismatch && (
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  当前画像和该岗位典型实战项目之间跨度较大。
+                  可以从搜索
+                  <span className="font-medium text-slate-700">「{data.target?.label} 学习路线」</span>
+                  或
+                  <span className="font-medium text-slate-700">「{data.target?.label} 入门教程」</span>
+                  开始，补齐基础概念后再回看项目推荐。
+                </p>
+              )}
+
+              {/* 市场 timing badge 保留但缩小 */}
+              {data.market && (
+                <div className="flex items-center gap-2">
+                  <TimingBadge timing={data.market.timing} label={data.market.timing_label} />
+                  <button
+                    onClick={() => navigate(`/roles/${data.target?.node_id}`)}
+                    className="text-[11px] text-blue-600 hover:underline"
+                  >
+                    查看岗位详情 →
+                  </button>
+                </div>
+              )}
             </div>
           </motion.div>
 
@@ -868,37 +1026,8 @@ export default function ReportPage() {
             </motion.div>
           )}
 
-          {/* ── Radar + Growth curve ── */}
-          <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <div className="glass p-5">
-              <div className="g-inner">
-                <p className="text-[13px] font-semibold text-slate-700 mb-4">四维能力雷达</p>
-                <ResponsiveContainer width="100%" height={240}>
-                  <RadarChart data={radarData} margin={{ top: 10, right: 20, bottom: 10, left: 20 }}>
-                    <PolarGrid stroke="rgba(148,163,184,0.3)" />
-                    <PolarAngleAxis
-                      dataKey="dim"
-                      tick={{ fontSize: 11, fill: '#64748b', fontFamily: 'Plus Jakarta Sans' }}
-                    />
-
-                    <Radar
-                      name="匹配度" dataKey="value"
-                      stroke="#2563eb" fill="#2563eb" fillOpacity={0.18} strokeWidth={2}
-                    />
-                    <Tooltip
-                      formatter={(v) => [`${v} 分`, '匹配度']}
-                      contentStyle={{ background: 'rgba(255,255,255,0.95)', border: '1px solid rgba(255,255,255,0.5)', borderRadius: 10, fontSize: 12 }}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-                {radarMissingDims.length > 0 && (
-                  <p className="text-[11px] text-slate-400 mt-2 text-center">
-                    {radarMissingDims.join('、')}暂无数据·完成模拟面试后解锁
-                  </p>
-                )}
-              </div>
-            </div>
-
+          {/* ── Growth curve ── */}
+          <motion.div variants={fadeUp}>
             <div className="glass p-5">
               <div className="g-inner">
                 <div className="flex items-center justify-between mb-4">
@@ -951,47 +1080,86 @@ export default function ReportPage() {
             </motion.div>
           )}
 
-          {/* ── Promotion path timeline ── */}
-          {data.promotion_path && data.promotion_path.length > 0 && (
-            <motion.div variants={fadeUp} className="glass p-5">
+          {/* ── Profile diagnosis ── */}
+          {data.diagnosis && data.diagnosis.length > 0 && (
+            <motion.div variants={fadeUp} className="glass p-6">
               <div className="g-inner">
-                <p className="text-[13px] font-semibold text-slate-700 mb-4">职业发展路径（参考）</p>
-                <div className="flex items-center gap-0 overflow-x-auto pb-2">
-                  {data.promotion_path.map((step, i) => {
-                    const isCurrentLevel = data.positioning_level === 'junior' ? i === 0
-                      : data.positioning_level === 'mid' ? i === 1
-                      : data.positioning_level === 'senior' ? i === 2 : false
-                    const currentIdx = data.positioning_level === 'junior' ? 0 : data.positioning_level === 'mid' ? 1 : 2
-                    return (
-                      <div key={i} className="flex items-center flex-shrink-0">
-                        <div className="flex flex-col items-center">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold ${
-                            i <= currentIdx
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-slate-100 text-slate-400'
-                          }`}>
-                            {i + 1}
-                          </div>
-                          <span className={`text-[10px] mt-1.5 max-w-[72px] text-center leading-tight ${
-                            isCurrentLevel ? 'text-blue-600 font-semibold' : 'text-slate-500'
-                          }`}>
-                            {step.title}
-                            {isCurrentLevel && <span className="block text-[9px] text-blue-400">← 你在这里</span>}
+                <div className="flex items-center gap-2 mb-4">
+                  <ClipboardList size={15} className="text-amber-500" />
+                  <p className="text-[13px] font-semibold text-slate-700">档案体检</p>
+                </div>
+                <div className="space-y-3">
+                  {data.diagnosis.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="rounded-xl p-4 transition-all duration-200"
+                      style={{
+                        background: item.status === 'pass' ? 'rgba(22,163,74,0.06)' : 'rgba(255,255,255,0.5)',
+                        border: `1px solid ${item.status === 'pass' ? 'rgba(22,163,74,0.15)' : 'rgba(217,119,6,0.15)'}`,
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[13px] font-medium text-slate-700">{item.source}</span>
+                          <span
+                            className="text-[10px] px-2 py-0.5 rounded-full"
+                            style={{
+                              background: item.source_type === 'resume' ? 'rgba(99,102,241,0.1)' : 'rgba(37,99,235,0.1)',
+                              color: item.source_type === 'resume' ? '#6366f1' : '#2563eb',
+                            }}
+                          >
+                            {item.source_type === 'resume' ? '简历' : '成长档案'}
                           </span>
                         </div>
-                        {i < data.promotion_path!.length - 1 && (
-                          <div className={`w-8 h-0.5 mx-1 mt-[-16px] ${
-                            i < currentIdx
-                              ? 'bg-blue-400' : 'bg-slate-200'
-                          }`} />
-                        )}
+                        <span
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                          style={{
+                            background: item.status === 'pass' ? 'rgba(22,163,74,0.1)' : 'rgba(217,119,6,0.1)',
+                            color: item.status === 'pass' ? '#15803d' : '#b45309',
+                          }}
+                        >
+                          {item.status === 'pass' ? '通过' : '还差一点'}
+                        </span>
                       </div>
-                    )
-                  })}
+                      {item.status === 'needs_improvement' && (
+                        <>
+                          {item.highlight && (
+                            <p className="text-[12px] text-slate-600 mb-1">
+                              <span className="text-green-600 font-medium">亮点：</span>
+                              {item.highlight}
+                            </p>
+                          )}
+                          <p className="text-[12px] text-slate-600 mb-2">
+                            <span className="text-amber-600 font-medium">差一步：</span>
+                            {item.issues.join('、')}
+                          </p>
+                          {item.suggestion && (
+                            <p className="text-[12px] text-indigo-600 px-3 py-2 rounded-lg bg-indigo-50/50 border border-indigo-100 leading-relaxed mb-2">
+                              {item.suggestion}
+                            </p>
+                          )}
+                          <div className="mt-3 flex justify-end">
+                            <button
+                              onClick={() => {
+                                navigate('/growth-log?tab=refine')
+                              }}
+                              className="text-[12px] text-blue-600 hover:text-blue-700 font-medium cursor-pointer flex items-center gap-1 transition-colors duration-200"
+                            >
+                              去补充
+                              <ArrowRight size={12} />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </motion.div>
           )}
+
+          {/* ── 职业发展路径（LLM 分析 + graph 绑定） ── */}
+          <CareerAlignmentSection alignment={data.career_alignment} />
 
           {/* ── Soft skills ── */}
           {data.soft_skills && Object.keys(data.soft_skills).length > 0 && (

@@ -14,115 +14,95 @@ from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
-# Normalize English dimension keys (from mock interview) to Chinese labels (from single-Q review)
-_KEY_TO_LABEL = {
-    "technical_depth": "技术深度",
-    "expression": "表达清晰度",
-    "project_experience": "项目经验",
-    "adaptability": "应变能力",
-    "answer_structure": "回答结构性",
-    "example_ability": "举例能力",
-}
-
-
-def _parse_analysis(raw: str | None) -> dict:
-    """Safely parse analysis_json, shared by InterviewReview and MockInterviewSession."""
-    if not raw:
-        return {}
-    try:
-        return json.loads(raw)
-    except (json.JSONDecodeError, TypeError):
-        return {}
-
 
 def get_dashboard_stats(profile_id: int, db: Session) -> dict[str, Any]:
-    """聚合仪表盘数据。"""
+    """聚合仪表盘数据 — 仅基于当前真实存在的功能模块。"""
     from backend.db_models import (
-        JDDiagnosis, InterviewReview, InterviewChecklist, MockInterviewSession,
+        JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile,
     )
+
+    user_id = db.query(Profile.user_id).filter(Profile.id == profile_id).scalar()
 
     # JD 诊断次数
     jd_count = db.query(func.count(JDDiagnosis.id)).filter_by(profile_id=profile_id).scalar() or 0
 
-    # 面试复盘次数（单题）
-    review_count = db.query(func.count(InterviewReview.id)).filter_by(profile_id=profile_id).scalar() or 0
+    # 项目记录数
+    project_count = db.query(func.count(ProjectRecord.id)).filter_by(profile_id=profile_id).scalar() or 0
 
-    # 模拟面试 — 一次查出，后续函数共享，避免重复查询
-    mock_sessions = (
-        db.query(MockInterviewSession)
-        .filter_by(profile_id=profile_id, status="finished")
-        .order_by(MockInterviewSession.finished_at.asc())
-        .all()
-    )
-    mock_count = len(mock_sessions)
+    # 岗位投递数
+    application_count = 0
+    if user_id:
+        application_count = (
+            db.query(func.count(JobApplication.id)).filter_by(user_id=user_id).scalar() or 0
+        )
 
-    # 备战清单进度（最新的一个）
-    checklist = (
-        db.query(InterviewChecklist)
-        .filter_by(profile_id=profile_id)
-        .order_by(InterviewChecklist.created_at.desc())
-        .first()
-    )
-    checklist_progress = None
-    if checklist:
-        items = checklist.items or []
-        total = len(items)
-        passed = sum(1 for i in items if i.get("status") in ("can_answer", "learned"))
-        checklist_progress = {
-            "total": total,
-            "passed": passed,
-            "progress": round(passed / total * 100) if total else 0,
-            "jd_title": checklist.jd_title,
-        }
+    # 面试记录数
+    interview_count = 0
+    if user_id:
+        interview_count = (
+            db.query(func.count(InterviewRecord.id)).filter_by(user_id=user_id).scalar() or 0
+        )
 
     # 有效操作天数 streak
-    streak = _compute_streak(profile_id, db, mock_sessions)
+    streak = _compute_streak(profile_id, db)
 
-    # 最近活动（诊断 + 复盘 + 模拟面试合并，按时间倒序，最多 10 条）
-    recent = _get_recent_activities(profile_id, db, mock_sessions, limit=10)
-
-    # 进步曲线
-    progress_curve = _get_progress_curve(profile_id, db, mock_sessions)
-
-    # 维度聚合
-    dimension_summary = _get_dimension_summary(profile_id, db, mock_sessions)
+    # 最近活动（诊断 + 项目 + 实战 + 面试，按时间倒序，最多 10 条）
+    recent = _get_recent_activities(profile_id, db, limit=10)
 
     return {
         "jd_diagnosis_count": jd_count,
-        "review_count": review_count + mock_count,
-        "checklist_progress": checklist_progress,
+        "project_count": project_count,
+        "application_count": application_count,
+        "interview_count": interview_count,
         "streak_days": streak,
         "recent_activities": recent,
-        "progress_curve": progress_curve,
-        "dimension_summary": dimension_summary,
     }
 
 
-def _compute_streak(profile_id: int, db: Session, mock_sessions: list) -> int:
-    """计算有效操作天数 streak。有效 = 当天有 ≥1 次诊断、复盘或模拟面试。"""
-    from backend.db_models import JDDiagnosis, InterviewReview
+def _compute_streak(profile_id: int, db: Session) -> int:
+    """计算有效操作天数 streak。有效 = 当天有 ≥1 次诊断、项目、实战或面试记录。"""
+    from backend.db_models import JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile
+
+    user_id = db.query(Profile.user_id).filter(Profile.id == profile_id).scalar()
+
+    active_dates = set()
 
     jd_dates = (
         db.query(func.date(JDDiagnosis.created_at))
         .filter_by(profile_id=profile_id)
         .all()
     )
-    review_dates = (
-        db.query(func.date(InterviewReview.created_at))
-        .filter_by(profile_id=profile_id)
-        .all()
-    )
-
-    active_dates = set()
     for (d,) in jd_dates:
         if d:
             active_dates.add(str(d))
-    for (d,) in review_dates:
+
+    project_dates = (
+        db.query(func.date(ProjectRecord.created_at))
+        .filter_by(profile_id=profile_id)
+        .all()
+    )
+    for (d,) in project_dates:
         if d:
             active_dates.add(str(d))
-    for m in mock_sessions:
-        if m.finished_at:
-            active_dates.add(str(m.finished_at.date()))
+
+    if user_id:
+        app_dates = (
+            db.query(func.date(JobApplication.created_at))
+            .filter_by(user_id=user_id)
+            .all()
+        )
+        for (d,) in app_dates:
+            if d:
+                active_dates.add(str(d))
+
+        interview_dates = (
+            db.query(func.date(InterviewRecord.created_at))
+            .filter_by(user_id=user_id)
+            .all()
+        )
+        for (d,) in interview_dates:
+            if d:
+                active_dates.add(str(d))
 
     if not active_dates:
         return 0
@@ -138,11 +118,14 @@ def _compute_streak(profile_id: int, db: Session, mock_sessions: list) -> int:
 
 
 def _get_recent_activities(
-    profile_id: int, db: Session, mock_sessions: list, limit: int = 10,
+    profile_id: int, db: Session, limit: int = 10,
 ) -> list[dict]:
-    """获取最近活动列表（诊断 + 单题复盘 + 模拟面试合并）。"""
-    from backend.db_models import JDDiagnosis, InterviewReview
+    """获取最近活动列表（诊断 + 项目 + 实战 + 面试合并），按时间倒序。"""
+    from backend.db_models import (
+        JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile,
+    )
 
+    user_id = db.query(Profile.user_id).filter(Profile.id == profile_id).scalar()
     activities: list[dict] = []
 
     # JD diagnoses
@@ -161,149 +144,57 @@ def _get_recent_activities(
             "id": jd.id,
         })
 
-    # Single-question reviews
-    reviews = (
-        db.query(InterviewReview)
+    # Project records
+    projects = (
+        db.query(ProjectRecord)
         .filter_by(profile_id=profile_id)
-        .order_by(InterviewReview.created_at.desc())
+        .order_by(ProjectRecord.created_at.desc())
         .limit(limit)
         .all()
     )
-    for r in reviews:
-        analysis = _parse_analysis(r.analysis_json)
+    for p in projects:
         activities.append({
-            "type": "interview_review",
-            "title": f"面试复盘 · {r.target_job or '未指定岗位'} ({analysis.get('score', 0)}分)",
-            "date": r.created_at.isoformat() if r.created_at else "",
-            "id": r.id,
+            "type": "project",
+            "title": f"项目 · {p.name}",
+            "date": p.created_at.isoformat() if p.created_at else "",
+            "id": p.id,
         })
 
-    # Mock interview sessions (already filtered to finished)
-    for m in mock_sessions:
-        analysis = _parse_analysis(m.analysis_json)
-        score = analysis.get("overall_score", 0)
-        activities.append({
-            "type": "mock_interview",
-            "title": f"模拟面试 · {m.target_job or '未指定岗位'} ({score}分)",
-            "date": (m.finished_at or m.created_at).isoformat(),
-            "id": m.id,
-        })
+    if user_id:
+        # Job applications
+        apps = (
+            db.query(JobApplication)
+            .filter_by(user_id=user_id)
+            .order_by(JobApplication.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for a in apps:
+            activities.append({
+                "type": "application",
+                "title": f"实战 · {a.company or '未知公司'} {a.position or ''}",
+                "date": a.created_at.isoformat() if a.created_at else "",
+                "id": a.id,
+            })
+
+        # Interview records
+        interviews = (
+            db.query(InterviewRecord)
+            .filter_by(user_id=user_id)
+            .order_by(InterviewRecord.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for i in interviews:
+            activities.append({
+                "type": "interview",
+                "title": f"面试 · {i.company or '未知公司'} {i.round or ''}",
+                "date": i.created_at.isoformat() if i.created_at else "",
+                "id": i.id,
+            })
 
     activities.sort(key=lambda x: x["date"], reverse=True)
     return activities[:limit]
-
-
-def _extract_dim_scores(dims: list) -> dict[str, int]:
-    """Extract dimension scores from analysis dimensions list, normalizing keys to Chinese labels."""
-    result = {}
-    for d in dims:
-        if isinstance(d, dict) and "score" in d:
-            label = d.get("name") or _KEY_TO_LABEL.get(d.get("key", ""), d.get("label", ""))
-            if label:
-                result[label] = d["score"]
-    return result
-
-
-def _get_progress_curve(profile_id: int, db: Session, mock_sessions: list) -> list[dict]:
-    """获取进步曲线数据（JD 匹配度 + 单题复盘 + 模拟面试的时间序列）。"""
-    from backend.db_models import JDDiagnosis, InterviewReview
-
-    points: list[dict] = []
-
-    # JD diagnosis scores
-    jds = (
-        db.query(JDDiagnosis)
-        .filter_by(profile_id=profile_id)
-        .order_by(JDDiagnosis.created_at.asc())
-        .all()
-    )
-    for jd in jds:
-        points.append({
-            "type": "jd",
-            "date": jd.created_at.isoformat() if jd.created_at else "",
-            "score": jd.match_score,
-        })
-
-    # Single-question review scores
-    reviews = (
-        db.query(InterviewReview)
-        .filter_by(profile_id=profile_id)
-        .order_by(InterviewReview.created_at.asc())
-        .all()
-    )
-    for r in reviews:
-        analysis = _parse_analysis(r.analysis_json)
-        if not analysis:
-            continue
-        points.append({
-            "type": "review",
-            "date": r.created_at.isoformat() if r.created_at else "",
-            "score": analysis.get("score", 0),
-            "dimensions": _extract_dim_scores(analysis.get("dimensions", [])),
-        })
-
-    # Mock interview scores
-    for m in mock_sessions:
-        analysis = _parse_analysis(m.analysis_json)
-        if not analysis:
-            continue
-        points.append({
-            "type": "review",  # same type so frontend curves render uniformly
-            "date": (m.finished_at or m.created_at).isoformat(),
-            "score": analysis.get("overall_score", 0),
-            "dimensions": _extract_dim_scores(analysis.get("dimensions", [])),
-        })
-
-    points.sort(key=lambda x: x["date"])
-    return points
-
-
-def _get_dimension_summary(
-    profile_id: int, db: Session, mock_sessions: list,
-) -> dict[str, Any]:
-    """聚合维度评分数据：每个维度的平均分 + 最弱维度。"""
-    from backend.db_models import InterviewReview
-
-    reviews = (
-        db.query(InterviewReview)
-        .filter_by(profile_id=profile_id)
-        .order_by(InterviewReview.created_at.asc())
-        .all()
-    )
-
-    # Collect all analysis blobs from both sources
-    all_analyses = [_parse_analysis(r.analysis_json) for r in reviews]
-    all_analyses += [_parse_analysis(m.analysis_json) for m in mock_sessions]
-
-    dim_scores: dict[str, list[int]] = {}
-    for analysis in all_analyses:
-        for d in analysis.get("dimensions", []):
-            if not isinstance(d, dict) or "score" not in d:
-                continue
-            label = d.get("name") or _KEY_TO_LABEL.get(d.get("key", ""), d.get("label", ""))
-            if label:
-                dim_scores.setdefault(label, []).append(d["score"])
-
-    if not dim_scores:
-        return {"dimensions": [], "weakest": []}
-
-    dim_avgs = []
-    for name, scores in dim_scores.items():
-        avg = round(sum(scores) / len(scores))
-        dim_avgs.append({
-            "name": name,
-            "avg_score": avg,
-            "count": len(scores),
-            "trend": _dim_trend(scores),
-        })
-
-    dim_avgs.sort(key=lambda x: x["avg_score"])
-    weakest = [d["name"] for d in dim_avgs[:2] if d["avg_score"] < 80]
-
-    return {
-        "dimensions": dim_avgs,
-        "weakest": weakest,
-    }
 
 
 def recommend_next_step(profile_id: int, db: Session) -> dict[str, Any]:
@@ -352,15 +243,13 @@ def recommend_next_step(profile_id: int, db: Session) -> dict[str, Any]:
     else:
         stage = "active"
         streak = stats.get("streak_days", 0)
-        review_count = stats.get("review_count", 0)
-        checklist = stats.get("checklist_progress")
+        project_count = stats.get("project_count", 0)
+        application_count = stats.get("application_count", 0)
 
-        if checklist and checklist.get("progress", 0) < 80:
-            recommendations.append(
-                f"继续攻克备战清单（进度 {checklist.get('progress', 0)}%）"
-            )
-        if review_count < 5:
-            recommendations.append("做更多面试练习或模拟面试，积累实战经验")
+        if project_count < 2:
+            recommendations.append("在成长档案中记录一个实战项目，补齐缺口技能")
+        if application_count < 3:
+            recommendations.append("追踪更多目标岗位投递，积累面试机会")
         if streak == 0:
             recommendations.append("今天还没有活动记录，保持学习节奏")
         else:
@@ -386,11 +275,14 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
     """Return daily activity counts for the last N weeks, for heatmap rendering.
 
     Returns:
-        { days: [ { date: "2026-04-08", count: 3, activities: ["学习", "JD诊断"] } ], streak: N }
+        { days: [ { date: "2026-04-08", count: 3, activities: ["项目", "JD诊断"] } ], streak: N }
     """
-    from backend.db_models import JDDiagnosis, InterviewReview, MockInterviewSession, LearningProgress
+    from backend.db_models import JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile
 
     cutoff = datetime.now(timezone.utc) - timedelta(weeks=weeks)
+
+    # Resolve user_id from profile_id
+    user_id = db.query(Profile.user_id).filter(Profile.id == profile_id).scalar()
 
     # Gather activity dates from all sources
     day_data: dict[str, dict[str, Any]] = {}
@@ -413,34 +305,33 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
         if dt:
             _add(dt.isoformat(), "JD诊断")
 
-    # Interview reviews
-    reviews = db.query(InterviewReview.created_at).filter(
-        InterviewReview.profile_id == profile_id,
-        InterviewReview.created_at >= cutoff,
+    # Project records
+    projects = db.query(ProjectRecord.created_at).filter(
+        ProjectRecord.profile_id == profile_id,
+        ProjectRecord.created_at >= cutoff,
     ).all()
-    for (dt,) in reviews:
+    for (dt,) in projects:
         if dt:
-            _add(dt.isoformat(), "面试练习")
+            _add(dt.isoformat(), "项目")
 
-    # Mock interviews
-    mocks = db.query(MockInterviewSession.finished_at).filter(
-        MockInterviewSession.profile_id == profile_id,
-        MockInterviewSession.status == "finished",
-        MockInterviewSession.finished_at >= cutoff,
-    ).all()
-    for (dt,) in mocks:
-        if dt:
-            _add(dt.isoformat(), "模拟面试")
+    # Job applications / pursuits
+    if user_id:
+        apps = db.query(JobApplication.created_at).filter(
+            JobApplication.user_id == user_id,
+            JobApplication.created_at >= cutoff,
+        ).all()
+        for (dt,) in apps:
+            if dt:
+                _add(dt.isoformat(), "实战")
 
-    # Learning progress
-    learns = db.query(LearningProgress.completed_at).filter(
-        LearningProgress.profile_id == profile_id,
-        LearningProgress.completed == True,
-        LearningProgress.completed_at >= cutoff,
-    ).all()
-    for (dt,) in learns:
-        if dt:
-            _add(dt.isoformat(), "学习")
+        # Interview records
+        interviews = db.query(InterviewRecord.created_at).filter(
+            InterviewRecord.user_id == user_id,
+            InterviewRecord.created_at >= cutoff,
+        ).all()
+        for (dt,) in interviews:
+            if dt:
+                _add(dt.isoformat(), "面试")
 
     # Build sorted list
     days = []

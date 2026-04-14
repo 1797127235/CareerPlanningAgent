@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import { motion } from 'framer-motion'
 import { ArrowRight, Upload, PenLine, MapPin, Target, User, Flame, BookOpen, FileSearch, Zap } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UploadProgress } from '@/components/profile'
 import { useGuidance } from '@/hooks/useGuidance'
 import { useAuth } from '@/hooks/useAuth'
@@ -12,6 +13,7 @@ import { useDashboardStats } from '@/hooks/useDashboard'
 import { useActivityHeatmap } from '@/hooks/useActivityHeatmap'
 import { SignatureHero } from '@/components/SignatureHero'
 import { ActivityHeatmap } from '@/components/ActivityHeatmap'
+import { rawFetch } from '@/api/client'
 
 const ease = [0.23, 1, 0.32, 1] as const
 
@@ -52,6 +54,49 @@ export default function HomePage() {
   const hasGoal = !!(graphPos && graphPos.target_node_id && graphPos.target_node_id !== graphPos.from_node_id)
   const zone = graphPos?.target_zone ? zoneLabel[graphPos.target_zone] : null
   const skillCount = profile?.profile?.skills?.length ?? 0
+
+  function HeartbeatBanners() {
+    const qc = useQueryClient()
+    const { data } = useQuery({
+      queryKey: ['heartbeat'],
+      queryFn: async () => rawFetch<{ notifications: any[] }>('/guidance/heartbeat'),
+      staleTime: 60_000,
+    })
+
+    const dismiss = useMutation({
+      mutationFn: async (id: number) =>
+        rawFetch('/guidance/heartbeat/dismiss', { method: 'POST', body: JSON.stringify({ notification_id: id }) }),
+      onSuccess: () => qc.invalidateQueries({ queryKey: ['heartbeat'] }),
+    })
+
+    const notes = data?.notifications ?? []
+    if (notes.length === 0) return null
+
+    return (
+      <div className="mb-4 space-y-2 w-full">
+        {notes.map((n: any) => (
+          <div key={n.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start justify-between">
+            <div>
+              <div className="font-medium text-amber-900">{n.title}</div>
+              <div className="text-sm text-amber-700 mt-1">{n.body}</div>
+              {n.cta_label && n.cta_route && (
+                <a href={n.cta_route} className="text-sm text-amber-800 underline mt-2 inline-block">
+                  {n.cta_label} →
+                </a>
+              )}
+            </div>
+            <button
+              onClick={() => dismiss.mutate(n.id)}
+              className="text-amber-600 hover:text-amber-800 ml-3 shrink-0"
+              aria-label="关闭"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col items-center h-full w-full px-4 sm:px-6 overflow-y-auto">
@@ -119,6 +164,7 @@ export default function HomePage() {
       ) : (
         /* ── Returning user: hero + dashboard content ── */
         <div className="flex flex-col items-center w-full max-w-[860px] pb-12">
+          <HeartbeatBanners />
 
           {/* ── Hero section ── */}
           <div className="relative w-full flex flex-col items-center justify-center min-h-[40dvh] pt-8 pb-10">
@@ -196,7 +242,7 @@ export default function HomePage() {
                         { label: '技能', value: skillCount, suffix: '项' },
                         ...(stats ? [
                           { label: '诊断', value: stats.jd_diagnosis_count, suffix: '次' },
-                          { label: '练习', value: stats.review_count, suffix: '次' },
+                          { label: '项目', value: stats.project_count, suffix: '个' },
                           { label: '连续', value: heatmapData?.streak ?? stats.streak_days, suffix: '天' },
                         ] : []),
                       ].map(({ label, value, suffix }) => (
@@ -293,7 +339,7 @@ export default function HomePage() {
                   {/* ── Journey: next step ── */}
                   {(() => {
                     const jdCount = stats?.jd_diagnosis_count ?? 0
-                    const reviewCount = stats?.review_count ?? 0
+                    const projectCount = stats?.project_count ?? 0
 
                     // Determine next step based on journey stage
                     let step: { icon: React.ReactNode; title: string; desc: string; action: string; onClick: () => void } | null = null
@@ -316,21 +362,19 @@ export default function HomePage() {
                           import('@/hooks/useCoachTrigger').then(m => m.sendToCoach('帮我搜索目标岗位相关的招聘'))
                         },
                       }
-                    } else if (reviewCount === 0) {
+                    } else if (projectCount === 0) {
                       step = {
                         icon: <Zap className="w-4 h-4 text-purple-500" />,
-                        title: '练一道面试题',
-                        desc: '根据你的缺口技能出一道面试题，边练边补',
-                        action: '开始练习',
-                        onClick: () => {
-                          import('@/hooks/useCoachTrigger').then(m => m.sendToCoach('根据我的技能缺口，帮我出一道面试题'))
-                        },
+                        title: '记录第一个项目',
+                        desc: '在成长档案记录一个项目，把缺口技能落到实战中',
+                        action: '去记录',
+                        onClick: () => navigate('/growth-log'),
                       }
                     } else {
                       step = {
                         icon: <BookOpen className="w-4 h-4 text-emerald-500" />,
                         title: '去成长档案追踪',
-                        desc: '在时间轴看见自己的进步，记录项目推进缺口',
+                        desc: '在时间轴看见自己的进步，记录更多项目与投递进展',
                         action: '打开档案',
                         onClick: () => navigate('/growth-log'),
                       }

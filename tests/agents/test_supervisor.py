@@ -21,8 +21,8 @@ class TestBuildSupervisor:
             "navigator",
             "jd_agent",
             "growth_agent",
-            "practice_agent",
-            "report_agent",
+            "coach_agent",
+            "search_agent",
         ]:
             assert agent_name in node_names or any(
                 agent_name in n for n in node_names
@@ -63,8 +63,8 @@ class TestHandoffTools:
             "transfer_to_navigator",
             "transfer_to_jd_agent",
             "transfer_to_growth_agent",
-            "transfer_to_practice_agent",
-            "transfer_to_report_agent",
+            "transfer_to_coach_agent",
+            "transfer_to_search_agent",
         }
         assert names == expected, f"Handoff tools mismatch: {names} vs {expected}"
 
@@ -153,3 +153,21 @@ class TestContextSummary:
         }
         result = build_context_summary(state)
         assert "未知" in result
+
+
+class TestQuestionRe:
+    def test_matches_question_patterns(self):
+        from agent.supervisor import _QUESTION_RE
+        assert _QUESTION_RE.search("要不要我帮你搜？")
+        assert _QUESTION_RE.search("需要吗")
+        assert _QUESTION_RE.search("是否适合？")
+        assert _QUESTION_RE.search("怎么样？")
+        assert _QUESTION_RE.search("好吗？")
+        assert _QUESTION_RE.search("帮你看看")
+        assert _QUESTION_RE.search("给你建议")
+
+    def test_does_not_match_statement(self):
+        from agent.supervisor import _QUESTION_RE
+        assert _QUESTION_RE.search("我觉得你可以关注字节。") is None
+        assert _QUESTION_RE.search("这是一个开放建议") is None
+        assert _QUESTION_RE.search("先补缺口再投") is None

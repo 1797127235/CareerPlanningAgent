@@ -30,22 +30,11 @@ def get_dashboard_stats(profile_id: int) -> str:
     lines = [
         f"画像 #{profile_id} 学习仪表盘：\n",
         f"  JD诊断次数: {stats.get('jd_diagnosis_count', 0)}",
-        f"  面试复盘次数: {stats.get('review_count', 0)}",
+        f"  项目记录数: {stats.get('project_count', 0)}",
+        f"  岗位追踪数: {stats.get('application_count', 0)}",
+        f"  面试记录数: {stats.get('interview_count', 0)}",
         f"  连续活跃天数: {stats.get('streak_days', 0)} 天",
     ]
-
-    checklist = stats.get("checklist_progress")
-    if checklist:
-        lines.append(
-            f"  备战清单进度: {checklist.get('passed', 0)}/{checklist.get('total', 0)}"
-            f"（{checklist.get('progress', 0)}%）— {checklist.get('jd_title', '')}"
-        )
-
-    curve = stats.get("progress_curve", [])
-    if curve:
-        recent = curve[-3:]
-        points = [f"{p.get('type', '?')}:{p.get('score', 0)}" for p in recent]
-        lines.append(f"  最近得分趋势: {' → '.join(points)}")
 
     recent_acts = stats.get("recent_activities", [])
     if recent_acts:
@@ -79,42 +68,6 @@ def recommend_next_step(profile_id: int) -> str:
     header = f"当前阶段: {result['stage_label']}\n\n推荐下一步行动：\n"
     numbered = [f"{i + 1}. {r}" for i, r in enumerate(result["recommendations"])]
     return header + "\n".join(numbered)
-
-
-@tool
-def get_learning_notes(topic: str = "") -> str:
-    """查询用户的学习笔记。可按主题关键词过滤，不传则返回最近10条。
-    当用户问"我学了什么"、"我的笔记"、"某个主题的笔记"时调用。
-    """
-    user_id = _injected_user_id.get()
-    if not user_id:
-        return "无法获取用户信息。"
-
-    try:
-        from backend.db import SessionLocal
-        from backend.db_models import LearningNote
-
-        db = SessionLocal()
-        try:
-            q = db.query(LearningNote).filter_by(user_id=user_id)
-            if topic:
-                q = q.filter(LearningNote.title.contains(topic) | LearningNote.summary.contains(topic))
-            notes = q.order_by(LearningNote.created_at.desc()).limit(10).all()
-        finally:
-            db.close()
-    except Exception as e:
-        return f"查询学习笔记时出错：{e}"
-
-    if not notes:
-        return f"没有找到{'关于「' + topic + '」的' if topic else ''}学习笔记。"
-
-    lines = [f"学习笔记（共 {len(notes)} 条）：\n"]
-    for n in notes:
-        tag_str = f" [{', '.join(n.tags[:3])}]" if n.tags else ""
-        date_str = n.created_at.strftime("%m/%d") if n.created_at else ""
-        lines.append(f"· {n.title}{tag_str} — {(n.summary or '')[:80]}{'…' if len(n.summary or '') > 80 else ''} ({date_str})")
-
-    return "\n".join(lines)
 
 
 @tool

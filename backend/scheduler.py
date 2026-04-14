@@ -35,8 +35,25 @@ def start_scheduler() -> None:
         id="daily-rescore",
         replace_existing=True,
     )
+
+    # 新增：每天 09:00 跑 heartbeat
+    scheduler.add_job(
+        _heartbeat_job,
+        trigger=CronTrigger(hour=9, minute=0),
+        id="daily-heartbeat",
+        replace_existing=True,
+    )
+
+    # 新增：每周日 04:00 跑 pattern analysis
+    scheduler.add_job(
+        _pattern_analysis_job,
+        trigger=CronTrigger(day_of_week="sun", hour=4, minute=0),
+        id="weekly-pattern-analysis",
+        replace_existing=True,
+    )
+
     scheduler.start()
-    logger.info("Scheduler started — daily rescore at 03:00")
+    logger.info("Scheduler started — daily rescore at 03:00, heartbeat at 09:00, weekly pattern analysis at Sun 04:00")
 
 
 def stop_scheduler() -> None:
@@ -62,3 +79,21 @@ def _sync_rescore() -> None:
                      result["changed_nodes"], result["zone_changes"])
     else:
         logger.info("Scheduled rescore skipped or failed")
+
+
+async def _heartbeat_job() -> None:
+    await asyncio.to_thread(_sync_heartbeat)
+
+
+def _sync_heartbeat() -> None:
+    from backend.services.heartbeat_service import run_heartbeat
+    run_heartbeat()
+
+
+async def _pattern_analysis_job() -> None:
+    await asyncio.to_thread(_sync_pattern_analysis)
+
+
+def _sync_pattern_analysis() -> None:
+    from backend.services.pattern_analyzer import run_pattern_analysis_all
+    run_pattern_analysis_all()

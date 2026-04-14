@@ -236,7 +236,7 @@ function CareerPathContent({ data }: { data: Record<string, unknown> }) {
         <div className="mb-5 p-3.5 bg-blue-50 border border-blue-100 rounded-xl">
           <div className="flex items-center gap-2.5 mb-2">
             <span className="text-[13.5px] font-semibold text-[var(--text-1)]">{goal.target_label as string}</span>
-            {goal.target_zone && (
+            {!!goal.target_zone && (
               <span className={`inline-flex px-1.5 py-0.5 rounded text-[9.5px] font-bold border ${ZONE_CLS[goal.target_zone as string] ?? ZONE_CLS.transition}`}>
                 {ZONE_ZH[goal.target_zone as string] ?? '过渡区'}
               </span>
@@ -424,58 +424,11 @@ function InterviewContent({ data }: { data: Record<string, unknown> }) {
   }>
   const avg   = data.avg_score as number | undefined
   const total = data.total_count as number | undefined
-  const mockSessions = (data.mock_sessions ?? []) as Array<{
-    id: number
-    target_job: string
-    overall_score: number
-    overall_feedback: string
-    dimensions: Array<{ key: string; label: string; score: number; feedback: string }>
-    skill_gaps: string[]
-    date: string
-  }>
 
   const latest = records[0]
 
   return (
     <div>
-      {/* Mock interview sessions */}
-      {mockSessions.length > 0 && (
-        <div className="mb-5">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-3)] mb-2.5">
-            模拟面试 · {mockSessions.length} 场
-          </p>
-          <div className="space-y-3">
-            {mockSessions.map((s) => (
-              <div key={s.id} className="bg-slate-50/80 border border-slate-100 rounded-xl p-3.5">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[12.5px] font-semibold text-[var(--text-1)]">{s.target_job}</span>
-                  <span className="text-[20px] font-bold tabular-nums text-[var(--blue)]">{s.overall_score}</span>
-                </div>
-                {s.dimensions.length > 0 && (
-                  <div className="grid grid-cols-2 gap-1.5 mb-2">
-                    {s.dimensions.slice(0, 4).map((d) => (
-                      <div key={d.key} className="flex items-center justify-between bg-white/70 rounded-lg px-2 py-1">
-                        <span className="text-[10.5px] text-[var(--text-3)]">{d.label}</span>
-                        <span className="text-[11px] font-semibold tabular-nums text-[var(--text-1)]">{d.score}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {s.skill_gaps.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {s.skill_gaps.slice(0, 5).map((g) => (
-                      <span key={g} className="inline-flex px-2 py-0.5 rounded-full text-[10.5px] bg-red-50 border border-red-100 text-red-600">
-                        {g}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* stats row */}
       <div className="grid grid-cols-3 bg-slate-50 border border-slate-100 rounded-xl overflow-hidden mb-4">
         {total != null && (

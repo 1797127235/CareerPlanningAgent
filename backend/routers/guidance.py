@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -16,10 +16,10 @@ from backend.auth import get_current_user
 from backend.db import get_db
 from backend.db_models import (
     InterviewRecord,
-    InterviewReview,
     JDDiagnosis,
     JobApplication,
     Profile,
+    ProjectRecord,
     Report,
     User,
 )
@@ -38,9 +38,8 @@ def _build_guidance(
     page: str,
     profile_name: str,
     jd_count: int,
-    review_count: int,
+    activity_count: int,
     latest_match_score: int | None,
-    latest_review_score: int | None,
     competitiveness: int,
     app_count: int = 0,
     has_applied: bool = False,
@@ -66,19 +65,14 @@ def _build_guidance(
 
     if stage == "has_profile":
         if page == "profile":
-            result["message"] = f"画像已就位！竞争力 {competitiveness} 分。下一步：找一份感兴趣的岗位 JD，测测匹配度。"
-            result["cta_text"] = "去做 JD 诊断"
-            result["cta_route"] = "/jd"
-            result["tone"] = "encouraging"
-        elif page == "jd":
-            result["message"] = "粘贴一份真实 JD，AI 会从四个维度分析你和这个岗位的匹配度。"
+            result["message"] = f"画像已就位！竞争力 {competitiveness} 分。把一份真实 JD 粘到右侧教练，我来帮你诊断匹配度。"
             result["cta_text"] = ""
             result["cta_route"] = ""
-            result["tone"] = "neutral"
+            result["tone"] = "encouraging"
         else:
-            result["message"] = f"{profile_name}，你的画像已建好。用一份真实 JD 来测测自己的匹配度？"
-            result["cta_text"] = "去做 JD 诊断"
-            result["cta_route"] = "/jd"
+            result["message"] = f"{profile_name}，你的画像已建好。把一份真实 JD 粘到右侧教练，我来帮你诊断匹配度。"
+            result["cta_text"] = ""
+            result["cta_route"] = ""
             result["tone"] = "encouraging"
         return result
 
@@ -107,14 +101,13 @@ def _build_guidance(
         return result
 
     if stage == "training":
-        score_text = f"面试平均分 {latest_review_score}，" if latest_review_score else ""
         if page == "growth":
-            result["message"] = f"{score_text}已有 {review_count} 次活动记录。继续积累，数据越多成长曲线越清晰。"
+            result["message"] = f"已有 {activity_count} 次成长记录。继续积累项目与投递，数据越完整，报告越有价值。"
             result["cta_text"] = ""
             result["cta_route"] = ""
             result["tone"] = "celebrating"
         else:
-            result["message"] = f"{score_text}已做了 {jd_count} 次诊断。去成长档案看看你的进步。"
+            result["message"] = f"已做了 {jd_count} 次诊断。去成长档案看看你的进步。"
             result["cta_text"] = "查看成长档案"
             result["cta_route"] = "/growth-log"
             result["tone"] = "encouraging"
@@ -122,7 +115,7 @@ def _build_guidance(
 
     if stage == "growing":
         if page == "growth":
-            result["message"] = "训练数据丰富了！可以生成一份完整的职业发展报告，记录你的成长轨迹。"
+            result["message"] = "成长档案越来越丰富了！可以生成一份完整的职业发展报告，记录你的轨迹。"
             result["cta_text"] = "生成发展报告"
             result["cta_route"] = "/report"
             result["tone"] = "celebrating"
@@ -132,7 +125,7 @@ def _build_guidance(
             result["cta_route"] = ""
             result["tone"] = "neutral"
         else:
-            result["message"] = f"你已经积累了 {jd_count} 次诊断、{review_count} 次面试练习。该出一份报告了！"
+            result["message"] = f"你已经积累了 {jd_count} 次诊断、{activity_count} 条成长记录。该出一份报告了！"
             result["cta_text"] = "生成发展报告"
             result["cta_route"] = "/report"
             result["tone"] = "celebrating"
@@ -140,12 +133,12 @@ def _build_guidance(
 
     # report_ready — full cycle complete
     if page == "report":
-        result["message"] = "报告已生成。继续做诊断和练习可以持续更新报告内容。"
-        result["cta_text"] = "做新的 JD 诊断"
-        result["cta_route"] = "/jd"
+        result["message"] = "报告已生成。继续粘 JD 到右侧教练或补齐档案，报告会随之更新。"
+        result["cta_text"] = ""
+        result["cta_route"] = ""
         result["tone"] = "neutral"
     else:
-        result["message"] = "你的职业规划闭环已完成！保持练习节奏，定期更新画像和报告。"
+        result["message"] = "你的职业规划闭环已完成！保持记录节奏，定期更新画像和报告。"
         result["cta_text"] = "查看发展报告"
         result["cta_route"] = "/report"
         result["tone"] = "celebrating"
@@ -167,15 +160,16 @@ def get_guidance(
     # Aggregate user state from DB
     profile_count = db.query(func.count(Profile.id)).filter_by(user_id=user.id).scalar() or 0
     jd_count = db.query(func.count(JDDiagnosis.id)).filter_by(user_id=user.id).scalar() or 0
-    review_count = (
-        db.query(func.count(InterviewReview.id))
-        .join(Profile, InterviewReview.profile_id == Profile.id)
-        .filter(Profile.user_id == user.id)
-        .scalar() or 0
-    )
+
+    # activity_count = 项目 + 实战 + 面试记录
+    project_count = db.query(func.count(ProjectRecord.id)).filter_by(user_id=user.id).scalar() or 0
+    app_count = db.query(func.count(JobApplication.id)).filter_by(user_id=user.id).scalar() or 0
+    interview_count = db.query(func.count(InterviewRecord.id)).filter_by(user_id=user.id).scalar() or 0
+    activity_count = project_count + app_count + interview_count
+
     report_count = db.query(func.count(Report.id)).filter_by(user_id=user.id).scalar() or 0
 
-    stage = compute_stage(profile_count, jd_count, review_count, report_count)
+    stage = compute_stage(profile_count, jd_count, activity_count, report_count)
 
     # Get profile name + competitiveness
     profile_name = "同学"
@@ -204,36 +198,14 @@ def get_guidance(
         if latest_jd:
             latest_match_score = latest_jd.match_score
 
-    # Latest review score (score lives in analysis_json)
-    latest_review_score = None
-    if review_count > 0:
-        recent_reviews = (
-            db.query(InterviewReview.analysis_json)
-            .join(Profile, InterviewReview.profile_id == Profile.id)
-            .filter(Profile.user_id == user.id)
-            .order_by(InterviewReview.created_at.desc())
-            .limit(10)
-            .all()
-        )
-        scores = []
-        for (aj,) in recent_reviews:
-            try:
-                s = json.loads(aj or "{}").get("score", 0)
-                if s:
-                    scores.append(s)
-            except (json.JSONDecodeError, TypeError):
-                pass
-        if scores:
-            latest_review_score = round(sum(scores) / len(scores))
-
     # JobApplication state — read-only aggregates, no business logic
     from datetime import datetime, timedelta, timezone as tz
     now = datetime.now(tz.utc)
-    app_count = db.query(func.count(JobApplication.id)).filter(
+    active_app_count = db.query(func.count(JobApplication.id)).filter(
         JobApplication.user_id == user.id,
         JobApplication.status != "pending",
     ).scalar() or 0
-    has_applied = app_count > 0 and db.query(JobApplication).filter(
+    has_applied = active_app_count > 0 and db.query(JobApplication).filter(
         JobApplication.user_id == user.id,
         JobApplication.status.in_(["applied", "screening"]),
     ).first() is not None
@@ -249,11 +221,10 @@ def get_guidance(
         page=page,
         profile_name=profile_name,
         jd_count=jd_count,
-        review_count=review_count,
+        activity_count=activity_count,
         latest_match_score=latest_match_score,
-        latest_review_score=latest_review_score,
         competitiveness=competitiveness,
-        app_count=app_count,
+        app_count=active_app_count,
         has_applied=has_applied,
         has_scheduled=has_scheduled,
     )
@@ -300,3 +271,67 @@ def get_guidance(
         guidance["tone"] = "urgent"
 
     return guidance
+
+
+from datetime import datetime, timezone
+from pydantic import BaseModel
+from backend.db_models import UserNotification
+
+
+class HeartbeatDismissBody(BaseModel):
+    notification_id: int
+
+
+@router.get("/heartbeat")
+def get_heartbeat(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """拉取未读的 heartbeat 通知，最多 3 条。"""
+    notes = (
+        db.query(UserNotification)
+        .filter(
+            UserNotification.user_id == user.id,
+            UserNotification.dismissed == False,  # noqa: E712
+        )
+        .order_by(UserNotification.created_at.desc())
+        .limit(3)
+        .all()
+    )
+    return {
+        "notifications": [
+            {
+                "id": n.id,
+                "kind": n.kind,
+                "title": n.title,
+                "body": n.body,
+                "cta_label": n.cta_label,
+                "cta_route": n.cta_route,
+                "created_at": n.created_at.isoformat(),
+            }
+            for n in notes
+        ]
+    }
+
+
+@router.post("/heartbeat/dismiss")
+def dismiss_heartbeat(
+    body: HeartbeatDismissBody,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """用户点关闭 → 标记 dismissed。"""
+    note = (
+        db.query(UserNotification)
+        .filter(
+            UserNotification.id == body.notification_id,
+            UserNotification.user_id == user.id,
+        )
+        .first()
+    )
+    if not note:
+        raise HTTPException(404, "通知不存在")
+    note.dismissed = True
+    note.dismissed_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}

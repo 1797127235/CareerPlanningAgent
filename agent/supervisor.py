@@ -115,7 +115,45 @@ def _get_market_signal_for_node(node_id: str) -> dict | None:
 
 # ── Context summary builder ───────────────────────────────────────────────────
 
-def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
+def build_context_summary(
+    state: "CareerState",
+    for_triage: bool = False,
+    agent_name: str | None = None,
+) -> str:
+    """Agent-aware context 注入。
+
+    - coach_agent: turn-aware 裁剪（冷启动空 / 3-4 轮骨架 / 5+ 完整）
+    - 其他 5 agent: full context（原行为）
+    """
+    # 非 coach: 原路径（零变化）
+    if agent_name != "coach_agent":
+        return _build_full_context(state, for_triage)
+
+    # coach 专用：按对话轮次裁剪
+    from langchain_core.messages import HumanMessage as _HM
+    human_count = sum(
+        1 for m in state.get("messages", []) if isinstance(m, _HM)
+    )
+
+    if human_count <= 2:
+        return (
+            "（冷启动期：用户刚开口，按本轮消息正常回应。"
+            "不要反引用系统里的画像细节；需要信息时调工具查。）"
+        )
+
+    if human_count <= 4:
+        stage = state.get("user_stage", "unknown")
+        lines = [f"- 当前阶段：{stage}"]
+        goal = state.get("career_goal")
+        if goal:
+            lines.append(f"- 目标岗位：{goal.get('label', '')}")
+        lines.append("（深度画像请通过 get_user_profile 等工具按需调用）")
+        return "\n".join(lines)
+
+    return _build_full_context(state, for_triage)
+
+
+def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
     """Create a structured summary from shared state.
 
     Args:
@@ -275,15 +313,6 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
             p_parts = [f"{p['company']} {p['position']}" for p in pursuits[:3] if p.get("company")]
             if p_parts:
                 parts.append(f"- 正在追踪的岗位: {', '.join(p_parts)}")
-        note_count = gc.get("learning_notes_count", 0)
-        latest_note = gc.get("latest_note_title")
-        if note_count > 0:
-            note_hint = f"- 学习笔记: {note_count}条"
-            if latest_note:
-                note_hint += f"（最新：{latest_note}）"
-            note_hint += " | 可调用 get_learning_notes 查询详情"
-            parts.append(note_hint)
-
     # Page context
     page = state.get("page_context")
     if page:
@@ -309,10 +338,30 @@ def build_context_summary(state: CareerState, for_triage: bool = False) -> str:
                 if pending:
                     parts.append(f"    待完成: {'、'.join(pending)}")
 
-    # Coach memo from prior sessions
-    memo = state.get("coach_memo", "")
-    if memo:
-        parts.append(f"\n教练备忘录（来自之前的对话）:\n{memo}")
+    # Coach memo from prior sessions (Mem0)
+    user_id = state.get("user_id")
+    if user_id and not for_triage:
+        last_user_msg = ""
+        for msg in reversed(state.get("messages", [])):
+            from langchain_core.messages import HumanMessage as _HM
+            if isinstance(msg, _HM):
+                last_user_msg = str(msg.content or "")[:200]
+                break
+
+        if last_user_msg:
+            try:
+                import time as _t
+                from backend.services.coach_memory import search_user_context
+                _mem_t0 = _t.time()
+                memories = search_user_context(user_id, last_user_msg, limit=5)
+                _mem_ms = (_t.time() - _mem_t0) * 1000
+                logger.info("Mem0 search: %.0f ms user=%d hits=%d", _mem_ms, user_id, len(memories))
+                if memories:
+                    parts.append("\n教练备忘录（Mem0 检索）:")
+                    for m in memories:
+                        parts.append(f"  · {m[:150]}")
+            except Exception:
+                pass  # Mem0 挂了不影响主链路
 
     return "\n".join(parts)
 
@@ -371,22 +420,13 @@ _INTENT_CLASSIFY_PROMPT = """判断用户消息应该由哪个专家处理。只
 
 _VALID_AGENTS = {"coach_agent", "navigator", "search_agent", "jd_agent", "profile_agent", "growth_agent"}
 
-# Regex patterns for detecting "search real JD" intent (deterministic, no LLM needed)
-# 触发真实JD搜索的模式
-# 核心原则：含"搜/找"动词 + 岗位/工作/招聘等名词 → 搜真实JD
-_SEARCH_JD_PATTERN = _re.compile(
-    # 动词 + 泛化对象（招聘/岗位/职位/工作/JD）
-    r"(帮我|能帮我)?(搜[搜索一下几份]*|找[找几份]*).{0,20}(招聘|岗位|职位|工作|JD|职位描述|岗位要求|岗位信息|工作信息|机会)"
-    # 动词 + 具体岗位方向（后端/前端/算法/开发/工程师）
-    r"|(帮我|能帮我)?(搜[搜索一下几份]*|找[找几份]*).{0,20}(后端|前端|全栈|算法|开发|工程师|实习|校招|测试|运维|数据|ai|llm|架构)"
-    # 动词 + 公司名（搜xx公司）
-    r"|搜[搜一下]*.*?公司"
-    # 省略宾语的求助
-    r"|[能可]不[能可]帮我搜"
-    r"|帮我搜[搜一下]*$"
-    r"|搜[搜一下]*看?$",
-    _re.IGNORECASE,
-)
+# NOTE: 前身 _SEARCH_JD_PATTERN 已删除（2026-04-15）
+# 原因：用关键字 regex 猜意图会把"我不知道能不能找到工作"这类自我评价/担忧语误判为搜 JD 请求。
+# 取而代之：模糊的搜索类意图 fall through 到 coach_agent，由 LLM + SYSTEM_PROMPT 判断是否调 search_real_jd。
+# JD 搜索的主产品路径走 Gap Preview 按钮跳 /jd?role=XXX（见 jd-search-upgrade-spec.md），不依赖聊天 regex。
+
+# 检测上一轮 AI 是否有明确问句（用于 confirmation 路由修复）
+_QUESTION_RE = _re.compile(r"(要不要|需不需要|需要吗?|是否|帮你|给你|怎么样[?？]|好吗[?？]|行吗[?？]|[?？])")
 
 # Cache the classifier LLM instance
 _classifier_llm = None
@@ -423,11 +463,8 @@ def _detect_intent(text: str) -> tuple[str | None, str]:
     if ("诊断" in text[:30] or "分析" in text[:30]) and len(text) > 200 and "JD" in text[:50]:
         return "jd_agent", ""
 
-    # Fast path 2: Search real JD intent (deterministic regex, bypass broken semantic router)
-    # 触发"搜索真实招聘"必须有两个条件：动词（搜/找）+ 岗位类名词
-    # → 路由到 search_agent (workflow，强制调 search_real_jd 工具)
-    if _SEARCH_JD_PATTERN.search(text):
-        return "search_agent", ""
+    # Fast path 2 已删除（2026-04-15）：原 regex 误把"能不能找到工作"判为搜 JD 请求。
+    # 搜 JD 意图交给 coach_agent 的 LLM + SYSTEM_PROMPT 判断（semantic router 兜底）。
 
     # Fast path 2a: 项目规划请求 → coach_agent (不搜JD)
     if text.startswith("[项目规划请求]") or ("项目规划" in text and "里程碑" in text):
@@ -507,30 +544,40 @@ def _make_triage_node():
             tool_calls=[{"id": f"route_{uuid.uuid4().hex[:8]}", "name": tool.name, "args": {}}],
         )]}
 
+    def _get_last_ai_content(state: CareerState) -> str:
+        """从 messages 里拿最近一条有实际内容的 AIMessage。"""
+        for msg in reversed(state.get("messages", [])):
+            if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
+                return str(msg.content)
+        return ""
+
     def triage_node(state: CareerState) -> dict:
         from langchain_core.messages import HumanMessage
 
-        # Get the last user message
         last_user_msg = ""
         for msg in reversed(state["messages"]):
             if isinstance(msg, HumanMessage):
                 last_user_msg = msg.content
                 break
 
-        # === Confirmation handling (Swarm-style: stay with last agent) ===
+        # === Confirmation handling — 只有上一轮 AI 有问句才粘回 ===
         last_agent = state.get("last_active_agent", "")
         if (last_user_msg and len(last_user_msg) <= 6
                 and _re.search(r"^(好[的啊吧]?|可以[的啊吧!！]?|行[的啊吧]?|嗯[嗯]?|对[的啊]?|是[的啊]?|ok|OK|继续|来吧|开始)$", last_user_msg)
                 and last_agent and last_agent in handoff_tool_map):
-            logger.info("Confirmation '%s' → re-route to last agent: %s", last_user_msg, last_agent)
-            return _force_handoff(last_agent, state)
+            # 新增检查：上一轮 AI 是否有明确问句
+            last_ai = _get_last_ai_content(state)
+            if last_ai and _QUESTION_RE.search(last_ai[-200:]):
+                logger.info("Confirmation after question '%s' → re-route to %s", last_user_msg, last_agent)
+                return _force_handoff(last_agent, state)
+            else:
+                # 上一轮是开放建议/总结，"好"不应触发执行——路由到 coach 给简短回应
+                logger.info("Confirmation without question '%s' → route to coach for brief reply", last_user_msg)
+                return _force_handoff("coach_agent", state)
 
-        # === Three-tier intent classification ===
+        # === 三层路由（保持不变）===
         matched_agent, tool_hint = _detect_intent(last_user_msg)
-
-        # _detect_intent returns None for chat/unmatched → route to coach_agent
         target = matched_agent if matched_agent and matched_agent in handoff_tool_map else "coach_agent"
-
         logger.info("Router: '%s' → %s (hint=%s)", last_user_msg[:50], target, tool_hint)
         return _force_handoff(target, state, tool_hint)
 
@@ -547,7 +594,7 @@ def _make_agent_node(agent, agent_name: str):
     from langchain_core.messages import HumanMessage as _HM
 
     def node(state: CareerState) -> dict:
-        context = build_context_summary(state)
+        context = build_context_summary(state, agent_name=agent_name)
         recent = state["messages"][-20:]
 
         # Clean: only pass user messages and AI messages with real content
@@ -573,7 +620,13 @@ def _make_agent_node(agent, agent_name: str):
                     break
             # If last user message is short (confirmation/follow-up), inject the AI context
             if last_human and len(last_human) <= 20 and last_ai_before_human:
-                handoff_context = f"\n\n[调用背景] 教练在上一轮对用户说了：「{last_ai_before_human[:200]}」，用户回复了「{last_human}」表示同意。请据此执行对应的分析任务。"
+                handoff_context = (
+                    f"\n\n[调用背景] 教练在上一轮对用户说了：「{last_ai_before_human[:200]}」，"
+                    f"用户回复了「{last_human}」。"
+                    f"判断规则：如果你上一轮提出了明确的选择问题（'要不要/是否/帮你...'），现在执行对应动作；"
+                    f"如果上一轮只是开放建议或总结，'{last_human}' 只表示用户收到了，不要调工具，"
+                    f"回 1-2 句话继续用问题推进对话即可。"
+                )
 
         # Inject tool hint if present
         tool_hint = state.get("tool_hint", "")
@@ -585,10 +638,45 @@ def _make_agent_node(agent, agent_name: str):
             if hint_text:
                 context += f"\n\n[工具指令] {hint_text}"
 
-        input_msgs = [SystemMessage(content=context + handoff_context)] + clean
+        # ── 构造 SystemMessage（coach 分支特殊处理）─────────────────
+        if agent_name == "coach_agent":
+            from agent.agents.coach_agent import BASE_IDENTITY
+            from agent.skills.loader import format_skills_for_prompt
 
-        # Inject profile + user_id via ContextVar for jd_agent tools
+            available_skills = format_skills_for_prompt()
+            sys_prompt = BASE_IDENTITY.replace(
+                "{AVAILABLE_SKILLS}", available_skills
+            ).replace(
+                "{CONTEXT}", context
+            )
+            if handoff_context:
+                sys_prompt += handoff_context
+        else:
+            # 其他 5 agent：原逻辑（保留原来 context + handoff_context 的拼接方式）
+            sys_prompt = context + handoff_context
+
+        input_msgs = [SystemMessage(content=sys_prompt)] + clean
+
+        # ── ContextVar 注入 ─────────────────────────────────────────
         _ctx_resets: list[tuple] = []
+
+        # Coach 专属：pull tool 的 ContextVar
+        if agent_name == "coach_agent":
+            from agent.tools.coach_context_tools import (
+                _ctx_profile, _ctx_goal, _ctx_user_id, _ctx_market_loader,
+            )
+            tok_p = _ctx_profile.set(state.get("user_profile"))
+            tok_g = _ctx_goal.set(state.get("career_goal"))
+            tok_u = _ctx_user_id.set(state.get("user_id"))
+            tok_m = _ctx_market_loader.set(_get_market_signal_for_node)
+            _ctx_resets.extend([
+                (_ctx_profile, tok_p),
+                (_ctx_goal, tok_g),
+                (_ctx_user_id, tok_u),
+                (_ctx_market_loader, tok_m),
+            ])
+
+        # 其他 agent 的原有 ContextVar 注入（growth/jd/search/navigator）保持不变
         if agent_name == "growth_agent":
             from agent.tools.growth_tools import _injected_user_id as _growth_uid
             tok_gu = _growth_uid.set(state.get("user_id"))
@@ -643,8 +731,12 @@ def _make_agent_node(agent, agent_name: str):
                 ]
             }
         finally:
-            for ctx_var, tok in _ctx_resets:
-                ctx_var.reset(tok)
+            # 记得 reset ContextVar
+            for var, tok in _ctx_resets:
+                try:
+                    var.reset(tok)
+                except Exception:
+                    pass
 
     node.__name__ = agent_name
     return node

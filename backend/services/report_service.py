@@ -4,16 +4,15 @@ Report service — generates career development reports.
 Four-dimension scoring pipeline:
   基础要求  — education + experience match vs job requirements
   职业技能  — weighted skill-tier match (reuses growth_log formula)
-  职业素养  — mock interview dimension averages (None if no data)
+  职业素养  — currently None (interview practice module removed)
   发展潜力  — readiness trend slope + project count + transition_probability
 
 Data sources:
   Profile.profile_json        → skills, education, experience_years
   CareerGoal                  → target_node_id, gap_skills, transition_probability
   GrowthSnapshot[]            → readiness curve
-  MockInterviewSession[]      → interview dimension scores
   ProjectRecord[]             → completed projects
-  data/graph.json             → promotion_path, skill_tiers, career_ceiling, etc.
+  data/graph.json             → skill_tiers, career_ceiling, soft_skills, career_alignment candidates
   data/market_signals.json    → demand_change_pct, salary_cagr, timing
   data/level_skills.json      → per-level skill lists (optional, for action plan)
 """
@@ -21,11 +20,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+_USE_LLM_ACTION_PLAN = os.getenv("USE_LLM_ACTION_PLAN", "true").lower() == "true"
 
 # Project root = two levels up from this file (backend/services/report_service.py)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -37,6 +39,95 @@ _GRAPH_NODES: dict[str, dict] = {}
 _LEVEL_SKILLS: dict[str, dict] = {}
 _MARKET: dict[str, dict] = {}        # family_name → signal dict
 _NODE_TO_FAMILY: dict[str, str] = {} # node_id → family_name
+
+_SKILL_FILL_PATH_PATH = _PROJECT_ROOT / "data" / "skill_fill_path_tags.json"
+_SKILL_FILL_PATH_CACHE: dict[str, str] | None = None
+
+
+def _load_skill_fill_path_cache() -> dict[str, str]:
+    global _SKILL_FILL_PATH_CACHE
+    if _SKILL_FILL_PATH_CACHE is not None:
+        return _SKILL_FILL_PATH_CACHE
+    if not _SKILL_FILL_PATH_PATH.exists():
+        _SKILL_FILL_PATH_CACHE = {}
+        return _SKILL_FILL_PATH_CACHE
+    try:
+        data = json.loads(_SKILL_FILL_PATH_PATH.read_text(encoding="utf-8"))
+        _SKILL_FILL_PATH_CACHE = {k: v for k, v in data.items() if v in {"learn", "practice", "both"}}
+    except Exception as e:
+        logger.warning("Failed to load skill_fill_path_tags.json: %s", e)
+        _SKILL_FILL_PATH_CACHE = {}
+    return _SKILL_FILL_PATH_CACHE
+
+
+_LEARN_KEYWORDS = {
+    "数据结构", "算法", "操作系统", "计算机网络", "计算机组成",
+    "数据库原理", "编译原理", "离散数学", "概率", "线性代数",
+    "设计模式", "计算机体系", "机器学习原理",
+}
+_PRACTICE_KEYWORDS = {
+    "高并发", "分布式", "性能优化", "架构", "微服务",
+    "消息队列", "中间件", "负载均衡", "系统设计",
+    "容灾", "秒杀", "限流",
+}
+_BOTH_KEYWORDS = {
+    "Docker", "Kubernetes", "K8s", "Git", "CI/CD",
+    "单元测试", "集成测试", "Code Review", "Terraform",
+    "Prometheus", "Grafana",
+}
+
+_PROJECT_SKILL_HINTS: dict[str, list[str]] = {
+    "性能优化": ["性能", "高性能", "压测", "benchmark", "qps", "延迟", "吞吐", "profile", "热点", "优化"],
+    "高并发":   ["并发", "高并发", "多线程", "线程池", "epoll", "reactor", "内存池", "qps", "压测"],
+    "系统编程": ["系统编程", "系统调用", "内核", "epoll", "reactor", "内存池", "多线程", "linux系统", "io_uring"],
+    "网络编程": ["网络", "socket", "tcp", "epoll", "reactor", "网络库", "网络框架"],
+    "内存管理": ["内存", "内存池", "tcmalloc", "jemalloc", "malloc", "分配器"],
+    "GDB":      ["gdb", "调试", "core dump", "断点"],
+    "CMake":    ["cmake", "makefile", "构建", "编译系统"],
+    "Linux":    ["linux", "系统调用", "epoll", "内核", "posix"],
+    "STL":      ["stl", "标准库", "容器", "迭代器", "模板"],
+    "多线程":   ["多线程", "线程池", "并发", "锁", "mutex", "原子操作"],
+    "C++":      ["c++", "cpp", "stl", "模板", "虚函数"],
+}
+
+
+def _classify_fill_path(skill_name: str, covered_by_project: bool = False) -> str:
+    cache = _load_skill_fill_path_cache()
+    if skill_name in cache:
+        return cache[skill_name]
+    s = skill_name.lower()
+    for kw in _LEARN_KEYWORDS:
+        if kw.lower() in s:
+            return "learn"
+    for kw in _PRACTICE_KEYWORDS:
+        if kw.lower() in s:
+            return "practice"
+    for kw in _BOTH_KEYWORDS:
+        if kw.lower() in s:
+            return "both"
+    return "practice" if covered_by_project else "both"
+
+
+# Career-alignment graph cache (auto-invalidates on mtime change)
+_graph_cache: list[dict] | None = None
+_graph_mtime: float = 0.0
+
+
+def _load_graph_nodes() -> list[dict]:
+    """Load & cache graph.json nodes, auto-invalidate on mtime change."""
+    global _graph_cache, _graph_mtime
+    try:
+        graph_path = _DATA_DIR / "graph.json"
+        mtime = graph_path.stat().st_mtime
+        if _graph_cache is None or mtime != _graph_mtime:
+            with open(graph_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            _graph_cache = data.get("nodes", [])
+            _graph_mtime = mtime
+        return _graph_cache or []
+    except Exception as e:
+        logger.warning("Failed to load graph.json: %s", e)
+        return []
 
 
 def reload_static() -> None:
@@ -167,14 +258,18 @@ def _skill_proficiency(
     When has_project_data is False (fresh student), matched skills get 'claimed'
     without the 0.7× penalty so new students aren't penalised.
     """
+    # Project evidence takes priority: if the skill is demonstrated in projects,
+    # it counts as matched even if the user didn't explicitly list it in skills.
+    if has_project_data:
+        if _skill_in_set(skill_name, completed_practiced):
+            return True, "completed"
+        if _skill_in_set(skill_name, practiced):
+            return True, "practiced"
+
     if not _skill_matches(skill_name, user_skills):
         return False, None
     if not has_project_data:
-        return True, "claimed"  # no project data → treat as claimed, no penalty
-    if _skill_in_set(skill_name, completed_practiced):
-        return True, "completed"
-    if _skill_in_set(skill_name, practiced):
-        return True, "practiced"
+        return True, "claimed"
     return True, "claimed"
 
 
@@ -390,7 +485,6 @@ def _build_skill_gap(
       top_missing               — up to 8 missing skills sorted by JD freq desc
       matched_skills            — up to 10 skills user has, with proficiency status
       has_project_data          — whether any project evidence exists (affects badge display)
-      positioning               — market positioning label (初级/中级/资深)
     """
     user_skills = _user_skill_set(profile_data)
     practiced = practiced or set()
@@ -447,18 +541,8 @@ def _build_skill_gap(
         reverse=True,
     )
 
-    # Market positioning based on core skill coverage
-    core_pct   = core_stats["pct"]
-    node_label = node.get("label", "工程师")
-    if core_pct >= 80:
-        positioning       = f"资深{node_label}"
-        positioning_level = "senior"
-    elif core_pct >= 50:
-        positioning       = f"中级{node_label}"
-        positioning_level = "mid"
-    else:
-        positioning       = f"初级{node_label}"
-        positioning_level = "junior"
+    # NOTE: 已删除 positioning / positioning_level —— 简历数据无法可信判断熟练度级别。
+    # 前端改为展示事实陈述（覆盖率、项目实证数），不贴 senior/mid/junior 标签。
 
     return {
         "core":              core_stats,
@@ -467,8 +551,6 @@ def _build_skill_gap(
         "top_missing":       missing[:8],
         "matched_skills":    all_matched[:12],
         "has_project_data":  has_project_data,
-        "positioning":       positioning,
-        "positioning_level": positioning_level,
     }
 
 
@@ -612,6 +694,75 @@ def _batch_embed(texts: list[str]) -> list[list[float]] | None:
         return None
 
 
+_PROJECT_SKILL_EMBED_THRESHOLD = 0.55
+
+
+def _build_skill_fill_path_map(
+    project_recs: list[dict],
+    top_missing: list[dict],
+) -> tuple[list[dict], list[dict], bool]:
+    """
+    为每个 project 预计算 covered_skills；为每个 top_missing 预计算
+    covered_by_project 和 fill_path。
+
+    返回：(enriched_projects, enriched_missing, project_mismatch)
+    project_mismatch = True 当且仅当过滤后没有任何 project 有非空 covered_skills。
+    """
+    if not project_recs or not top_missing:
+        enriched_projects = [dict(p, covered_skills=[]) for p in project_recs]
+        enriched_missing = [
+            dict(m, covered_by_project=False, fill_path=_classify_fill_path(m.get("name", ""), False))
+            for m in top_missing
+        ]
+        mismatch = len(project_recs) > 0 and not any(p["covered_skills"] for p in enriched_projects)
+        return enriched_projects, enriched_missing, mismatch
+
+    # 1) 准备文本
+    project_texts = [f"{p.get('name', '')} {p.get('why', '')}".strip() for p in project_recs]
+    missing_names = [m.get("name", "").strip() for m in top_missing]
+    all_texts = project_texts + missing_names
+
+    # 2) 批量 embedding
+    embeddings = _batch_embed(all_texts)
+    if embeddings is None:
+        # API 失败：保守回退，全部认为无关联，但不标记 mismatch（避免污染语义）
+        enriched_projects = [dict(p, covered_skills=[]) for p in project_recs]
+        enriched_missing = [
+            dict(m, covered_by_project=False, fill_path=_classify_fill_path(m.get("name", ""), False))
+            for m in top_missing
+        ]
+        return enriched_projects, enriched_missing, False
+
+    proj_embs = embeddings[:len(project_texts)]
+    miss_embs = embeddings[len(project_texts):]
+
+    # 3) 计算 project -> covered_skills
+    enriched_projects: list[dict] = []
+    for p, pe in zip(project_recs, proj_embs):
+        covered: list[str] = []
+        for m, me in zip(top_missing, miss_embs):
+            sim = _cosine_sim(pe, me)
+            if sim >= _PROJECT_SKILL_EMBED_THRESHOLD:
+                covered.append(m["name"])
+        enriched_projects.append(dict(p, covered_skills=covered))
+
+    # 4) 过滤掉 covered_skills 为空的项目
+    visible_projects = [p for p in enriched_projects if p["covered_skills"]]
+    project_mismatch = len(visible_projects) == 0 and len(project_recs) > 0
+
+    # 5) 计算 missing -> covered_by_project + fill_path
+    #    以 visible_projects（过滤后）为准，判断该缺口是否被任一项目覆盖
+    enriched_missing: list[dict] = []
+    for m, me in zip(top_missing, miss_embs):
+        covered_by_project = any(
+            m["name"] in p["covered_skills"] for p in visible_projects
+        )
+        fill_path = _classify_fill_path(m.get("name", ""), covered_by_project)
+        enriched_missing.append(dict(m, covered_by_project=covered_by_project, fill_path=fill_path))
+
+    return enriched_projects, enriched_missing, project_mismatch
+
+
 # Semantic similarity threshold: above this → project covers the skill
 _EMBED_THRESHOLD = 0.65
 
@@ -663,6 +814,83 @@ def _embed_classify_skills(
     return result
 
 
+def _infer_implicit_skills_llm(
+    uncovered_skills: list[str],
+    profile_proj_descs: list[dict],
+) -> list[str]:
+    """LLM 语义推理：哪些"未验证"技能实际上已隐含在项目描述里？
+
+    embedding 相似度 < 0.65 会错过"C++ 网络库 → STL/Linux socket"这种
+    技术栈依赖关系。用 LLM 做一轮显式推理，把"明显隐含在项目里"的技能
+    从 claimed 拉到 practiced。
+
+    返回：应该标为 practiced 的技能名列表（原样大小写，便于后续 set 匹配）。
+    失败时返回空列表，不抛异常。
+    """
+    if not uncovered_skills or not profile_proj_descs:
+        return []
+
+    # 组装项目文本
+    proj_lines = []
+    for pp in profile_proj_descs[:6]:
+        name = pp.get("name", "未命名")
+        desc = pp.get("desc", "")[:250]
+        if desc:
+            proj_lines.append(f"- [{name}] {desc}")
+    if not proj_lines:
+        return []
+
+    skills_str = "、".join(uncovered_skills)
+    proj_block = "\n".join(proj_lines)
+
+    prompt = f"""你是技术栈分析助手。任务：判断学生项目里**隐式使用了**下面哪些技术。
+
+# 判定规则（严格）
+
+1. 只有当项目**必然会用到**该技术时才返回（例如 C++ 网络库必然用 STL 容器 + Linux socket + 多线程）
+2. 如果只是可能用到但不确定，**不要返回**
+3. 不是跨领域关联（比如用 Python 不意味着会 R）
+4. 基于技术常识推理，不要瞎猜
+
+# 待判定技能列表
+{skills_str}
+
+# 学生项目
+{proj_block}
+
+# 输出格式（严格 JSON，不要多余文字）
+
+{{
+  "implicit_used": ["确认隐式用到的技能 1", "技能 2"],
+  "reasoning": "一句话说明判定依据"
+}}
+
+只输出 JSON。"""
+
+    try:
+        from backend.llm import get_llm_client, get_model
+        resp = get_llm_client(timeout=20).chat.completions.create(
+            model=get_model("fast"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.1,
+            max_tokens=400,
+        )
+        raw = resp.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        parsed = json.loads(raw.strip())
+        implicit = parsed.get("implicit_used", []) or []
+        # 只保留原列表里存在的技能，防 LLM 自造新技能名
+        uncovered_set = {s.lower().strip() for s in uncovered_skills}
+        result = [s for s in implicit if s.lower().strip() in uncovered_set]
+        return result
+    except Exception as e:
+        logger.warning("Implicit skill inference failed: %s", e)
+        return []
+
+
 def _build_action_plan(
     gap_skills: list[str],
     top_missing: list[dict],
@@ -673,63 +901,204 @@ def _build_action_plan(
     claimed_skills: list[str] | None = None,
     projects: list | None = None,
     applications: list | None = None,
+    profile_proj_descs: list[dict] | None = None,
 ) -> dict:
     """
-    Build an action plan with three categories:
-      - skills:   'validate' tasks for claimed-but-unverified skills FIRST,
-                  then 'learn' tasks for missing skills
-      - project:  concrete project suggestion referencing actual student projects
-      - job_prep: resume / portfolio / application readiness tasks
+    Build a descriptive action plan.
+      - skills:   observational gap descriptions (no prescribed projects)
+      - project:  directional guidance (no concrete project names)
+      - job_prep: resume / application readiness observations
     """
     user_skills = _user_skill_set(profile_data)
-    has_projects = bool(projects) or bool(profile_data.get("projects"))
+    _proj_text = " ".join(pp.get("desc", "") for pp in (profile_proj_descs or [])).lower()
 
-    # Project names for personalizing task text
-    completed_proj_names = [p.name for p in (projects or []) if getattr(p, "status", "") == "completed"]
-    any_proj_names = [p.name for p in (projects or [])]
-
-    # ── Pre-classify missing skills via LLM (no hardcoded synonym tables) ──────
-    # Collect all skill names that need classification (claimed + top_missing)
-    # Preserve order; dedup without set scrambling
-    _seen_names: set[str] = set()
-    _all_skill_names: list[str] = []
-    for _n in [*(claimed_skills or [])[:4], *(m.get("name", "") for m in top_missing[:6] if m.get("name"))]:
-        if _n and _n not in _seen_names:
-            _all_skill_names.append(_n)
-            _seen_names.add(_n)
-    _llm_coverage: dict[str, str | None] = _embed_classify_skills(
-        _all_skill_names, projects or []
-    ) if projects else {}
-
-    # Find a relevant existing project to reference in tasks.
-    # Priority: recorded (skills_used exact) > inferred (embedding) > none
-    def _find_related_project(skill: str) -> tuple[str | None, str]:
-        skill_norm = _norm_skill(skill)
-        if not skill_norm:
-            return None, "none"
-
-        # 1. Highest confidence: skill explicitly in skills_used
-        for p in (projects or []):
-            for s in (p.skills_used or []):
-                s_norm = _norm_skill(s)
-                if s_norm and (skill_norm == s_norm or
-                               (len(skill_norm) > 2 and (skill_norm in s_norm or s_norm in skill_norm))):
-                    return p.name, "recorded"
-
-        # 2. Embedding said this skill is covered by a project (semantic inference)
-        for key, proj_name in _llm_coverage.items():
-            if proj_name and _norm_skill(key) == skill_norm:
-                return proj_name, "inferred"
-
-        return None, "none"
-
-    # ── 1. Skill tasks (from top_missing with JD freq, fallback to gap_skills) ──
+    # ── 1. Skill tasks ────────────────────────────────────────────────────────
     skill_tasks = []
     seen: set[str] = set()
 
-    # ── Priority 1: Missing skills from real JD data ──
-    # (Validate/claimed items removed — the skill gap section already shows "待验证" badges.
-    #  Action plan items should drive real growth, not admin tasks like "add skill to log".)
+    skill_pool: list[dict] = []
+    for m in top_missing:
+        name = m.get("name", "")
+        freq = m.get("freq", 0)
+        tier = m.get("tier", "important")
+        fill_path = m.get("fill_path", "both")
+        if name and name.lower() not in seen and not _skill_matches(name, user_skills):
+            skill_pool.append({"name": name, "freq": freq, "tier": tier, "fill_path": fill_path})
+            seen.add(name.lower())
+    for s in gap_skills:
+        if s.lower() not in seen and not _skill_matches(s, user_skills):
+            skill_pool.append({"name": s, "freq": 0, "tier": "important", "fill_path": "both"})
+            seen.add(s.lower())
+
+    tier_order = {"core": 0, "important": 1, "bonus": 2}
+    skill_pool.sort(key=lambda x: (tier_order.get(x["tier"], 1), -x["freq"]))
+
+    for i, s in enumerate(skill_pool[:3]):
+        name = s["name"]
+        priority = "high" if s["tier"] == "core" or i == 0 else "medium"
+
+        hints = _PROJECT_SKILL_HINTS.get(name, [name.lower()])
+        covered_in_project = any(h in _proj_text for h in hints)
+
+        if covered_in_project:
+            if s["fill_path"] == "learn":
+                text = f"已有项目实践涉及 {name}，但描述中缺少系统性的知识梳理和可验证的技术文档，这在面试中容易被追问。"
+            elif s["fill_path"] == "practice":
+                text = f"已有项目涉及 {name} 方向，但缺少可量化的性能数据、测试覆盖说明或深度技术文档，难以在面试中体现工程深度。"
+            else:
+                text = f"已有项目涉及 {name} 方向，但缺少可量化的性能数据、测试覆盖说明或深度技术文档，这在面试中容易被追问。"
+            tag = "具体盲区"
+        else:
+            if s["fill_path"] == "learn":
+                text = f"简历技能中包含 {name}，但项目描述中未见与之对应的具体应用场景，建议通过技术文档建立系统性理解。"
+            elif s["fill_path"] == "practice":
+                text = f"当前项目描述中未见 {name} 相关的具体技术关键词，建议通过搜索引擎或技术社区了解该方向在目标岗位中的考察重点。"
+            else:
+                text = f"当前项目描述中未见 {name} 相关的具体技术关键词，建议关注该方向在目标岗位中的实践形态和面试考察点。"
+            tag = "面试追问点"
+
+        skill_tasks.append({
+            "id": f"skill_{name[:10].replace(' ', '_')}",
+            "type": "skill",
+            "sub_type": "learn",
+            "text": text,
+            "tag": tag,
+            "skill_name": name,
+            "priority": priority,
+            "done": False,
+        })
+
+    # ── 2. Project task ───────────────────────────────────────────────────────
+    truly_missing = [s for s in skill_pool if s.get("fill_path") in ("practice", "both")]
+    top_skill_names = [s["name"] for s in truly_missing[:2]]
+
+    has_metrics = any(
+        d in _proj_text
+        for d in ["qps", "latency", "用户", "日活", "准确率", "提升", "%", "倍", "ms", "tps", "吞吐"]
+    )
+    if not has_metrics:
+        project_text = (
+            "当前项目描述偏向'做了什么'，而缺少'做成了什么'的量化叙事。"
+            "在简历中使用'动词+动作+数字'的 impact-first 结构，能显著提升通过初筛的概率。"
+        )
+    elif top_skill_names:
+        project_text = (
+            f"目标岗位看重 {'、'.join(top_skill_names)} 等方向的实战背景。"
+            "可通过搜索引擎或技术社区了解该方向的典型项目形态和面试考察要点。"
+        )
+    else:
+        project_text = (
+            f"{node_label} 方向注重项目经验的深度。"
+            "建议在已有实践基础上，关注量化成果、技术选型和性能数据等面试高频追问点。"
+        )
+    project_tasks = [{
+        "id": "proj_main",
+        "type": "project",
+        "text": project_text,
+        "tag": "实战方向参考" if has_metrics else "可量化缺失",
+        "priority": "high",
+        "done": False,
+    }]
+
+    # ── 3. Job prep tasks ────────────────────────────────────────────────────
+    job_prep_tasks = []
+    readiness_label = "完善" if current_readiness < 60 else "优化"
+
+    job_prep_tasks.append({
+        "id": "prep_resume",
+        "type": "job_prep",
+        "text": f"{readiness_label}简历：建议突出与 {node_label} 相关的技术关键词和可量化成果，让面试官在 10 秒内看到你的工程价值。",
+        "tag": "求职必备",
+        "priority": "high",
+        "done": False,
+    })
+
+    app_count = len(applications or [])
+    if app_count == 0:
+        apply_text = "建立目标公司候选列表（5-10家），区分保底/目标/冲刺三档，技能补强完成后开始批量投递"
+        apply_tag = "尚未开始投递"
+    elif app_count < 5:
+        apply_text = f"已投 {app_count} 家，建议扩大到 10+ 家，增加保底岗位比例，避免孤注一掷"
+        apply_tag = f"已投 {app_count} 家"
+    else:
+        apply_text = f"已投 {app_count} 家，注意复盘无回音的原因——可能是简历筛选环节，建议对照岗位JD检查关键词覆盖"
+        apply_tag = f"已投 {app_count} 家"
+
+    job_prep_tasks.append({
+        "id": "prep_apply",
+        "type": "job_prep",
+        "text": apply_text,
+        "tag": apply_tag,
+        "priority": "medium",
+        "done": False,
+    })
+
+    # ── Assign phase and group into stages ──────────────────────────────────
+    all_tasks = skill_tasks + project_tasks + job_prep_tasks
+
+    for t in all_tasks:
+        tid = t.get("id", "")
+        ttype = t.get("type", "")
+        sub = t.get("sub_type", "")
+
+        t["deliverable"] = ""
+
+        if sub == "learn" and ttype == "skill":
+            t["phase"] = 2
+        elif ttype == "project":
+            t["phase"] = 2
+        elif tid == "prep_resume":
+            t["phase"] = 1
+        elif tid.startswith("prep_apply") and app_count == 0:
+            t["phase"] = 1
+        elif tid.startswith("prep_apply") and app_count > 0:
+            t["phase"] = 3
+        else:
+            t["phase"] = 1
+
+    stage_items: dict[int, list[dict]] = {1: [], 2: [], 3: []}
+    for t in all_tasks:
+        stage_items[t["phase"]].append(t)
+
+    missing_skill_names = [s["name"] for s in skill_pool[:2]]
+    milestone_1 = "整理简历，确保技术关键词与目标岗位对齐"
+    milestone_2 = (
+        f"补齐 {'、'.join(missing_skill_names)} 等核心技能缺口，建立可验证的学习或实践证据"
+        if missing_skill_names
+        else "补齐核心技能缺口，建立可验证的学习或实践证据"
+    )
+    milestone_3 = "完善项目展示资料，开始目标岗位投递"
+
+    stages = [
+        {
+            "stage": 1,
+            "label": "立即整理",
+            "duration": "0-2周",
+            "milestone": milestone_1,
+            "items": stage_items[1],
+        },
+        {
+            "stage": 2,
+            "label": "技能补强",
+            "duration": "2-6周",
+            "milestone": milestone_2,
+            "items": stage_items[2],
+        },
+        {
+            "stage": 3,
+            "label": "项目冲刺+求职",
+            "duration": "6-12周",
+            "milestone": milestone_3,
+            "items": stage_items[3],
+        },
+    ]
+
+    return {
+        "stages": stages,
+        "skills":   skill_tasks,
+        "project":  project_tasks,
+        "job_prep": job_prep_tasks,
+    }
     skill_pool: list[dict] = []
     for m in top_missing:
         name = m.get("name", "")
@@ -890,7 +1259,7 @@ def _build_action_plan(
         if sub == "validate":
             t["deliverable"] = "更新后的简历技能栏截图"
         elif sub == "learn":
-            t["deliverable"] = "学习笔记录入成长档案"
+            t["deliverable"] = "用该技能做一个 demo 并写进项目描述"
         elif ttype == "project":
             t["deliverable"] = "GitHub 仓库链接 + README"
         elif tid == "prep_resume":
@@ -974,14 +1343,348 @@ def _build_action_plan(
     }
 
 
+# ── Career alignment analysis ────────────────────────────────────────────────
+
+def _canon_skill(s: Any) -> str:
+    """技能名规范化：lower + strip，兼容非字符串输入。"""
+    if isinstance(s, dict):
+        s = s.get("name")
+    if not isinstance(s, str):
+        s = str(s) if s is not None else ""
+    return s.strip().lower()
+
+
+def _preselect_alignment_candidates(
+    user_skills: list[str],
+    graph_nodes: list[dict],
+    top_k: int = 15,
+) -> list[dict]:
+    """基于技能 overlap 预选候选节点。"""
+    user_skill_set = {_canon_skill(s) for s in user_skills if s}
+    if not user_skill_set:
+        return []
+
+    scored = []
+    for node in graph_nodes:
+        # 从 skill_tiers 或 must_skills 提取节点要求的技能名集合
+        node_skills = set()
+        tiers = node.get("skill_tiers", {}) or {}
+        for tier in ("core", "important", "bonus"):
+            for s in tiers.get(tier, []) or []:
+                name = s.get("name") if isinstance(s, dict) else s
+                if name:
+                    node_skills.add(_canon_skill(name))
+        for s in node.get("must_skills", []) or []:
+            node_skills.add(_canon_skill(s))
+
+        if not node_skills:
+            continue
+
+        overlap = len(user_skill_set & node_skills)
+        scored.append({
+            "node_id": node.get("node_id"),
+            "label": node.get("label"),
+            "role_family": node.get("role_family"),
+            "career_level": node.get("career_level"),
+            "must_skills": list(node_skills)[:8],
+            "_overlap": overlap,
+        })
+
+    scored.sort(key=lambda x: x["_overlap"], reverse=True)
+    # 取 top_k；为 LLM 留对比视角，保留 2-3 个 overlap=0 的节点
+    top = scored[:top_k - 3]
+    filler = [s for s in scored[top_k:] if s["_overlap"] == 0][:3]
+    return top + filler
+
+
+def _normalize_project_sources(profile_data: dict, projects: list) -> list[dict]:
+    """合并两类项目来源，统一为 {name, desc, source} 字典列表。
+
+    - profile_data.projects (简历提取): str 或 {name, description} dict
+    - projects (ProjectRecord from 成长档案): ORM 对象
+
+    来源标签让 LLM 看清哪些是简历陈述、哪些是档案追踪数据。
+    """
+    pool: list[dict] = []
+
+    # ── 简历来源 ──
+    for p in (profile_data.get("projects") or []):
+        if isinstance(p, str) and p.strip():
+            pool.append({"name": "简历项目", "desc": p.strip(), "source": "resume"})
+        elif isinstance(p, dict):
+            _desc = p.get("description")
+            _name = p.get("name")
+            desc = (_desc.strip() if isinstance(_desc, str) else str(_desc)).strip() if _desc else ""
+            name = (_name.strip() if isinstance(_name, str) else str(_name)).strip() if _name else ""
+            name = name or "简历项目"
+            if desc or name:
+                pool.append({"name": name, "desc": desc or name, "source": "resume"})
+
+    # ── 成长档案来源 ──
+    for p in (projects or []):
+        desc = (getattr(p, "description", "") or "").strip()
+        name = (getattr(p, "name", "") or "未命名").strip()
+        if desc or name:
+            pool.append({"name": name, "desc": desc or name, "source": "growth_log"})
+
+    return pool
+
+
+def _build_alignment_prompt(skills, projects, soft_skills, candidates, target_node_id, profile_data=None):
+    # 合并简历 + 成长档案项目
+    all_projects = _normalize_project_sources(profile_data or {}, projects)
+
+    proj_lines = []
+    for p in all_projects[:8]:  # 最多 8 个项目，防 prompt 过长
+        tag = "简历" if p["source"] == "resume" else "档案"
+        proj_lines.append(f"- [{tag}] [{p['name']}] {p['desc'][:220]}")
+    projects_block = "\n".join(proj_lines) or "（无项目数据）"
+
+    # 软技能
+    ss_lines = []
+    for k, v in (soft_skills or {}).items():
+        if k.startswith("_"):
+            continue
+        if isinstance(v, (int, float)):
+            ss_lines.append(f"- {k}: {int(v)}/100")
+    soft_block = "\n".join(ss_lines) or "（无软技能评估）"
+
+    # 候选节点
+    cand_lines = []
+    for c in candidates:
+        cand_lines.append(
+            f'- {{"node_id": "{c["node_id"]}", '
+            f'"label": "{c["label"]}", '
+            f'"role_family": "{c.get("role_family", "")}", '
+            f'"career_level": "{c.get("career_level", "")}", '
+            f'"key_skills": {c["must_skills"][:5]}}}'
+        )
+    candidates_block = "\n".join(cand_lines)
+
+    target_hint = ""
+    if target_node_id:
+        target_hint = f"\n\n学生目前标定的目标岗位 node_id: {target_node_id}（若此岗位在候选列表中，请给出对齐评估；若不在，请观察其他对齐方向）"
+
+    return f"""你是职业数据分析师。你的任务是根据学生数据**观察 + 对齐**，不做预测、不贴级别、不给时间表。
+
+# 严格规则
+
+1. **只陈述事实**：所有结论必须能从给定的学生数据里找到依据
+2. **不做时间预测**：禁止输出"N 年到 senior"这类时间表
+3. **不贴等级标签**：禁止输出"你是中级/初级/资深"这类分类判断
+4. **node_id 只能从候选列表里选**：不许自创岗位名、不许拼接新词
+5. **每个 alignment 必须引用具体 evidence**：要么是学生某个项目里的数字、要么是某个技能名、要么是某个软技能分数——不许空泛描述
+6. **不确定就说不知道**：把无法从数据里得出的结论放进 `cannot_judge` 字段
+7. **最多输出 3 条 alignments**，按对齐度排序
+
+# 学生数据
+
+## 技能（来自简历 + 成长档案）
+{", ".join(skills[:30])}
+
+## 项目（含数据）
+{projects_block}
+
+## 软技能评估
+{soft_block}
+{target_hint}
+
+# 候选岗位（你只能从这 {len(candidates)} 个里选）
+
+{candidates_block}
+
+# 输出 JSON schema（严格遵守，不要额外文字）
+
+{{
+  "observations": "2-3 句对学生数据的事实观察，必须引用具体数据",
+  "alignments": [
+    {{
+      "node_id": "从候选列表里选的 node_id",
+      "score": 0.85,
+      "evidence": "引用学生具体项目/数字/技能作为对齐证据",
+      "gap": "对齐到该岗位还差什么（可以为空字符串）"
+    }}
+  ],
+  "cannot_judge": [
+    "你无法从数据里判断的维度，例如：'实际工作节奏与晋升速度'"
+  ]
+}}
+
+只输出 JSON，不要 markdown 代码块包裹，不要解释性文字。
+"""
+
+
+def _build_career_alignment(
+    profile_data: dict,          # profile.profile_json 解析后的 dict
+    projects: list,              # ProjectRecord list
+    graph_nodes: list[dict],     # data/graph.json 的 nodes 数组
+    target_node_id: str | None = None,  # 学生当前的目标岗位（如有）
+) -> dict | None:
+    """
+    基于学生数据做方向对齐分析。输出绑定 graph.json node_id。
+
+    返回 schema：
+    {
+        "observations": str,        # 对学生数据的事实观察，2-3 句
+        "alignments": [              # 最多 3 条，按 score 降序
+            {
+                "node_id": str,      # 必须在 graph_nodes 里存在
+                "label": str,        # 从 graph_nodes 回填，不来自 LLM
+                "score": float,      # 0-1 clip
+                "evidence": str,     # 引用学生具体项目或数字
+                "gap": str,          # 还差什么（可为空字符串）
+            }
+        ],
+        "cannot_judge": list[str],  # 显式声明无法判断的维度
+    }
+
+    返回 None 表示数据不足（项目 < 2 或技能 < 5 或无软技能数据）。
+    """
+    # ── [Step 1] 数据准备 ──
+    skills = profile_data.get("skills", []) or []
+    soft_skills = profile_data.get("soft_skills", {}) or {}
+    merged_projects = _normalize_project_sources(profile_data, projects)
+    projects_count = len(merged_projects)
+
+    has_enough_data = projects_count >= 2 and len(skills) >= 5
+    if not has_enough_data:
+        logger.info(
+            "Career alignment: limited data (merged_projects=%d, skills=%d)",
+            projects_count, len(skills)
+        )
+
+    # ── [Step 2] 候选节点预选 ──
+    candidates = _preselect_alignment_candidates(skills, graph_nodes, top_k=15)
+    if not candidates:
+        # 连候选都没有时，基于目标节点（如有）或热门节点做一个最小 fallback
+        if target_node_id:
+            target_node = next((n for n in graph_nodes if n.get("node_id") == target_node_id), None)
+            if target_node:
+                candidates = [{
+                    "node_id": target_node_id,
+                    "label": target_node.get("label", target_node_id),
+                    "role_family": target_node.get("role_family", ""),
+                    "career_level": target_node.get("career_level", ""),
+                    "must_skills": list(target_node.get("must_skills", []))[:8],
+                    "_overlap": 0,
+                }]
+        if not candidates and graph_nodes:
+            # 最后 resort：随便取第一个有 label 的节点
+            first = graph_nodes[0]
+            candidates = [{
+                "node_id": first.get("node_id", ""),
+                "label": first.get("label", ""),
+                "role_family": first.get("role_family", ""),
+                "career_level": first.get("career_level", ""),
+                "must_skills": list(first.get("must_skills", []))[:8],
+                "_overlap": 0,
+            }]
+
+    # ── [Step 2] 构造 Prompt ──
+    prompt = _build_alignment_prompt(
+        skills=skills,
+        projects=projects,
+        soft_skills=soft_skills,
+        candidates=candidates,
+        target_node_id=target_node_id,
+        profile_data=profile_data,  # 让 prompt builder 也能读简历项目
+    )
+
+    # ── [Step 3] 调用 LLM ──
+    parsed: dict | None = None
+    try:
+        from backend.llm import get_llm_client, get_model
+        resp = get_llm_client(timeout=120).chat.completions.create(
+            model=get_model("slow"),
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=1200,
+        )
+        raw = resp.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        parsed = json.loads(raw.strip())
+    except Exception as e:
+        logger.warning("Career alignment LLM call failed: %s", e)
+
+    # ── [Step 4] 护栏 Validate ──
+    node_map = {n.get("node_id"): n for n in graph_nodes if n.get("node_id")}
+    validated: list[dict] = []
+    if parsed:
+        for a in parsed.get("alignments", []):
+            nid = a.get("node_id", "")
+            if nid not in node_map:
+                logger.warning("Career alignment: LLM invented node_id '%s', dropped", nid)
+                continue
+            a["label"] = node_map[nid].get("label", nid)
+            try:
+                s = float(a.get("score", 0))
+                a["score"] = max(0.0, min(1.0, s))
+            except (ValueError, TypeError):
+                a["score"] = 0.0
+            validated.append(a)
+        validated.sort(key=lambda x: x["score"], reverse=True)
+
+    # ── [Step 5] Fallback ──
+    # 如果 LLM 失败或返回为空，基于 candidates overlap 生成简单的非 LLM fallback，
+    # 避免前端因为返回 None 而显示「数据不足」的硬编码 UI。
+    if not validated:
+        logger.info("Career alignment: using non-LLM fallback based on skill overlap")
+        user_skill_set = {_canon_skill(s) for s in skills}
+        for c in candidates[:3]:
+            nid = c.get("node_id")
+            if not nid or nid not in node_map:
+                continue
+            c_node = node_map[nid]
+            node_skills = set()
+            tiers = c_node.get("skill_tiers") or {}
+            for tier in ("core", "important", "bonus"):
+                for s in tiers.get(tier, []) or []:
+                    name = s.get("name") if isinstance(s, dict) else s
+                    if name:
+                        node_skills.add(_canon_skill(name))
+            for s in c_node.get("must_skills", []) or []:
+                node_skills.add(_canon_skill(s))
+            overlap_skills = user_skill_set & node_skills
+            total_skills = len(node_skills) or 1
+            score = min(len(overlap_skills) / total_skills * 1.5, 0.85)
+            validated.append({
+                "node_id": nid,
+                "label": c_node.get("label", nid),
+                "score": round(score, 2),
+                "evidence": f"技能标签中包含 {', '.join(list(overlap_skills)[:4]) or '部分'} 相关技能" if overlap_skills else "技能画像与该方向有一定交集",
+                "gap": "项目描述中缺少与该方向核心要求直接对应的深度实践证据，建议补充可量化的项目成果。",
+            })
+
+    observations = ""
+    if parsed and parsed.get("observations"):
+        observations = parsed.get("observations", "")
+    elif validated:
+        top_label = validated[0].get("label", "目标方向")
+        observations = (
+            f"基于当前技能画像，{top_label} 等方向与简历标签有一定重叠。"
+            "项目经验的深度和可验证的技术文档，是影响对齐度的主要变量。"
+        )
+
+    return {
+        "observations": observations,
+        "alignments": validated[:3],
+        "cannot_judge": parsed.get("cannot_judge", []) if parsed else ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
+    }
+
+
 # ── LLM narrative generator ───────────────────────────────────────────────────
 
-_NARRATIVE_SYSTEM = """你是一位资深职业规划顾问，正在为一名IT学生撰写职业发展报告的核心评估段落。
+_NARRATIVE_SYSTEM = """你是一位兼具数据敏感度和教练视角的职业规划顾问，正在为一名IT学生撰写职业发展报告的核心评估段落。
 要求：
-- 语言亲切专业，200-300字
+- 语言亲切专业，直接称呼"你"，200-300字
 - 结合具体数据说话（技能匹配、分数、差距）
 - 指出最大亮点和最需改进的1-2个方向
-- 结尾给出一句鼓励性总结
+- 适当体现"职业阶段感"：如果是初级方向强调基础与完整度，如果是中高级方向强调系统深度与可量化影响
+- 如果项目描述缺少"动词+动作+数字"的 impact-first 结构，要把它作为简历层面的关键观察点提出来
+- 结尾给出一句鼓励性总结，并传递一种温和的"计划性偶发"（Planned Happenstance）态度：职业路径往往是非线性的，保持好奇心和小步尝试比追求完美规划更重要
 - 直接输出段落文字，不要标题或标签"""
 
 
@@ -1017,24 +1720,30 @@ def _generate_narrative(
             if school or major:
                 edu_text = f"学生背景：{school + ' ' if school else ''}{major + '专业' if major else ''}"
 
-        # Projects context (names + key skills)
+        # Projects context（含描述，让 LLM 能基于真实项目推理而不是空谈）
         proj_text = ""
         if projects:
-            completed = [p for p in projects if getattr(p, "status", "") == "completed"]
-            in_prog = [p for p in projects if getattr(p, "status", "") == "in_progress"]
-            parts = []
-            if completed:
-                names = "、".join(p.name for p in completed[:3])
-                parts.append(f"已完成项目：{names}")
-            if in_prog:
-                names = "、".join(p.name for p in in_prog[:2])
-                parts.append(f"进行中：{names}")
-            proj_text = "；".join(parts) if parts else ""
+            proj_lines = []
+            for p in projects[:4]:
+                name = getattr(p, "name", "") or "未命名"
+                desc = getattr(p, "description", "") or getattr(p, "_desc", "") or ""
+                status = getattr(p, "status", "")
+                status_tag = "[已完成]" if status == "completed" else "[进行中]" if status == "in_progress" else ""
+                if desc:
+                    proj_lines.append(f"{status_tag}{name}：{desc[:180]}")
+                else:
+                    proj_lines.append(f"{status_tag}{name}")
+            proj_text = "\n".join(proj_lines)
 
         # Claimed-but-unverified skills (risk signal)
+        # 注：经 6b embedding + 6c LLM 隐式推断之后仍未匹配到项目的，才算真 claimed
         claimed_text = ""
         if claimed_skills:
-            claimed_text = f"简历声称但成长档案无验证记录的技能：{', '.join(claimed_skills[:3])}（面试风险点）"
+            claimed_text = (
+                f"简历声称但无项目可对应的技能：{', '.join(claimed_skills[:3])}。"
+                "⚠️ 仅当该技能确实无法从现有项目推理出使用场景时，才当作面试风险点；"
+                "如果学生的项目隐式使用了这些技能（例如 C++ 后端项目必然用 STL），不要当成风险。"
+            )
 
         # Application status
         apply_text = ""
@@ -1055,6 +1764,16 @@ def _generate_narrative(
         context_parts = [p for p in [edu_text, proj_text, claimed_text, apply_text] if p]
         context_block = "\n".join(context_parts) if context_parts else ""
 
+        # Resume impact-first observation
+        resume_impact_text = ""
+        if projects:
+            has_metrics = any(
+                any(d in (getattr(p, "description", "") + getattr(p, "_desc", "")).lower() for d in ["qps", "latency", "用户", "日活", "准确率", "提升", "%", "倍", "ms", "tps"])
+                for p in projects[:4]
+            )
+            if not has_metrics:
+                resume_impact_text = "注意：该学生项目描述中缺少可量化的结果数字（如 QPS、用户数、准确率等），这意味着简历可能还停留在'做了什么'而不是'做成了什么'的层面。"
+
         prompt = f"""为以下学生撰写职业发展报告的综合评价段落（200-300字）：
 
 目标岗位：{target_label}
@@ -1069,36 +1788,55 @@ def _generate_narrative(
 
 【学生真实档案】
 {context_block if context_block else '（学生尚未完善档案）'}
+{resume_impact_text}
 
 要求：
 - 语言亲切专业，直接称呼"你"
-- 结合学生真实档案数据，不要说空话
-- 点名最大优势和最需改进的1-2个方向
-- 如有声称但未验证的技能，需提醒面试风险
-- 结尾一句鼓励性话语
+- **不要罗列分数**（例如"职业技能维度得分 47，发展潜力 50"这类 X 分 Y 分的堆砌）。分数已经在页面其他地方展示，你的文字要讲**故事**，不要复读数据
+- 必须引用学生项目里的具体细节（项目名 + 做法或数字）作为推理依据，**严禁泛泛而谈**
+- 点名最大优势和最需改进的 1-2 个方向时，每条结论都要能回指上面的项目或数字
+- 对"简历声称但无项目可对应的技能"要先判断：该技能是否已经**隐式用在学生现有项目里**？
+  • 如果是（例如做 C++ 网络库必然用到 STL+Linux socket），**不要**列为面试风险
+  • 只有确实找不到任何项目能证明的技能，才能提风险
+- 如果项目缺少量化数字，要把"缺少 impact-first 叙事"当作一个独立的简历观察点提出来
+- 严禁输出"建议聚焦实战项目填补技能缺口"、"保持当前成长势头"、"持续积累实战项目经验"、"相信你一定行"这类万能套话
+- 结尾一句鼓励，要具体（例如"把下一个 demo 的 QPS 数据写进档案就能封堵这个缺口"这种），并传递职业路径可以是非线性的、小步尝试同样有价值的温和态度
 - 直接输出段落，不要标题"""
 
-        client = get_llm_client(timeout=30)
-        resp = client.chat.completions.create(
-            model=get_model("fast"),
-            messages=[
-                {"role": "system", "content": _NARRATIVE_SYSTEM},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.5,
-            max_tokens=500,
-        )
-        return resp.choices[0].message.content.strip()
+        # 带重试：首次 60s 超时，失败再试一次 90s；max_tokens 收敛到 400 降低耗时
+        client = get_llm_client(timeout=60)
+        last_err: Exception | None = None
+        for attempt in range(2):
+            try:
+                resp = client.chat.completions.create(
+                    model=get_model("fast"),
+                    messages=[
+                        {"role": "system", "content": _NARRATIVE_SYSTEM},
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=0.5,
+                    max_tokens=400,
+                )
+                return resp.choices[0].message.content.strip()
+            except Exception as inner:
+                last_err = inner
+                logger.warning("Narrative attempt %d failed: %s", attempt + 1, inner)
+                if attempt == 0:
+                    # 第二次用更长超时 + 更短 max_tokens
+                    client = get_llm_client(timeout=90)
+        if last_err:
+            raise last_err
 
     except Exception as e:
-        logger.warning("Narrative generation failed: %s", e)
-        dim_s = four_dim.get("skills", 0)
-        dim_p = four_dim.get("potential", 0)
+        # 重试两次都失败——诚实告知，不伪装 AI 输出
+        logger.error("Narrative generation FAILED after retries: %s", e, exc_info=True)
+        err_type = type(e).__name__
+        err_msg = str(e)[:180] if str(e) else err_type
         return (
-            f"你在{target_label}方向的综合匹配度为 {match_score} 分，"
-            f"职业技能维度得分 {dim_s}，发展潜力 {dim_p}。"
-            f"{'核心差距技能：' + '、'.join(gap_skills[:3]) + '。' if gap_skills else ''}"
-            f"建议聚焦提升技术深度，保持当前成长势头，持续积累实战项目经验。"
+            f"⚠️ AI 综合评价暂时生成失败（{err_type}）。"
+            f"这通常是大模型调用超时、配额或网络问题造成的——报告其他部分不受影响，"
+            f"可稍后点击右上角「AI 润色」按钮重试综合评价。"
+            f"\n\n[诊断信息：{err_msg}]"
         )
 
 
@@ -1151,16 +1889,33 @@ def _diagnose_profile(
     # Collect all describable items: resume projects + growth log projects
     items_to_check: list[dict] = []
 
+    # Smart project-name extraction (same logic as generate_report's _short_proj_name)
+    def _smart_name(desc: str) -> str:
+        before_punct = _re_diag.split(r'[，。,.、；]', desc)[0].strip()
+        m = _re_diag.search(r'实现(?:了|的)?\s*(.{4,20}?)$', before_punct)
+        if m:
+            candidate = m.group(1).strip()
+            candidate = _re_diag.sub(r'^[的了地一个款]{1,3}', '', candidate).strip()
+            if len(candidate) >= 4:
+                return candidate
+        m2 = _re_diag.search(r'的\s*((?:[A-Za-z+#]+\s*)?[\u4e00-\u9fff]{2,}[\u4e00-\u9fff\w+# ]*)$', before_punct)
+        if m2:
+            candidate = m2.group(1).strip()
+            if 4 <= len(candidate) <= 20:
+                return candidate
+        raw = before_punct[:30].strip() if len(before_punct) > 30 else before_punct
+        return _re_diag.sub(r'^[的了地是]{1,2}\s*', '', raw).strip()
+
     # Resume-extracted projects
     raw_projects = profile_data.get("projects", [])
-    for p in raw_projects:
+    for i, p in enumerate(raw_projects):
         if isinstance(p, str) and p.strip():
-            items_to_check.append({"name": p[:20], "text": p, "source": "resume"})
+            items_to_check.append({"name": _smart_name(p), "text": p, "source_type": "resume", "source_id": i})
         elif isinstance(p, dict):
             name = p.get("name", "")
             desc = p.get("description", "") or name
             if desc:
-                items_to_check.append({"name": name or desc[:20], "text": desc, "source": "resume"})
+                items_to_check.append({"name": name or _smart_name(desc), "text": desc, "source_type": "resume", "source_id": i})
 
     # Growth log projects
     for p in (projects or []):
@@ -1168,7 +1923,7 @@ def _diagnose_profile(
         name = getattr(p, "name", "") or ""
         text = desc if desc else name
         if text and not any(i["text"] == text for i in items_to_check):
-            items_to_check.append({"name": name or text[:20], "text": text, "source": "growth_log"})
+            items_to_check.append({"name": name or _smart_name(text), "text": text, "source_type": "growth_log", "source_id": getattr(p, "id", 0)})
 
     if not items_to_check:
         return []
@@ -1235,6 +1990,9 @@ def _diagnose_profile(
         s = suggestions.get(item["name"], {})
         results.append({
             "source": item["name"],
+            "source_type": item["source_type"],
+            "source_id": item["source_id"],
+            "current_text": item["text"],
             "status": "needs_improvement",
             "highlight": s.get("highlight", ""),
             "issues": item["issues"],
@@ -1244,6 +2002,9 @@ def _diagnose_profile(
     for item in passed:
         results.append({
             "source": item["name"],
+            "source_type": item["source_type"],
+            "source_id": item["source_id"],
+            "current_text": item["text"],
             "status": "pass",
             "highlight": "",
             "issues": [],
@@ -1272,8 +2033,7 @@ def generate_report(user_id: int, db) -> dict:
     _load_static()
 
     from backend.db_models import (
-        Profile, CareerGoal, GrowthSnapshot,
-        MockInterviewSession, ProjectRecord,
+        Profile, CareerGoal, GrowthSnapshot, ProjectRecord,
     )
 
     # 1. Load profile
@@ -1323,18 +2083,6 @@ def generate_report(user_id: int, db) -> dict:
         for s in snapshots
     ]
 
-    # 4. Load mock interview sessions
-    mock_sessions = (
-        db.query(MockInterviewSession)
-        .filter(
-            MockInterviewSession.profile_id == profile.id,
-            MockInterviewSession.status == "finished",
-        )
-        .order_by(MockInterviewSession.created_at.desc())
-        .limit(5)
-        .all()
-    )
-
     # 5. Load projects
     projects = (
         db.query(ProjectRecord)
@@ -1374,6 +2122,22 @@ def generate_report(user_id: int, db) -> dict:
     profile_proj_descs: list[dict] = [
         {"name": _short_proj_name(desc), "desc": desc}
         for desc in profile_projects_raw[:4]
+    ]
+
+    # 5d. Merge ProjectRecord list with profile_proj_descs for downstream use
+    #     (reverse skill gap check + action plan + narrative generation).
+    class _ProfileProj:
+        """Minimal proxy so profile_json projects look like ProjectRecord."""
+        def __init__(self, name: str, desc: str):
+            self.name = name
+            self.skills_used: list[str] = []
+            self.status = "in_progress"
+            self._desc = desc
+
+    merged_projects = list(projects) + [
+        _ProfileProj(pp["name"], pp["desc"])
+        for pp in profile_proj_descs
+        if not any(p.name == pp["name"] for p in projects)
     ]
 
     # 5c. Rule-based skill extraction from description text.
@@ -1421,7 +2185,7 @@ def generate_report(user_id: int, db) -> dict:
         try:
             from backend.llm import get_llm_client, get_model as _get_model
             _proj_list = "\n".join(f"- {t[:100]}" for t in _texts_to_infer)
-            _infer_resp = get_llm_client(timeout=15).chat.completions.create(
+            _infer_resp = get_llm_client(timeout=60).chat.completions.create(
                 model=_get_model("fast"),
                 messages=[{"role": "user", "content":
                     "以下项目描述，提取技术技能（3-8个，JSON数组，不要解释）：\n" + _proj_list}],
@@ -1479,10 +2243,53 @@ def generate_report(user_id: int, db) -> dict:
         logger.info("Embedding pre-pass practiced additions: %s",
                     [k for k, v in _embed_pre.items() if v])
 
+        # 6c. LLM 隐式技能推断 pre-pass：
+        #     embedding 只能捕捉语义相似度，无法推理"C++ 网络库必然用 STL+Linux"
+        #     这种技术栈依赖关系。让 LLM 读项目描述，显式推断隐式用到的技术。
+        _still_uncovered = [
+            s for s in _user_skills_all
+            if not _skill_in_set(s, practiced)
+        ]
+        if _still_uncovered and profile_proj_descs:
+            _llm_implicit = _infer_implicit_skills_llm(
+                _still_uncovered,
+                profile_proj_descs,
+            )
+            for _sk in _llm_implicit:
+                practiced.add(_sk.lower().strip())
+            if _llm_implicit:
+                logger.info("LLM implicit-skill inference added: %s", _llm_implicit)
+
+    # 6d. Reverse skill gap check: scan project texts for keywords that imply
+    #     coverage of required skills, even if the user didn't list them in skills.
+
+    _node_skill_names: list[str] = []
+    _tiers = node.get("skill_tiers") or {}
+    for _tier in ("core", "important", "bonus"):
+        for _s in _tiers.get(_tier, []):
+            _name = _s.get("name") if isinstance(_s, dict) else _s
+            if _name:
+                _node_skill_names.append(_name)
+    for _s in node.get("must_skills", []) or []:
+        if _s and _s not in _node_skill_names:
+            _node_skill_names.append(_s)
+
+    _all_project_text = " ".join(
+        [pp.get("name", "") + " " + pp.get("desc", "") for pp in profile_proj_descs]
+        + [getattr(p, "name", "") + " " + getattr(p, "_desc", "") for p in merged_projects]
+    ).lower()
+
+    for _req_skill in _node_skill_names:
+        if _skill_matches(_req_skill, _user_skills_all) or _skill_in_set(_req_skill, practiced):
+            continue
+        _hints = _PROJECT_SKILL_HINTS.get(_req_skill, [])
+        if any(_h in _all_project_text for _h in _hints):
+            practiced.add(_req_skill.lower().strip())
+
     # 7. Compute four dimensions
     foundation_score = _score_foundation(profile_data, node)
     skills_score = _score_skills(profile_data, node, practiced, completed_practiced)
-    qualities_score = _score_qualities(mock_sessions)
+    qualities_score = None
     potential_score = _score_potential(
         snapshots, projects, float(goal.transition_probability or 0)
     )
@@ -1519,36 +2326,58 @@ def generate_report(user_id: int, db) -> dict:
             if m.get("status") == "claimed" and m.get("tier") in ("core", "important"):
                 claimed_skills.append(m["name"])
 
-    # 9. Action plan — merge ProjectRecord list with profile_proj_descs so the action
-    #    plan can reference profile project names even when growth log is empty.
-    #    We create lightweight proxy objects that quack like ProjectRecord.
-    class _ProfileProj:
-        """Minimal proxy so profile_json projects look like ProjectRecord to action plan."""
-        def __init__(self, name: str, desc: str):
-            self.name = name
-            self.skills_used: list[str] = []
-            self.status = "in_progress"
-            self._desc = desc
+    # ── Action plan ───────────────────────────────────────────────────────────
+    if _USE_LLM_ACTION_PLAN:
+        try:
+            from backend.services.action_plan_llm import build_action_plan_with_llm
+            _plan_context = {
+                "node_label": goal.target_label,
+                "ai_impact_narrative": node.get("ai_impact_narrative", ""),
+                "differentiation_advice": node.get("differentiation_advice", ""),
+                "skills": list(_user_skills_all),
+                "projects": [
+                    {"name": pp.get("name", ""), "desc": pp.get("desc", "")}
+                    for pp in profile_proj_descs
+                ],
+                "app_count": len(applications or []),
+                "top_missing": skill_gap.get("top_missing", []) if skill_gap else [],
+                "market": {
+                    "demand_change_pct": market_info.get("demand_change_pct") if market_info else None,
+                    "salary_cagr": market_info.get("salary_cagr") if market_info else None,
+                    "salary_p50": node.get("salary_p50", 0),
+                },
+            }
+            action_plan = build_action_plan_with_llm(_plan_context)
+        except Exception as e:
+            logger.warning("LLM action plan failed, falling back to template: %s", e)
+            action_plan = _build_action_plan(
+                gap_skills=goal.gap_skills or [],
+                top_missing=skill_gap.get("top_missing", []) if skill_gap else [],
+                node_id=node_id,
+                node_label=goal.target_label,
+                profile_data=profile_data,
+                current_readiness=current_readiness,
+                claimed_skills=claimed_skills,
+                projects=merged_projects,
+                applications=applications,
+                profile_proj_descs=profile_proj_descs,
+            )
+    else:
+        action_plan = _build_action_plan(
+            gap_skills=goal.gap_skills or [],
+            top_missing=skill_gap.get("top_missing", []) if skill_gap else [],
+            node_id=node_id,
+            node_label=goal.target_label,
+            profile_data=profile_data,
+            current_readiness=current_readiness,
+            claimed_skills=claimed_skills,
+            projects=merged_projects,
+            applications=applications,
+            profile_proj_descs=profile_proj_descs,
+        )
 
-    merged_projects = list(projects) + [
-        _ProfileProj(pp["name"], pp["desc"])
-        for pp in profile_proj_descs
-        if not any(p.name == pp["name"] for p in projects)
-    ]
-
-    action_plan = _build_action_plan(
-        gap_skills=goal.gap_skills or [],
-        top_missing=skill_gap.get("top_missing", []) if skill_gap else [],
-        node_id=node_id,
-        node_label=goal.target_label,
-        profile_data=profile_data,
-        current_readiness=current_readiness,
-        claimed_skills=claimed_skills,
-        projects=merged_projects,
-        applications=applications,
-    )
-
-    # 10. LLM narrative (now uses real student context)
+    # 10. LLM narrative — 用合并后的 projects（成长档案 + 简历项目），
+    #     防止成长档案为空时 narrative 缺项目素材只能输出套话
     narrative = _generate_narrative(
         target_label=goal.target_label,
         match_score=match_score,
@@ -1557,7 +2386,7 @@ def generate_report(user_id: int, db) -> dict:
         market_info=market_info,
         growth_delta=growth_delta,
         education=profile_data.get("education"),
-        projects=projects,
+        projects=merged_projects,   # ← 关键修复：从 projects 改成 merged_projects
         claimed_skills=claimed_skills[:3],
         applications=applications,
     )
@@ -1568,6 +2397,29 @@ def generate_report(user_id: int, db) -> dict:
         projects=projects,
         node_label=goal.target_label,
     )
+
+    # ── 方向对齐分析（LLM 分析 + graph 绑定）──
+    try:
+        career_alignment = _build_career_alignment(
+            profile_data=profile_data,
+            projects=projects,
+            graph_nodes=_load_graph_nodes(),
+            target_node_id=node_id,
+        )
+    except Exception as e:
+        logger.warning("Career alignment build failed: %s", e)
+        # 硬兜底：绝不返回 None，避免前端显示「数据不足」写死 UI
+        career_alignment = {
+            "observations": "基于当前档案标签，可初步观察与目标岗位的技能重叠情况。",
+            "alignments": [{
+                "node_id": node_id,
+                "label": goal.target_label,
+                "score": 0.5,
+                "evidence": "用户已标定该方向为目标岗位",
+                "gap": "建议补充可量化的项目成果和技术文档以提升对齐度。",
+            }],
+            "cannot_judge": ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
+        }
 
     # 11. Delta vs previous report
     delta = None
@@ -1662,7 +2514,20 @@ def generate_report(user_id: int, db) -> dict:
             "next_action": next_action,
         }
 
-    # 12. Assemble report payload
+    # 12. Build enriched project recommendations + skill fill path map
+    import copy
+    project_recs_raw = node.get("project_recommendations", [])[:3]
+    top_missing_raw = skill_gap.get("top_missing", []) if skill_gap else []
+
+    enriched_projects, enriched_missing, project_mismatch = _build_skill_fill_path_map(
+        project_recs_raw, top_missing_raw
+    )
+
+    report_skill_gap = copy.deepcopy(skill_gap) if skill_gap else None
+    if report_skill_gap is not None:
+        report_skill_gap["top_missing"] = enriched_missing
+
+    # 13. Assemble report payload
     report_data = {
         "version": "1.0",
         "report_type": "long",
@@ -1686,14 +2551,16 @@ def generate_report(user_id: int, db) -> dict:
             "timing": market_info.get("timing", "good") if market_info else "good",
             "timing_label": market_info.get("timing_label", "") if market_info else "",
         },
-        "skill_gap": skill_gap,
+        "skill_gap": report_skill_gap,
         "growth_curve": growth_curve,
         "action_plan": action_plan,
         "delta": delta,
-        "promotion_path": node.get("promotion_path", []),
         "soft_skills": node.get("soft_skills", {}),
-        "positioning": skill_gap.get("positioning", "") if skill_gap else "",
-        "positioning_level": skill_gap.get("positioning_level", "junior") if skill_gap else "junior",
+        "career_alignment": career_alignment,
+        "differentiation_advice": node.get("differentiation_advice", ""),
+        "ai_impact_narrative": node.get("ai_impact_narrative", ""),
+        "project_recommendations": enriched_projects,
+        "project_mismatch": project_mismatch,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 

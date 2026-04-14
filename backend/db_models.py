@@ -555,43 +555,28 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
-# ── 模拟面试会话 ────────────────────────────────────────────────
-
-
-class MockInterviewSession(Base):
-    """模拟面试会话"""
-
-    __tablename__ = "mock_interview_sessions"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    session_uuid: Mapped[str] = mapped_column(
-        String(36), unique=True, nullable=False, index=True
-    )
-    profile_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("profiles.id"), nullable=False, index=True
-    )
-    jd_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("jd_diagnoses.id"), nullable=True
-    )
-    application_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("job_applications.id"), nullable=True, index=True
-    )
-    target_job: Mapped[str] = mapped_column(String(256), nullable=False, default="")
-    questions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
-    transcript_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
-    interviewer_notes: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
-    analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-    mapped_dimensions: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="active"
-    )  # active / finished / abandoned
-    current_question: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-
 from backend.market_signal_model import MarketSignal  # noqa: F401
 from backend.city_market_signal_model import CityMarketSignal  # noqa: F401
+
+
+class UserNotification(Base):
+    """主动推送消息。由 heartbeat scheduler 生成，前端轮询拉取。"""
+    __tablename__ = "user_notifications"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=False, index=True
+    )
+    kind: Mapped[str] = mapped_column(
+        String(32), nullable=False, index=True
+    )  # 'jd_followup' | 'inactive_nudge' | 'milestone_due' | 'tracked_company_update'
+    title: Mapped[str] = mapped_column(String(128), nullable=False)
+    body: Mapped[str] = mapped_column(String(500), nullable=False)
+    cta_label: Mapped[str | None] = mapped_column(String(32), nullable=True)  # "去投递" / "去更新"
+    cta_route: Mapped[str | None] = mapped_column(String(128), nullable=True)  # "/growth-log" 等
+    dismissed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
 
 # ── JD 匹配诊断记录 ─────────────────────────────────────────────
@@ -614,100 +599,6 @@ class JDDiagnosis(Base):
     match_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     result_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-# ── 面试评估结果持久化 ───────────────────────────────────────────
-
-
-class InterviewHistory(Base):
-    """面试评估结果持久化"""
-
-    __tablename__ = "interview_history"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("profiles.id"), nullable=False, index=True
-    )
-    user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True
-    )
-    target_job: Mapped[str] = mapped_column(String(128), nullable=False, default="")
-    overall_score: Mapped[int] = mapped_column(Integer, default=0)
-    dimensions_json: Mapped[str] = mapped_column(Text, default="[]")
-    skill_gaps_json: Mapped[str] = mapped_column(Text, default="[]")
-    question_count: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-# ── 面试题库 ────────────────────────────────────────────────────
-
-
-class InterviewQuestion(Base):
-    """面试题库 — 管理员维护 + 模板生成"""
-
-    __tablename__ = "interview_questions"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    node_id: Mapped[str | None] = mapped_column(
-        String(128), ForeignKey("job_nodes.node_id"), nullable=True, index=True
-    )
-    skill_tag: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
-    question: Mapped[str] = mapped_column(Text, nullable=False)
-    question_type: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="technical"
-    )
-    question_category: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="technical", index=True
-    )
-    difficulty: Mapped[str] = mapped_column(
-        String(16), nullable=False, default="medium"
-    )
-    source: Mapped[str] = mapped_column(String(32), nullable=False, default="generated")
-    answer_key: Mapped[str | None] = mapped_column(Text, nullable=True)
-    resource_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-    practice_task: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-# ── 用户面试通关清单 ────────────────────────────────────────────
-
-
-class InterviewChecklist(Base):
-    """用户面试通关清单"""
-
-    __tablename__ = "interview_checklists"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("profiles.id"), nullable=False, index=True
-    )
-    diagnosis_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("jd_diagnoses.id"), nullable=True
-    )
-    target_node_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    jd_title: Mapped[str] = mapped_column(String(256), nullable=False, default="")
-    items: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=_utcnow, onupdate=_utcnow
-    )
-
-
-# ── 浏览器扩展令牌 ────────────────────────────────────────────────
-
-
-class ExtensionToken(Base):
-    """Browser extension API tokens — one active token per user."""
-
-    __tablename__ = "extension_tokens"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True
-    )
-    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 # ── 求职投递跟踪 ────────────────────────────────────────────────
@@ -754,49 +645,6 @@ class InterviewDebrief(Base):
     report_json: Mapped[str | None] = mapped_column(Text, nullable=True)          # LLM 输出的复盘报告 JSON
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-# ── 单题面试复盘记录 ───────────────────────────────────────────────
-
-
-class InterviewReview(Base):
-    """单题面试复盘记录"""
-
-    __tablename__ = "interview_reviews"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("profiles.id"), nullable=False, index=True
-    )
-    question_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("interview_questions.id"), nullable=True, index=True
-    )
-    target_job: Mapped[str] = mapped_column(String(128), nullable=False, default="")
-    question_text: Mapped[str] = mapped_column(Text, nullable=False)
-    answer_text: Mapped[str] = mapped_column(Text, nullable=False)
-    analysis_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-
-
-# ── 学习进度跟踪 ─────────────────────────────────────────────────
-
-
-class LearningProgress(Base):
-    """Per-subtopic completion tracking for learning paths."""
-
-    __tablename__ = "learning_progress"
-    __table_args__ = (
-        UniqueConstraint("profile_id", "role_id", "subtopic_id", name="uq_learning_progress"),
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    profile_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("profiles.id"), nullable=False, index=True
-    )
-    role_id: Mapped[str] = mapped_column(String(64), nullable=False)
-    subtopic_id: Mapped[str] = mapped_column(String(128), nullable=False)
-    completed: Mapped[bool] = mapped_column(Boolean, default=False)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 # ── 教练结果存储 ─────────────────────────────────────────────────
@@ -875,26 +723,6 @@ class InterviewRecord(Base):
     interview_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
-
-
-# ── 学习记录 ─────────────────────────────────────────────────────
-
-
-class LearningNote(Base):
-    """用户主动记录的学习笔记 — 标题 + 简短总结 + 标签 + 关联技能。"""
-
-    __tablename__ = "learning_notes"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    profile_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("profiles.id"), nullable=True)
-
-    title: Mapped[str] = mapped_column(String(256), nullable=False)
-    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    tags: Mapped[list] = mapped_column(JSON, default=list)            # ["Redis", "数据库"]
-    linked_skill: Mapped[str | None] = mapped_column(String(128), nullable=True)  # 关联目标岗位技能
-
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
 # ── 教练结果存储 ─────────────────────────────────────────────────

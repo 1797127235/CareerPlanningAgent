@@ -5,10 +5,9 @@ let _isRedirecting = false
 /** Clear auth state and redirect to login page */
 function handleUnauthorized(): never {
   if (_isRedirecting) {
-    // Prevent race condition: if already redirecting, just stall
-    while (true) {
-      /* busy-wait until navigation completes */
-    }
+    // Another 401 already triggered the redirect — abort this request,
+    // let the in-flight navigation complete. Do NOT busy-wait (would freeze the UI).
+    throw new Error('Unauthorized (redirect in progress)')
   }
   _isRedirecting = true
   localStorage.removeItem('token')

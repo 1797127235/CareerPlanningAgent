@@ -131,8 +131,8 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
     const tips: Record<string, { text: string; prompt: string }> = {
       '/profile': { text: '画像页 — 想诊断技能缺口？粘贴一段目标 JD 试试', prompt: '诊断 JD 匹配度' },
       '/graph': { text: '图谱页 — 点击感兴趣的岗位，我帮你分析转型路径', prompt: '帮我探索岗位图谱' },
-      '/growth': { text: '成长看板 — 想知道下一步该做什么？', prompt: '分析我的成长数据，推荐下一步行动' },
-      '/applications': { text: '求职追踪 — 需要帮你优化投递策略吗？', prompt: '帮我分析投递策略' },
+      '/growth-log': { text: '成长档案 — 想知道下一步该做什么？', prompt: '分析我的成长数据，推荐下一步行动' },
+      '/report': { text: '报告页 — 想升级报告？可以粘 JD 或补档案，我来帮你拉通。', prompt: '基于我的画像和成长数据帮我规划下一步' },
     }
     const tip = tips[location.pathname]
     if (tip && dismissedTipRef.current !== location.pathname) {

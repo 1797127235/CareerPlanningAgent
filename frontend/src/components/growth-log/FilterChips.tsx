@@ -1,13 +1,13 @@
-import { FolderGit2, Briefcase, BookOpen } from 'lucide-react'
+import { FolderGit2, Briefcase, Sparkles } from 'lucide-react'
 import type { ComponentType } from 'react'
 
-export type FilterKey = 'all' | 'project' | 'pursuit' | 'learning'
+export type FilterKey = 'all' | 'project' | 'pursuit' | 'refine'
 
 export const FILTERS: { key: FilterKey; label: string; icon?: ComponentType<{ className?: string }> }[] = [
   { key: 'all',      label: '全部' },
   { key: 'project',  label: '项目',  icon: FolderGit2 },
   { key: 'pursuit',  label: '实战',  icon: Briefcase },
-  { key: 'learning', label: '学习',  icon: BookOpen },
+  { key: 'refine',   label: '档案精修', icon: Sparkles },
 ]
 
 export function FilterChips({ value, onChange }: { value: FilterKey; onChange: (v: FilterKey) => void }) {

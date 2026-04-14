@@ -20,10 +20,8 @@ from backend.db_models import (
     ChatSession,
     CoachResult,
     InterviewRecord,
-    InterviewReview,
     JDDiagnosis,
     JobApplication,
-    LearningNote,
     Profile,
     ProjectRecord,
     Report,
@@ -290,15 +288,13 @@ def _hydrate_state(user: User, db: Session) -> dict:
     # 4. Compute journey stage
     profile_count = db.query(func.count(Profile.id)).filter_by(user_id=user.id).scalar() or 0
     jd_count = db.query(func.count(JDDiagnosis.id)).filter_by(user_id=user.id).scalar() or 0
-    review_count = (
-        db.query(func.count(InterviewReview.id))
-        .join(Profile, InterviewReview.profile_id == Profile.id)
-        .filter(Profile.user_id == user.id)
-        .scalar() or 0
-    )
+    project_count = db.query(func.count(ProjectRecord.id)).filter_by(user_id=user.id).scalar() or 0
+    app_count = db.query(func.count(JobApplication.id)).filter_by(user_id=user.id).scalar() or 0
+    interview_count = db.query(func.count(InterviewRecord.id)).filter_by(user_id=user.id).scalar() or 0
+    activity_count = project_count + app_count + interview_count
     report_count = db.query(func.count(Report.id)).filter_by(user_id=user.id).scalar() or 0
 
-    state["user_stage"] = compute_stage(profile_count, jd_count, review_count, report_count)
+    state["user_stage"] = compute_stage(profile_count, jd_count, activity_count, report_count)
 
     # 5. Growth coach state
     state["coach_memo"] = ""
@@ -327,14 +323,6 @@ def _hydrate_state(user: User, db: Session) -> dict:
             .limit(5)
             .all()
         )
-        # Learning notes: count + latest title only (content via get_learning_notes tool)
-        note_count = db.query(func.count(LearningNote.id)).filter_by(user_id=user.id).scalar() or 0
-        latest_note = (
-            db.query(LearningNote)
-            .filter_by(user_id=user.id)
-            .order_by(LearningNote.created_at.desc())
-            .first()
-        )
         state["growth_context"] = {
             "projects": [
                 {
@@ -353,8 +341,6 @@ def _hydrate_state(user: User, db: Session) -> dict:
                 }
                 for a in pursuits
             ],
-            "learning_notes_count": note_count,
-            "latest_note_title": latest_note.title if latest_note else None,
         }
     except Exception:
         logger.exception("Failed to load growth context")
@@ -470,15 +456,13 @@ def _build_greeting(user: User, db: Session) -> dict:
 
     profile_count = db.query(func.count(Profile.id)).filter_by(user_id=user.id).scalar() or 0
     jd_count = db.query(func.count(JDDiagnosis.id)).filter_by(user_id=user.id).scalar() or 0
-    review_count = (
-        db.query(func.count(InterviewReview.id))
-        .join(Profile, InterviewReview.profile_id == Profile.id)
-        .filter(Profile.user_id == user.id)
-        .scalar() or 0
-    )
+    project_count = db.query(func.count(ProjectRecord.id)).filter_by(user_id=user.id).scalar() or 0
+    app_count = db.query(func.count(JobApplication.id)).filter_by(user_id=user.id).scalar() or 0
+    interview_count = db.query(func.count(InterviewRecord.id)).filter_by(user_id=user.id).scalar() or 0
+    activity_count = project_count + app_count + interview_count
     report_count = db.query(func.count(Report.id)).filter_by(user_id=user.id).scalar() or 0
 
-    stage = compute_stage(profile_count, jd_count, review_count, report_count)
+    stage = compute_stage(profile_count, jd_count, activity_count, report_count)
 
     # Guard: auto-created empty profiles inflate profile_count to 1 even with no content.
     # A profile record with zero skills AND no name AND no raw_text is effectively "no profile".
@@ -730,7 +714,6 @@ def _build_greeting(user: User, db: Session) -> dict:
             "skill_count": skill_count,
             "goal_label": goal.target_label if goal else None,
             "jd_count": jd_count,
-            "review_count": review_count,
             "learning_pct": learning_pct,
         },
     }
@@ -831,13 +814,18 @@ def _generate_session_title(session_id: int, user_id: int) -> None:
 
 
 def _update_coach_memo(session_id: int, user_id: int) -> None:
-    """Background: extract key insights from conversation and update coach_memo."""
+    """Background: 把本次对话喂给 Mem0，让它自动抽取记忆。
+
+    Mem0 内置 LLM extraction + 去重 + 冲突合并，我们只负责喂对话。
+    老的 profile.coach_memo 文本在首次调用时一次性迁移进 Mem0。
+    """
     from backend.db import SessionLocal
-    from backend.llm import get_model, llm_chat
+    from backend.db_models import ChatMessage, Profile
+    from backend.services.coach_memory import add_conversation, migrate_legacy_memo
+    from sqlalchemy import func
 
     db = SessionLocal()
     try:
-        # Need at least 3 rounds (6 messages) for meaningful memo
         msg_count = (
             db.query(func.count(ChatMessage.id))
             .filter(ChatMessage.session_id == session_id)
@@ -852,10 +840,14 @@ def _update_coach_memo(session_id: int, user_id: int) -> None:
             .order_by(Profile.updated_at.desc())
             .first()
         )
-        if not profile:
-            return
 
-        # Get recent messages from this session
+        # 迁移老 memo（幂等，Mem0 自动去重）
+        if profile and profile.coach_memo:
+            migrate_legacy_memo(user_id, profile.coach_memo)
+            profile.coach_memo = ""  # 迁移后清空，避免重复
+            db.commit()
+
+        # 喂本次对话给 Mem0
         msgs = (
             db.query(ChatMessage)
             .filter(ChatMessage.session_id == session_id)
@@ -863,39 +855,11 @@ def _update_coach_memo(session_id: int, user_id: int) -> None:
             .limit(20)
             .all()
         )
-        conversation = "\n".join(f"{m.role}: {m.content[:200]}" for m in msgs)
-        current_memo = profile.coach_memo or ""
-
-        updated = llm_chat(
-            [
-                {
-                    "role": "system",
-                    "content": (
-                        "你是职业教练的记忆助手。根据本次对话更新用户备忘录。\n"
-                        "规则：\n"
-                        "- 保留仍相关的旧内容，融入新发现\n"
-                        "- 记录：用户偏好、决策、关注点、目标变化、情绪状态\n"
-                        "- 不记录：具体问题原文、JD内容、技术细节\n"
-                        "- 总长度不超过500字\n"
-                        "- 直接输出更新后的备忘录，不加解释"
-                    ),
-                },
-                {
-                    "role": "user",
-                    "content": f"现有备忘录：\n{current_memo or '（空）'}\n\n本次对话：\n{conversation}",
-                },
-            ],
-            model=get_model("fast"),
-            temperature=0.3,
-            timeout=15,
-        )
-        updated = updated.strip()[:600]
-        if updated and updated != current_memo:
-            profile.coach_memo = updated
-            db.commit()
-            logger.info("Updated coach_memo for user %d (len=%d)", user_id, len(updated))
+        conversation = "\n".join(f"{m.role}: {m.content[:300]}" for m in msgs)
+        add_conversation(user_id, conversation)
+        logger.info("Coach memory updated via Mem0 for user %d", user_id)
     except Exception:
-        logger.exception("Failed to update coach memo")
+        logger.exception("Failed to update coach memory")
     finally:
         db.close()
 
@@ -978,6 +942,11 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
     agent_source_sent = False  # Whether we've sent the agent_source SSE event
     tool_messages: list = []  # Collect tool messages for structured data extraction
 
+    # TTFT instrumentation (2026-04-15)
+    import time as _time
+    _ttft_start = _time.time()
+    _first_chunk_logged = False
+
     # Pre-scan user message for direction mentions (user-side trigger)
     user_detected_cards = _extract_market_cards(req.message)
 
@@ -991,9 +960,9 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                 if page_card["family"] not in existing_families:
                     user_detected_cards = [page_card] + user_detected_cards
 
-    # Trailing buffer: keep last 40 chars un-emitted so [COACH_RESULT_ID:N] tokens
-    # don't flash to the user before we can strip them at stream end.
-    _TAIL = 40
+    # Trailing buffer: keep last 24 chars un-emitted so [COACH_RESULT_ID:NNNNN]
+    # markers (23 chars max) don't flash before we strip them at stream end.
+    _TAIL = 24
     _stream_tail = ""
     import re as _re
 
@@ -1044,6 +1013,9 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                 _safe = _stream_tail[:-_TAIL]
                 _safe = _re.sub(r'\[COACH_RESULT_ID:\d+\]', '', _safe)
                 if _safe:
+                    if not _first_chunk_logged:
+                        logger.info("TTFT: %.0f ms user=%d", (_time.time()-_ttft_start)*1000, user.id)
+                        _first_chunk_logged = True
                     yield f"data: {json.dumps({'content': _safe}, ensure_ascii=False)}\n\n"
                 _stream_tail = _stream_tail[-_TAIL:]
 

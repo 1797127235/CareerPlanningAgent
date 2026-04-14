@@ -219,15 +219,6 @@ def delete_diagnosis(
     )
     if not row:
         raise HTTPException(404, "记录不存在")
-    # Nullify FK references to avoid constraint violations
-    from backend.db_models import MockInterviewSession, InterviewChecklist
-
-    db.query(MockInterviewSession).filter(
-        MockInterviewSession.jd_id == diagnosis_id
-    ).update({"jd_id": None, "target_job": "通用技术面试"})
-    db.query(InterviewChecklist).filter(
-        InterviewChecklist.diagnosis_id == diagnosis_id
-    ).update({"diagnosis_id": None})
     db.delete(row)
     db.commit()
     return {"success": True, "message": "已删除"}

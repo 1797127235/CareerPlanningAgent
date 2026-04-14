@@ -38,13 +38,6 @@ export interface JdDiagnosisSummary {
   matched_skills: string[]
 }
 
-export interface MockSessionSummary {
-  id: number
-  overall_score: number
-  status: string
-  created_at: string
-}
-
 export interface JobApplication {
   id: number
   jd_diagnosis_id: number | null
@@ -63,7 +56,6 @@ export interface JobApplication {
   updated_at: string
   debrief: ApplicationDebrief | null
   jd_diagnosis: JdDiagnosisSummary | null
-  mock_sessions: MockSessionSummary[]
 }
 
 export interface CreateApplicationRequest {

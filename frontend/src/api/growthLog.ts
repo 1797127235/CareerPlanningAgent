@@ -171,45 +171,6 @@ export const deleteProjectLog = (projectId: number, logId: number) =>
 export const deleteInterview = (id: number) =>
   rawFetch<void>(`${BASE}/interviews/${id}`, { method: 'DELETE' })
 
-/* ── Learning Notes ── */
-
-export interface LearningNote {
-  id: number
-  title: string
-  summary: string
-  tags: string[]
-  linked_skill: string | null
-  created_at: string
-}
-
-export const listLearningNotes = () =>
-  rawFetch<{ notes: LearningNote[] }>(`${BASE}/learning-notes`)
-
-export const createLearningNote = (data: {
-  title: string
-  summary?: string
-  tags?: string[]
-  linked_skill?: string
-}) =>
-  rawFetch<LearningNote>(`${BASE}/learning-notes`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-
-export const updateLearningNote = (id: number, data: {
-  title?: string
-  summary?: string
-  tags?: string[]
-  linked_skill?: string
-}) =>
-  rawFetch<LearningNote>(`${BASE}/learning-notes/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  })
-
-export const deleteLearningNote = (id: number) =>
-  rawFetch<void>(`${BASE}/learning-notes/${id}`, { method: 'DELETE' })
-
 /* ── Project Graph ── */
 
 export interface GraphData {

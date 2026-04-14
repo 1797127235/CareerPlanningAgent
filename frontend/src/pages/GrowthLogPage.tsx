@@ -1,11 +1,11 @@
-import { useState, useMemo, type ReactNode } from 'react'
+import { useState, useMemo, useEffect, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 
-import { listProjects, listLearningNotes, getGrowthDashboard } from '@/api/growthLog'
-import type { ProjectRecord, LearningNote } from '@/api/growthLog'
+import { listProjects, getGrowthDashboard } from '@/api/growthLog'
+import type { ProjectRecord } from '@/api/growthLog'
 import { listApplications } from '@/api/applications'
 import type { JobApplication } from '@/types/application'
 
@@ -15,9 +15,9 @@ import type { FilterKey } from '@/components/growth-log/FilterChips'
 import { RecordRow } from '@/components/growth-log/RecordRow'
 import type { UnifiedRecord, RecordType } from '@/components/growth-log/RecordRow'
 import { NewRecordDialog } from '@/components/growth-log/NewRecordDialog'
-import { LearningNoteForm } from '@/components/growth-log/LearningNoteForm'
 import { AddProjectForm } from '@/components/growth-log/ProjectsSection'
 import { AddPursuitForm } from '@/components/growth-log/PursuitsSection'
+import { RefineSection } from '@/components/growth-log/RefineSection'
 
 interface DateGroup {
   label: string
@@ -50,7 +50,6 @@ function groupByDate(records: UnifiedRecord[]): DateGroup[] {
 function mergeRecords(
   projects: ProjectRecord[],
   applications: JobApplication[],
-  learningNotes: LearningNote[]
 ): UnifiedRecord[] {
   const records: UnifiedRecord[] = [
     ...projects.map(p => ({
@@ -72,15 +71,6 @@ function mergeRecords(
       tags: [],
       date: a.created_at,
       raw: a,
-    })),
-    ...learningNotes.map(l => ({
-      id: `learn-${l.id}`,
-      type: 'learning' as RecordType,
-      title: l.title,
-      subtitle: l.summary,
-      tags: l.tags,
-      date: l.created_at,
-      raw: l,
     })),
   ]
   return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -142,15 +132,29 @@ export default function GrowthLogPage() {
   const { data: dashboardData } = useQuery({ queryKey: ['growth-dashboard'], queryFn: getGrowthDashboard, staleTime: 120_000 })
   const { data: projectsData } = useQuery({ queryKey: ['growth-projects'], queryFn: listProjects })
   const { data: appsData } = useQuery({ queryKey: ['pursuits-apps'], queryFn: listApplications })
-  const { data: notesData } = useQuery({ queryKey: ['learning-notes'], queryFn: listLearningNotes, retry: false })
 
   const projects = projectsData?.projects ?? []
   const applications = appsData ?? []
-  const learningNotes: LearningNote[] = notesData?.notes ?? []
 
-  const allRecords = useMemo(() => mergeRecords(projects, applications, learningNotes), [projects, applications, learningNotes])
-  const filtered = filterParam === 'all' ? allRecords : allRecords.filter(r => r.type === filterParam)
+  const allRecords = useMemo(() => mergeRecords(projects, applications), [projects, applications])
+  const filtered = filterParam === 'all' || filterParam === 'refine' ? allRecords : allRecords.filter(r => r.type === filterParam)
   const groups = useMemo(() => groupByDate(filtered), [filtered])
+
+  useEffect(() => {
+    const urlTab = searchParams.get('tab')
+    // tab → filter 映射：前端 FilterChips 用单数 key（pursuit/project），URL 惯用复数
+    const tabToFilter: Record<string, FilterKey> = {
+      refine: 'refine',
+      pursuits: 'pursuit',
+      pursuit: 'pursuit',
+      projects: 'project',
+      project: 'project',
+    }
+    const mapped = urlTab ? tabToFilter[urlTab] : undefined
+    if (mapped) {
+      setFilter(mapped)
+    }
+  }, [searchParams])
 
   const handleRecordSelect = (type: RecordType) => {
     setShowNewDialog(false)
@@ -161,7 +165,6 @@ export default function GrowthLogPage() {
     setActiveForm(null)
     qc.invalidateQueries({ queryKey: ['growth-projects'] })
     qc.invalidateQueries({ queryKey: ['pursuits-apps'] })
-    qc.invalidateQueries({ queryKey: ['learning-notes'] })
   }
 
   return (
@@ -178,27 +181,31 @@ export default function GrowthLogPage() {
         <FilterChips value={filterParam} onChange={setFilter} />
       </div>
 
-      <div className="space-y-4">
-        {allRecords.length === 0 ? (
-          <EmptyState onAddRecord={() => setShowNewDialog(true)} hasGoal={!!(dashboardData as any)?.has_goal} />
-        ) : groups.length === 0 ? (
-          <div className="text-center py-12 text-slate-400 text-[12px]">没有符合条件的记录</div>
-        ) : (
-          groups.map(group => (
-            <div key={group.label}>
-              <div className="flex items-center gap-3 mb-3 mt-5">
-                <span className="text-[11px] font-bold text-slate-400 uppercase">{group.label}</span>
-                <div className="flex-1 h-px bg-slate-200/60" />
+      {filterParam === 'refine' ? (
+        <RefineSection />
+      ) : (
+        <div className="space-y-4">
+          {allRecords.length === 0 ? (
+            <EmptyState onAddRecord={() => setShowNewDialog(true)} hasGoal={!!(dashboardData as any)?.has_goal} />
+          ) : groups.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-[12px]">没有符合条件的记录</div>
+          ) : (
+            groups.map(group => (
+              <div key={group.label}>
+                <div className="flex items-center gap-3 mb-3 mt-5">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase">{group.label}</span>
+                  <div className="flex-1 h-px bg-slate-200/60" />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {group.items.map(record => (
+                    <RecordRow key={record.id} record={record} />
+                  ))}
+                </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {group.items.map(record => (
-                  <RecordRow key={record.id} record={record} />
-                ))}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      )}
 
       <AnimatePresence>
         {showNewDialog && (
@@ -219,9 +226,7 @@ export default function GrowthLogPage() {
             {activeForm === 'pursuit' && (
               <AddPursuitForm onSuccess={handleFormSuccess} onCancel={() => setActiveForm(null)} />
             )}
-            {activeForm === 'learning' && (
-              <LearningNoteForm onSuccess={handleFormSuccess} onCancel={() => setActiveForm(null)} />
-            )}
+
           </FormModal>
         )}
       </AnimatePresence>

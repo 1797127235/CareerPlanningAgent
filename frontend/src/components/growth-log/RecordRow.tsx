@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import { FolderGit2, Briefcase, BookOpen, Trash2, ArrowRight } from 'lucide-react'
+import { FolderGit2, Briefcase, Trash2, ArrowRight } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
-import type { ProjectRecord, LearningNote } from '@/api/growthLog'
-import { deleteProject, deleteLearningNote } from '@/api/growthLog'
+import type { ProjectRecord } from '@/api/growthLog'
+import { deleteProject } from '@/api/growthLog'
 import { deleteApplication } from '@/api/applications'
 import type { JobApplication } from '@/types/application'
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog'
 import { useQueryClient } from '@tanstack/react-query'
 
-export type RecordType = 'project' | 'pursuit' | 'learning'
+export type RecordType = 'project' | 'pursuit'
 
 export interface UnifiedRecord {
   id: string
@@ -19,13 +19,12 @@ export interface UnifiedRecord {
   status?: string
   tags?: string[]
   date: string
-  raw: ProjectRecord | JobApplication | LearningNote
+  raw: ProjectRecord | JobApplication
 }
 
 const TYPE_CONFIG = {
   project:  { label: '项目', color: '#EA580C', bg: 'rgba(234,88,12,0.10)', icon: FolderGit2 },
   pursuit:  { label: '实战', color: '#2563EB', bg: 'rgba(37,99,235,0.10)',  icon: Briefcase },
-  learning: { label: '学习', color: '#16A34A', bg: 'rgba(22,163,74,0.10)',  icon: BookOpen },
 }
 
 const STATUS_TEXT: Record<string, string> = {
@@ -64,8 +63,6 @@ export function RecordRow({ record }: { record: UnifiedRecord }) {
     else if (record.type === 'pursuit') {
       qc.invalidateQueries({ queryKey: ['pursuits-apps'] })
       qc.invalidateQueries({ queryKey: ['pursuits-interviews'] })
-    } else {
-      qc.invalidateQueries({ queryKey: ['learning-notes'] })
     }
   }
 
@@ -80,7 +77,6 @@ export function RecordRow({ record }: { record: UnifiedRecord }) {
     try {
       if (record.type === 'project') await deleteProject((record.raw as ProjectRecord).id)
       else if (record.type === 'pursuit') await deleteApplication((record.raw as JobApplication).id)
-      else await deleteLearningNote((record.raw as LearningNote).id)
       invalidate()
     } finally { setDeleting(false) }
   }
@@ -172,24 +168,7 @@ export function RecordRow({ record }: { record: UnifiedRecord }) {
         </div>
       </div>
 
-      {detailOpen && record.type === 'learning' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setDetailOpen(false)}>
-          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
-          <div className="relative bg-white rounded-2xl p-6 w-full max-w-[480px] shadow-xl z-10" onClick={e => e.stopPropagation()}>
-            <p className="text-[15px] font-bold text-slate-800 mb-3">{record.title}</p>
-            <p className="text-[13px] text-slate-600 leading-relaxed whitespace-pre-wrap">
-              {record.subtitle || '暂无摘要'}
-            </p>
-            {(record.raw as LearningNote).tags?.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-4">
-                {(record.raw as LearningNote).tags.map(t => (
-                  <span key={t} className="text-[11px] px-2.5 py-1 bg-green-50 text-green-600 rounded-lg">#{t}</span>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
     </>
   )
 }

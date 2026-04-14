@@ -1,197 +1,146 @@
-# 智能职业规划 Agent 系统
+# 职途智析 · AI 大学生职业规划智能体
 
-基于岗位图谱与 LLM 的智能职业规划系统：从原始岗位数据构建职业图谱（岗位方向、技能、晋升/换岗关系、社区划分），提供 Web 端图谱浏览、路径规划与差距分析，并支持命令行 Agent 查询。
-
----
-
-## 功能概览
-
-- **职业图谱**：岗位节点、晋升/换岗边、社区划分，支持搜索与筛选
-- **路径规划**：基于图谱的岗位路径推荐
-- **差距分析**：岗位技能与能力差距展示
-- **岗位图谱流水线**：从 CSV 岗位数据到 `graph.json` 的全自动构建（LLM 抽取 + 规则校验 + 社区发现）
-- **命令行 Agent**：`main.py` 支持按岗位/城市等条件查询推荐
+> 基于大模型的个性化职业发展助手 —— 从简历解析到岗位对齐、从技能诊断到成长追踪，全链路帮中国 CS/IT 学生把"学了什么"转化为"能去哪里"。
 
 ---
 
-## 技术栈
+## ✨ 核心特性
 
-| 模块     | 技术 |
-|----------|------|
-| 前端     | React 19 + TypeScript + Vite + Tailwind + React Flow + Recharts |
-| 后端     | FastAPI + Python 3.9+ |
-| 流水线   | Python（NetworkX 社区发现、OpenAI 兼容 API 如 DashScope） |
-| 向量检索 | Qdrant / ChromaDB（可选） |
-| LLM      | 阿里云百炼 DashScope（qwen 系列），兼容 OpenAI API |
-
----
-
-## 环境要求
-
-- **Python 3.9+**
-- **Node.js 18+**（用于前端）
-- **阿里云百炼 API Key**（[获取地址](https://dashscope.aliyun.com/)），用于流水线 step2/step7 与 Agent
+| 模块 | 能做什么 |
+|------|---------|
+| 🎯 **能力画像** | 上传简历自动解析 → 提炼技能/项目/经历 → SJT 软技能评估 → 在职业图谱上定位你的坐标 |
+| 🗺️ **岗位图谱** | 45 个真实 IT 岗位节点 + 可视化探索 + 每个岗位含核心技能、典型实战项目、AI 影响、差异化建议 |
+| 🔍 **JD 诊断** | 粘贴任意真实 JD → 四维评分（基础/技能/素养/潜力）+ 技能缺口分析 + 可落地成长建议 |
+| 📈 **成长档案** | 项目追踪（记录你做过什么）+ 求职追踪（记录投递进度）+ 档案精修（学生自补空洞项目描述） |
+| 📊 **AI 发展报告** | 综合评价 · 技能覆盖 · 方向对齐（LLM 分析）· 补法路径地图 · 成长计划 · AI 影响参照 |
+| 💬 **AI 教练** | 右侧常驻对话面板 · 结合你当前画像/档案实时给建议 · 支持 JD 诊断、目标对齐、面试准备 |
 
 ---
 
-## 快速开始
+## 🚀 快速开始
 
-### 1. 克隆仓库
+### 前置条件
+
+- Python 3.10+
+- Node.js 18+
+- 一个[阿里云百炼 API Key](https://dashscope.aliyun.com/)（必需）
+
+### 环境变量
+
+复制 `.env.example` 为 `.env`，至少配置：
 
 ```bash
-git clone <你的 Gitee 仓库地址>
-cd CareerPlanningAgent
+DASHSCOPE_API_KEY=sk-your-dashscope-api-key-here
 ```
 
-### 2. 环境变量
+### 启动服务
 
-复制环境变量模板并填入 API Key：
+**手动启动（两个终端）**：
 
 ```bash
-copy .env.example .env
-# 编辑 .env，至少填写：
-# DASHSCOPE_API_KEY=sk-你的密钥
+# 终端 1：后端（端口 8000）
+python -m uvicorn backend.app:app --reload
+
+# 终端 2：前端（端口 5173）
+cd frontend
+npm install
+npm run dev
 ```
 
-### 3. 一键启动（推荐）
-
-双击或在项目根目录执行：
-
-```bash
-start.bat
-```
-
-按提示选择：
-
-- **1**：启动 Web 服务（前端 + 后端），浏览器访问 http://localhost:5173
-- **2**：仅启动后端 API，访问 http://localhost:8000/docs
-- **3**：测试命令行 Agent
-- **4**：运行岗位图谱流水线（全量数据需较长时间，支持断点续传）
-
-首次运行会自动创建 `.venv`、安装 Python 依赖；若选 1 且未安装前端依赖，会提示安装 Node 依赖。
-
-### 4. 手动启动（可选）
-
-```bash
-# 创建并激活虚拟环境
-python -m venv .venv
-.venv\Scripts\activate
-
-# 安装依赖
-pip install -r requirements.txt
-
-# 启动后端
-python backend/api_integrated.py
-
-# 另开终端：启动前端
-cd frontend && npm install && npm run dev
-```
-
-前端默认：http://localhost:5173  
-后端默认：http://localhost:8000
+浏览器打开 [http://localhost:5173](http://localhost:5173) 开始使用。
 
 ---
 
-## 项目结构
+## 🧰 技术栈
+
+### 后端
+- **FastAPI** · 异步 API 框架
+- **SQLAlchemy** + **SQLite** · ORM + 轻量数据库
+- **LangGraph** · 多 Agent 编排框架
+- **阿里云百炼**（qwen 系列）· 大模型推理
+- **text-embedding-v3** · 语义向量计算
+- **Qdrant** · 向量数据库（可选，默认嵌入式）
+
+### 前端
+- **React 19** + **TypeScript** · UI 框架
+- **Vite** · 构建工具
+- **TanStack Query** · 服务端状态管理
+- **Tailwind CSS 4** · 样式系统（glassmorphism 设计）
+- **Framer Motion** · 动效
+- **Recharts** + **@xyflow/react** · 图表 + 图谱可视化
+- **Lucide Icons** · SVG 图标库
+
+### AI Agent 架构
+- **Supervisor Pattern** · 中央调度器根据意图路由到专门 Agent
+- **专家 Agent**：`navigator`（图谱探索）/ `growth`（成长追踪）/ `profile`（画像诊断）/ `coach`（教练对话）/ `jd`（JD 诊断）/ `search`（网络搜索）
+- **Tool 层**：每个 Agent 绑定其领域内的工具集
+
+---
+
+## 📂 项目结构
 
 ```
 CareerPlanningAgent/
-├── backend/              # FastAPI 后端（API、图谱接口、报告导出等）
-├── frontend/             # React 前端（Vite + TS）
-├── pipeline/             # 岗位图谱构建流水线（Step 1–10）
-│   ├── run.py            # 一键运行流水线
-│   ├── step1_csv_to_jobs.py
-│   ├── step2_extract_evidence.py   # LLM 抽取（支持 --resume 断点续传）
-│   ├── step3_build_directions.py
-│   ├── step4_aggregate.py
-│   ├── step5_role_family.py
-│   ├── step6_candidates.py
-│   ├── step7_llm_edges.py
-│   ├── step8_validate.py
-│   ├── step9_communities.py       # 社区检测（可 --resolution 调社区数）
-│   └── step10_assemble.py
-├── data/                 # 原始数据（如 岗位数据.csv、skill_taxonomy.csv）
-├── artifacts/            # 流水线产出与运行结果
-│   ├── pipeline/         # graph.json、evidence.jsonl、profiles.json 等
-│   └── graph.json        # 后端/Agent 读取的图谱入口
-├── docs/                 # 文档（部署、流水线生产就绪性等）
-├── main.py               # 命令行 Agent 入口
-├── start.bat             # Windows 一键启动
-├── requirements.txt
-└── .env.example          # 环境变量模板（复制为 .env 使用）
+├── backend/                    # FastAPI 后端
+│   ├── app.py                  # 应用入口 + 路由注册
+│   ├── db.py / db_models.py    # SQLAlchemy ORM
+│   ├── routers/                # HTTP 路由层
+│   │   ├── profiles.py         # 画像 CRUD + 简历解析
+│   │   ├── jd.py               # JD 诊断
+│   │   ├── report.py           # 职业发展报告生成
+│   │   ├── growth_log.py       # 成长档案
+│   │   ├── applications.py     # 求职追踪
+│   │   ├── chat.py             # AI 教练对话
+│   │   └── graph.py            # 岗位图谱 API
+│   └── services/               # 业务逻辑层
+│       ├── report_service.py   # 报告生成核心
+│       ├── jd_service.py       # JD 诊断核心
+│       ├── profile_service.py  # 画像定位 + 评分
+│       └── dashboard_service.py
+├── agent/                      # LangGraph 多 Agent
+│   ├── supervisor.py           # 中央调度器
+│   ├── intent_router.py        # 意图识别
+│   ├── agents/                 # 专家 Agent 实现
+│   └── tools/                  # Agent 工具集
+├── frontend/                   # React 前端
+│   └── src/
+│       ├── pages/              # 路由级页面
+│       ├── components/         # 可复用组件
+│       ├── api/                # HTTP 客户端
+│       └── hooks/              # React hooks
+├── data/
+│   ├── graph.json              # 岗位图谱 curated 数据（45 节点）
+│   ├── market_signals.json     # 市场信号数据
+│   └── skill_fill_path_tags.json  # 技能补法路径分类
+└── docs/
+    ├── PROJECT_GUIDE.md        # 项目详细讲解 + 使用指南
+    ├── career-alignment-spec.md
+    └── ...                     # 其他技术规范文档
 ```
 
 ---
 
-## 岗位图谱流水线
+## 🎓 设计哲学（三条红线）
 
-从「岗位数据 CSV」到「图谱 JSON」的完整流程：
+### 1. AI 做观察，不做预言
+系统**拒绝**输出"你 3 年能到高级"、"你适合做 X 方向"这类无法验证的预测。
+只展示**事实陈述**（技能覆盖 X/Y · 项目证据 N 个）和**对齐分析**（你的画像跟 graph 里哪些岗位重合度高）。
 
-| 步骤 | 说明 |
-|------|------|
-| 1 | CSV → jobs.jsonl |
-| 2 | jobs.jsonl → evidence.jsonl（LLM + 规则抽取，**支持 --resume 断点续传**） |
-| 3 | evidence → directions + assignments |
-| 4 | evidence → profiles.json |
-| 5 | profiles → role_family.json |
-| 6 | profiles + role_family → candidate_pairs.json |
-| 7 | candidate_pairs → llm_edges.json（LLM 判边，有缓存可续跑） |
-| 8 | llm_edges → validated_edges.json |
-| 9 | validated_edges → communities.json（Louvain，可 --resolution 调社区数） |
-| 10 | 全部 → graph.json |
+### 2. 学生填真实数据，AI 不代写
+档案精修模块**只给差距诊断 + 格式范本**（例如"加一个 QPS 数字会更有说服力"），
+**学生必须用自己真实的项目数据填空**——强制自我反思，防止 AI 编造的假简历。
 
-**常用命令：**
-
-```bash
-# 完整流水线
-python pipeline/run.py
-
-# 从 step2 开始（例如已有 jobs.jsonl）
-python pipeline/run.py --from 2
-
-# step2 断点续传（中断后继续）
-python pipeline/run.py --from 2 --resume
-
-# 仅测试少量数据
-python pipeline/run.py --max-jobs 500
-```
-
-产出图谱由后端从 `artifacts/pipeline/graph.json` 加载，前端「职业图谱」页即展示该数据。
+### 3. 诚实展示"我不知道"
+- 当项目推荐与学生缺口严重错配时 → 显示"当前画像和典型实战项目跨度较大，建议先补基础"，**不硬塞项目**
+- 当学生数据不足生成方向对齐时 → 显示"还需要更多数据"引导去补项目，**不用模板填充**
+- 缺口技能按补法路径分三类（📚 学习 / 🛠️ 实践 / 🔀 先学后做），**诚实告知哪些项目能覆盖、哪些不能**
 
 ---
 
-## 环境变量说明
+## 📚 进阶阅读
 
-| 变量 | 说明 |
-|------|------|
-| `DASHSCOPE_API_KEY` | 阿里云百炼 API Key，**必填**（流水线 step2/step7、Agent 等） |
-| `DASHSCOPE_BASE_URL` | 可选，默认 DashScope 兼容 API 地址 |
-| `LLM_MODEL` | 可选，默认 qwen3.5-plus |
-| 其他 | 见 `.env.example` 中注释（向量库、Embedding 等） |
+- **[项目详细讲解 + 使用指南](docs/PROJECT_GUIDE.md)** · 设计理念、模块详解、使用流程、常见问题
+- **[方向对齐规范](docs/career-alignment-spec.md)** · LLM + graph.json 绑定的对齐分析设计
+- **[Hero 重构规范 v2](docs/report-hero-redesign-spec-v2.md)** · 报告页信息架构重构
 
 ---
-
-## 文档
-
-- [流水线生产就绪性说明](docs/PIPELINE_PRODUCTION_READINESS.md)
-- [部署说明](docs/DEPLOYMENT.md)（若存在）
-- [流水线步骤说明](pipeline/read.md)
-
----
-
-## 后续加岗位数据
-
-1. 将新岗位数据追加或更新到 `data/岗位数据.csv`（或当前使用的 CSV）。
-2. 在项目根目录重新运行流水线：  
-   `python pipeline/run.py`  
-   或从 step1 开始：  
-   `python pipeline/run.py`  
-3. 运行完成后会更新 `artifacts/pipeline/graph.json`，重启后端或刷新前端即可看到新图谱。
-
----
-
-## 许可证与致谢
-
-本项目仅供学习与组内使用。使用阿里云百炼（DashScope）请遵守其服务条款。
-
-如有问题或建议，可在仓库提 Issue 或与维护者联系。

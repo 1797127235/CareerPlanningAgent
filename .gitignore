@@ -63,8 +63,9 @@ _bmad-output/
 _bmad/_memory/
 
 
-# === Êý¾ÝÎÄ¼þ£¨´óÎÄ¼þ£¬²»Ìá½» Git£©===
+# === ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á½» Gitï¿½ï¿½===
 data/
+data/mem0_qdrant/
 artifacts/edge-debug/
 *.db-wal
 *.db-shm
