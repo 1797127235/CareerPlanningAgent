@@ -35,7 +35,7 @@ class SkillOutputParseError(Exception): ...
 class Skill:
     name: str
     description: str
-    model: Literal["fast", "slow"]
+    model: Literal["fast", "strong"]
     temperature: float
     max_tokens: int
     output: Literal["text", "json"]

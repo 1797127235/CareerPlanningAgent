@@ -71,9 +71,9 @@ def _generate_narrative(
         err_type = type(e).__name__
         err_msg = str(e)[:180] if str(e) else err_type
         return (
-            f"⚠️ AI 综合评价暂时生成失败（{err_type}）。"
-            f"这通常是大模型调用超时、配额或网络问题造成的——报告其他部分不受影响，"
-            f"可稍后点击右上角「AI 润色」按钮重试综合评价。"
+            f"⚠️ 综合评价暂时生成失败（{err_type}）。"
+            f"大模型调用超时、配额或网络问题都可能触发这种情况——报告其他部分不受影响，"
+            f"可稍后点击页尾「再生成一份」重试。"
             f"\n\n[诊断信息：{err_msg}]"
         )
 

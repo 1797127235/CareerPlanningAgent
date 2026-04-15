@@ -1,7 +1,7 @@
 ---
 name: career-alignment
 description: 给出学生和目标方向的定性 fit 分析 + 3 条对齐维度 + 无法判断的保留项
-model: slow
+model: strong
 temperature: 0.2
 max_tokens: 1600
 output: json
