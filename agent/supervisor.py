@@ -641,11 +641,11 @@ def _make_agent_node(agent, agent_name: str):
         # ── 构造 SystemMessage（coach 分支特殊处理）─────────────────
         if agent_name == "coach_agent":
             from agent.agents.coach_agent import BASE_IDENTITY
-            from agent.skills.loader import format_skills_for_prompt
+            from agent.skills.loader import format_catalog_for_prompt
 
-            available_skills = format_skills_for_prompt()
+            skill_catalog = format_catalog_for_prompt()
             sys_prompt = BASE_IDENTITY.replace(
-                "{AVAILABLE_SKILLS}", available_skills
+                "{SKILL_CATALOG}", skill_catalog
             ).replace(
                 "{CONTEXT}", context
             )

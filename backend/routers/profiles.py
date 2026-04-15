@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from backend.auth import get_current_user
 from backend.db import get_db
 from backend.db_models import CareerGoal, JobNode, Profile, User
-from backend.services.profile_service import ProfileService
+from backend.services.profile import ProfileService
 
 logger = logging.getLogger(__name__)
 

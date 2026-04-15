@@ -91,7 +91,7 @@ def generate_report(
     db: Session = Depends(get_db),
 ):
     """Generate and persist a new career development report for the current user."""
-    from backend.services.report_service import generate_report as _generate
+    from backend.services.report import generate_report as _generate
 
     try:
         data = _generate(user_id=user.id, db=db)
@@ -215,7 +215,7 @@ def polish_report(
     db: Session = Depends(get_db),
 ):
     """Use LLM to polish the narrative of an existing report."""
-    from backend.services.report_service import polish_narrative
+    from backend.services.report import polish_narrative
 
     report = db.query(Report).filter(
         Report.id == report_id,

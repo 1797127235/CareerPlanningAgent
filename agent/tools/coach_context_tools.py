@@ -171,3 +171,48 @@ def get_memory_recall(query: str = "用户偏好") -> str:
     except Exception as e:
         logger.warning("get_memory_recall(%s) failed user=%s: %s", query, user_id, e)
         return "记忆检索暂不可用"
+
+
+# ── load_skill tool (Progressive Disclosure) ──────────────────────────────
+# 放在文件末尾，其他 4 个 tool 之后
+
+@tool
+def load_skill(skill_name: str) -> str:
+    """（此处 docstring 会在模块加载后被动态替换，包含真实的可用 skill 名清单）"""
+    from agent.skills.loader import SkillLoader
+    body = SkillLoader.load_full(skill_name)
+    if body is None:
+        return f"未找到 skill「{skill_name}」。可用 skill: {', '.join(SkillLoader.skill_names())}"
+    return body
+
+
+# Dynamic docstring 注入（模块加载时执行）
+def _inject_load_skill_docstring():
+    """启动时把真实 skill 名清单 + 使用说明写进 load_skill.description。
+
+    LangChain @tool 装饰后的 description 就是 docstring。
+    此处修改 load_skill.description 确保 LLM 看到的工具说明永远和实际 skill 列表同步。
+    """
+    try:
+        from agent.skills.loader import SkillLoader
+        names = SkillLoader.skill_names()
+        doc = (
+            "加载指定 coach skill 的完整规则（场景/规则/示范/反面教材）。\n\n"
+            "使用时机：你读完本轮用户消息 + catalog（SystemMessage 里）后，"
+            "判断本轮应用某个 skill 时，调本工具拿该 skill 的完整规则再回复。\n\n"
+            "参数:\n"
+            f"    skill_name: 必须是以下 {len(names)} 个之一 — {', '.join(names)}\n\n"
+            "何时调用:\n"
+            "- catalog 里某个 skill 描述匹配当前用户消息场景\n"
+            "- 当前任务需要该 skill 的具体规则指引\n\n"
+            "何时不调用:\n"
+            "- 纯问候/闲聊（greeting skill 如果本身也不需要，就直接回）\n"
+            "- 用户确认词（好/嗯/可以），直接 1-2 句推进即可\n"
+            "- 你已经清楚该怎么回复，且没有 skill 明显匹配"
+        )
+        load_skill.description = doc
+    except Exception as exc:
+        logger.warning("load_skill docstring injection skipped: %s", exc)
+
+
+_inject_load_skill_docstring()

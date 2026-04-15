@@ -11,7 +11,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 from agent.agents.coach_agent import BASE_IDENTITY, create_coach_agent
-from agent.skills.loader import format_skills_for_prompt
+from agent.skills.loader import format_catalog_for_prompt, SkillLoader
 from agent.supervisor import build_context_summary
 from agent.tools.coach_context_tools import (
     _ctx_profile, _ctx_goal, _ctx_user_id, _ctx_market_loader,
@@ -52,8 +52,8 @@ def make_sys_prompt(msgs: list) -> str:
         "user_profile": PROFILE,
     }
     context = build_context_summary(state, agent_name="coach_agent")
-    skills = format_skills_for_prompt()
-    return BASE_IDENTITY.replace("{AVAILABLE_SKILLS}", skills).replace("{CONTEXT}", context)
+    skills_catalog = format_catalog_for_prompt()
+    return BASE_IDENTITY.replace("{SKILL_CATALOG}", skills_catalog).replace("{CONTEXT}", context)
 
 
 async def run_coach_turn(msgs: list) -> tuple[str, list[dict]]:
