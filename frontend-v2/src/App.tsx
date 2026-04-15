@@ -3,6 +3,7 @@ import HomePage from './pages/HomePage'
 import DemoPage from './pages/DemoPage'
 import ReportPage from './pages/ReportPage'
 import ProfilePage from './pages/ProfilePage'
+import LoginPage from './pages/LoginPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -13,6 +14,7 @@ function App() {
         <Route path="/__demo" element={<DemoPage />} />
         <Route path="/report" element={<ReportPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
