@@ -18,7 +18,7 @@ export function ChapterOpener({ numeral, title }: { numeral: string; title: Reac
   const scale = shouldReduceMotion ? 1 : rawScale
 
   return (
-    <div ref={ref} className="relative py-24 md:py-32 mb-8">
+    <div ref={ref} className="relative py-16 md:py-20 mb-6">
       <motion.span
         aria-hidden
         className="absolute left-0 top-1/2 -translate-y-1/2 font-serif font-light text-[160px] md:text-[220px] leading-none tracking-tighter select-none pointer-events-none"

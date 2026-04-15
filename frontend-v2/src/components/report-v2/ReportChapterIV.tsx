@@ -17,7 +17,7 @@ function ActionCard({
       <h3 className="font-display font-medium text-[var(--fs-display-sm)] leading-[var(--lh-display)] text-[var(--ink-1)]">
         {numerals[idx]} · {item.tag || '这周做这件事'}
       </h3>
-      <p className="mt-3 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
+      <p className="mt-2 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
         为什么这件事先做：{item.text}
       </p>
       <p className="mt-3 text-[var(--fs-body)] leading-[var(--lh-body-zh)] text-[var(--ink-3)]">

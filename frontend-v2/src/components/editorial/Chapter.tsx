@@ -42,7 +42,7 @@ export function Chapter({ numeral, label, title, intro, children }: ChapterProps
       whileInView="visible"
       viewport={{ once: true, amount: 0.2 }}
       variants={containerVariants}
-      className="relative py-24 md:py-32"
+      className="relative py-16 md:py-24"
     >
       <motion.div variants={childVariants}>
         <Kicker>Chapter {numeral} · {label}</Kicker>

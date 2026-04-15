@@ -10,6 +10,7 @@ import {
   ReportEpilogue,
 } from '@/components/report-v2'
 import { mockReportData } from '@/components/report-v2/mockData'
+import { TableOfContents } from '@/components/editorial'
 
 export default function ReportPage() {
   const [searchParams] = useSearchParams()
@@ -84,13 +85,25 @@ export default function ReportPage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
-      <div className="max-w-[900px] mx-auto px-6 md:px-16 lg:px-32 pb-32">
-        <ReportPrologue targetLabel={data.target.label} />
-        <ReportChapterI data={data} />
-        <ReportChapterII data={data} />
-        <ReportChapterIII data={data} />
-        <ReportChapterIV data={data} />
-        <ReportEpilogue generatedAt={data.generated_at} />
+      <div className="max-w-[1200px] mx-auto px-6 md:px-12 lg:px-20 pb-32">
+        <div className="lg:grid lg:grid-cols-[1fr_200px] lg:gap-12">
+          <div className="max-w-[720px] mx-auto lg:mx-0">
+            <ReportPrologue targetLabel={data.target.label} />
+            <div id="chapter-1"><ReportChapterI data={data} /></div>
+            <div id="chapter-2"><ReportChapterII data={data} /></div>
+            <div id="chapter-3"><ReportChapterIII data={data} /></div>
+            <div id="chapter-4"><ReportChapterIV data={data} /></div>
+            <ReportEpilogue generatedAt={data.generated_at} />
+          </div>
+          <TableOfContents
+            items={[
+              { id: 'chapter-1', numeral: 'I', label: '你是谁' },
+              { id: 'chapter-2', numeral: 'II', label: '你能去哪' },
+              { id: 'chapter-3', numeral: 'III', label: '差距' },
+              { id: 'chapter-4', numeral: 'IV', label: '下一步' },
+            ]}
+          />
+        </div>
       </div>
     </main>
   )

@@ -42,9 +42,9 @@ export function ReportChapterII({ data }: { data: ReportV2Data }) {
       <ChapterOpener numeral="II" title={heroTitle} />
       <Chapter numeral="II" label="你能去哪" title="">
         <DropCap>{whyThis}</DropCap>
-        <p className="mt-6 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{dailyWhat}</p>
-        <p className="mt-6 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{notRecommended}</p>
-        <p className="mt-6 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{altText}</p>
+        <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{dailyWhat}</p>
+        <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{notRecommended}</p>
+        <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{altText}</p>
         <div className="mt-10">
           <button
             onClick={() => navigate(`/graph?target=${encodeURIComponent(data.target.node_id)}`)}

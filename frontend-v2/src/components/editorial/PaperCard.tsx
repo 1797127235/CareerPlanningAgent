@@ -4,7 +4,7 @@ export function PaperCard({ children, className = '' }: { children: ReactNode; c
   return (
     <div
       className={[
-        'bg-[var(--bg-card)] rounded-lg p-6',
+        'bg-[var(--bg-card)] rounded-lg p-5 md:p-7',
         'shadow-[0_1px_2px_var(--warm-shadow-1),0_4px_12px_var(--warm-shadow-2)]',
         className,
       ].join(' ')}
