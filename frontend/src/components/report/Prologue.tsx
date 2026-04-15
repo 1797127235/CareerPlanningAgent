@@ -24,12 +24,15 @@ export function Prologue({ target, matchScore, generatedAt, onRegenerate, regene
         <h1 className="flex-1 min-w-0 text-[40px] md:text-[52px] lg:text-[60px] font-extrabold leading-[0.95] tracking-[-0.02em] text-slate-900">
           {target.label}
         </h1>
-        <div className="flex items-baseline gap-2 shrink-0">
+        <div className="flex items-baseline gap-1.5 shrink-0">
           <span className="text-[56px] md:text-[72px] lg:text-[88px] font-extrabold leading-[0.85] tracking-[-0.03em] text-slate-900 tabular-nums">
             {matchScore}
           </span>
-          <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 pb-2">
-            综合
+          <span className="text-[14px] md:text-[16px] font-semibold text-slate-300 tabular-nums pb-2">
+            / 100
+          </span>
+          <span className="ml-1 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 pb-2">
+            匹配度
           </span>
         </div>
       </div>
