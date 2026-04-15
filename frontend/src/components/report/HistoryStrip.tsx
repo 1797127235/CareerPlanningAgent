@@ -75,14 +75,6 @@ export function HistoryStrip({
                     >
                       {date}
                     </span>
-                    <span
-                      className={[
-                        'text-[12px] font-semibold tabular-nums transition-colors',
-                        isCurrent ? 'text-slate-900' : 'text-slate-400',
-                      ].join(' ')}
-                    >
-                      {item.match_score ?? '—'}
-                    </span>
                     {isSwitching && (
                       <span className="ml-1 text-[10px] font-medium uppercase tracking-[0.18em] text-slate-400">
                         加载中

@@ -375,7 +375,6 @@ export default function ReportPage() {
         <div className="min-w-0">
           <Prologue
             target={data.target}
-            matchScore={data.match_score}
             generatedAt={data.generated_at}
             onRegenerate={generate}
             regenerating={generating}

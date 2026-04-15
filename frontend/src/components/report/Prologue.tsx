@@ -1,6 +1,5 @@
 interface PrologueProps {
   target: { label: string; zone?: string }
-  matchScore: number
   generatedAt: string
   onRegenerate?: () => void
   regenerating?: boolean
@@ -12,7 +11,7 @@ function fmtDate(iso: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-export function Prologue({ target, matchScore, generatedAt, onRegenerate, regenerating }: PrologueProps) {
+export function Prologue({ target, generatedAt, onRegenerate, regenerating }: PrologueProps) {
   const date = fmtDate(generatedAt)
   return (
     <header className="pt-6 md:pt-8 pb-4">
@@ -20,22 +19,9 @@ export function Prologue({ target, matchScore, generatedAt, onRegenerate, regene
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
         职业生涯发展报告
       </p>
-      <div className="flex items-end justify-between gap-6 flex-wrap">
-        <h1 className="flex-1 min-w-0 text-[40px] md:text-[52px] lg:text-[60px] font-extrabold leading-[0.95] tracking-[-0.02em] text-slate-900">
-          {target.label}
-        </h1>
-        <div className="flex items-baseline gap-1.5 shrink-0">
-          <span className="text-[56px] md:text-[72px] lg:text-[88px] font-extrabold leading-[0.85] tracking-[-0.03em] text-slate-900 tabular-nums">
-            {matchScore}
-          </span>
-          <span className="text-[14px] md:text-[16px] font-semibold text-slate-300 tabular-nums pb-2">
-            / 100
-          </span>
-          <span className="ml-1 text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 pb-2">
-            匹配度
-          </span>
-        </div>
-      </div>
+      <h1 className="text-[40px] md:text-[52px] lg:text-[60px] font-extrabold leading-[0.95] tracking-[-0.02em] text-slate-900">
+        {target.label}
+      </h1>
       <div className="mt-6 flex items-center gap-5 text-[12px] text-slate-500">
         <span className="tabular-nums">生成于 {date}</span>
         {onRegenerate && (
