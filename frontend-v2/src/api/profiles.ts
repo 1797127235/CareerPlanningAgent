@@ -54,7 +54,7 @@ export interface SjtSubmitResult {
 }
 
 export async function generateSjt(): Promise<SjtGenerateResult> {
-  const res = await rawFetch<{ data: SjtGenerateResult }>('/profiles/sjt/generate', {
+  const res = await rawFetch('/profiles/sjt/generate', {
     method: 'POST',
   })
   return res.data
@@ -64,7 +64,7 @@ export async function submitSjt(
   sessionId: string,
   answers: SjtAnswer[],
 ): Promise<SjtSubmitResult> {
-  const res = await rawFetch<{ data: SjtSubmitResult }>('/profiles/sjt/submit', {
+  const res = await rawFetch('/profiles/sjt/submit', {
     method: 'POST',
     body: JSON.stringify({ session_id: sessionId, answers }),
   })

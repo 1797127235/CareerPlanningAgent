@@ -1,76 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  /* v2.0 色板（从 .impeccable.md 取全量）*/
-  --bg-paper:       oklch(0.97 0.012 75);
-  --bg-paper-2:     oklch(0.955 0.014 75);
-  --bg-card:        oklch(0.99 0.006 75);
-  --bg-card-hover:  oklch(0.985 0.008 75);
-  --ink-1:          oklch(0.20 0.018 60);
-  --ink-2:          oklch(0.42 0.012 60);
-  --ink-3:          oklch(0.62 0.008 60);
-  --moss:           oklch(0.55 0.090 145);
-  --ember:          oklch(0.66 0.13 50);
-  --chestnut:       oklch(0.32 0.05 30);
-  --line:           oklch(0.88 0.012 75);
-  --highlight:      oklch(0.93 0.045 85);
-  --warm-shadow-1:  oklch(0.65 0.025 55 / 0.08);
-  --warm-shadow-2:  oklch(0.50 0.035 50 / 0.12);
+  /* Design System — from .impeccable.md v2.0 */
+  --bg-paper: oklch(0.97 0.012 75);
+  --bg-card: oklch(0.99 0.006 75);
+  --ink-1: oklch(0.20 0.018 60);
+  --ink-2: oklch(0.42 0.012 60);
+  --ink-3: oklch(0.62 0.008 60);
+  --moss: oklch(0.55 0.090 145);
+  --ember: oklch(0.66 0.13 50);
+  --chestnut: oklch(0.32 0.05 30);
+  --line: oklch(0.88 0.012 75);
 
-  /* Typography scale */
+  --bg-paper-2: oklch(0.955 0.014 75);
+  --bg-card-hover: oklch(0.985 0.008 75);
+  --highlight: oklch(0.93 0.045 85);
+  --warm-shadow-1: oklch(0.65 0.025 55 / 0.08);
+  --warm-shadow-2: oklch(0.50 0.035 50 / 0.12);
+  --grain-color: oklch(0.25 0.02 60 / 0.025);
+
+  /* Typography Scale — adjusted */
   --fs-display-xl: clamp(42px, 6vw, 96px);
   --fs-display-lg: clamp(36px, 5vw, 72px);
   --fs-display-md: clamp(28px, 3.6vw, 52px);
-  --fs-body-lg:    17px;
-  --fs-body:       15px;
-  --fs-body-sm:    13px;
-  --fs-caption:    11px;
-  --fs-quote:      clamp(20px, 2.4vw, 32px);
+  --fs-display-sm: clamp(22px, 2.8vw, 36px);
+  --fs-body-lg: 19px;
+  --fs-body: 16px;
+  --fs-body-sm: 13px;
+  --fs-caption: 11px;
+  --fs-quote: clamp(24px, 2.8vw, 40px);
 
-  --lh-display:    1.12;
-  --lh-body:       1.75;
-  --lh-body-zh:    1.85;
-  --lh-ui:         1.4;
-
-  /* Warm shadow */
-  --shadow-paper:   0 1px 2px var(--warm-shadow-1), 0 4px 12px var(--warm-shadow-2);
-  --shadow-chapter: 0 2px 4px var(--warm-shadow-1), 0 12px 40px var(--warm-shadow-2);
+  --lh-display: 1.12;
+  --lh-body: 1.75;
+  --lh-body-zh: 1.85;
+  --lh-ui: 1.4;
 
   /* Font families */
-  --font-display: "Bricolage Grotesque", "Noto Serif SC", serif;
-  --font-serif:   "Source Serif 4", "Noto Serif SC", serif;
-  --font-sans:    "Geist", "Noto Sans SC", sans-serif;
-  --font-mono:    "JetBrains Mono", monospace;
-}
+  --font-sans: "Geist Variable", "Noto Sans SC", system-ui, sans-serif;
+  --font-serif: "Source Serif 4", "Noto Serif SC", Georgia, serif;
+  --font-display: "Bricolage Grotesque", "Noto Sans SC", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-html, body {
-  background: var(--bg-paper);
-  color: var(--ink-1);
   font-family: var(--font-sans);
-  font-size: var(--fs-body);
-  line-height: var(--lh-body-zh);
+  color: var(--ink-1);
+  background: var(--bg-paper);
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 全局 noise overlay（.impeccable.md v2.0 必达）*/
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 1;
-  background-image: url("/noise.svg");
-  opacity: 0.025;
-  mix-blend-mode: multiply;
+body {
+  margin: 0;
+  min-height: 100svh;
 }
 
-/* 确保所有内容在 noise 之上 */
-#root > * { position: relative; z-index: 2; }
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
-  }
+* {
+  box-sizing: border-box;
 }

@@ -124,3 +124,101 @@ export async function updatePlanCheck(
     body: JSON.stringify({ item_id: itemId, done }),
   })
 }
+
+// ── Report V2 data shape (aligned with backend/services/report/pipeline.py) ───
+
+export interface ReportV2Data {
+  version: string
+  report_type: string
+  student: {
+    user_id: number
+    profile_id: number
+  }
+  target: {
+    node_id: string
+    label: string
+    zone?: string
+  }
+  match_score: number
+  four_dim: {
+    foundation: number | null
+    skills: number | null
+    qualities: number | null
+    potential: number | null
+  }
+  narrative: string
+  diagnosis: Array<{
+    source: string
+    source_type: string
+    source_id: number
+    current_text: string
+    status: 'pass' | 'needs_improvement'
+    highlight: string
+    issues: string[]
+    suggestion: string
+  }>
+  market: {
+    demand_change_pct: number | null
+    salary_cagr: number | null
+    salary_p50: number
+    timing: string
+    timing_label: string
+  }
+  skill_gap: {
+    core: { total: number; matched: number; pct: number; practiced_count: number; claimed_count: number }
+    important: { total: number; matched: number; pct: number; practiced_count: number; claimed_count: number }
+    bonus: { total: number; matched: number; pct: number; practiced_count: number; claimed_count: number }
+    top_missing: Array<{
+      name: string
+      freq: number
+      tier: string
+      covered_by_project?: boolean
+      fill_path?: string
+    }>
+    matched_skills: Array<{
+      name: string
+      tier: string
+      status: string
+      freq: number
+    }>
+    has_project_data: boolean
+  }
+  growth_curve: Array<{ date: string; score: number }>
+  action_plan: {
+    stages: PlanStage[]
+    skills: PlanActionItem[]
+    project: PlanActionItem[]
+    job_prep: PlanActionItem[]
+  }
+  delta: {
+    prev_score: number
+    score_change: number
+    prev_date: string
+    gained_skills: string[]
+    still_missing: string[]
+    plan_progress: { done: number; total: number } | null
+    next_action: string | null
+  } | null
+  soft_skills: Record<string, unknown>
+  career_alignment: {
+    observations: string
+    alignments: Array<{
+      node_id: string
+      label: string
+      score: number
+      evidence: string
+      gap: string
+    }>
+    cannot_judge: string[]
+  }
+  differentiation_advice: string
+  ai_impact_narrative: string
+  project_recommendations: Array<Record<string, unknown>>
+  project_mismatch: boolean
+  generated_at: string
+}
+
+export async function generateReportV2(): Promise<ReportDetail & { data: ReportV2Data }> {
+  const detail = await generateReport()
+  return detail as ReportDetail & { data: ReportV2Data }
+}

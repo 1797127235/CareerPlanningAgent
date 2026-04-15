@@ -1,0 +1,55 @@
+import { useNavigate } from 'react-router-dom'
+import { Chapter, ChapterOpener } from '@/components/editorial'
+import type { ReportV2Data, PlanActionItem } from '@/api/report'
+
+const numerals = ['一', '二', '三']
+
+function ActionCard({
+  idx,
+  item,
+}: {
+  idx: number
+  item: PlanActionItem
+}) {
+  const navigate = useNavigate()
+  return (
+    <div className="mt-10 first:mt-6">
+      <h3 className="font-display font-medium text-[var(--fs-display-sm)] leading-[var(--lh-display)] text-[var(--ink-1)]">
+        {numerals[idx]} · {item.tag || '这周做这件事'}
+      </h3>
+      <p className="mt-3 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
+        为什么这件事先做：{item.text}
+      </p>
+      <p className="mt-3 text-[var(--fs-body)] leading-[var(--lh-body-zh)] text-[var(--ink-3)]">
+        优先级：{item.priority === 'high' ? '高' : '中'} · 阶段：{item.phase || 1}
+      </p>
+      <button
+        onClick={() => navigate('/growth-log', { state: { prefill: item.text } })}
+        className="mt-4 inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] hover:bg-[var(--line)]/10 transition-colors text-sm font-medium"
+      >
+        记到成长档案 →
+      </button>
+    </div>
+  )
+}
+
+export function ReportChapterIV({ data }: { data: ReportV2Data }) {
+  const stages = data.action_plan?.stages || []
+  const allItems = stages.flatMap((s) => s.items || [])
+  const items = allItems.slice(0, 3)
+
+  return (
+    <>
+      <ChapterOpener numeral="IV" title={<>先从 <strong>这一件</strong> 开始。</>} />
+      <Chapter numeral="IV" label="下一步" title="">
+        {items.length === 0 ? (
+          <p className="text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
+            行动方案正在生成中。你可以先回到岗位图谱，进一步了解目标方向所需的核心技能。
+          </p>
+        ) : (
+          items.map((item, i) => <ActionCard key={item.id || i} idx={i} item={item} />)
+        )}
+      </Chapter>
+    </>
+  )
+}
