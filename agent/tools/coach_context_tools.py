@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 from langchain_core.tools import tool
 
-from agent.market import available_directions, get_signal as _get_market_signal
+from agent.market import get_signal as _get_market_signal
 
 logger = logging.getLogger(__name__)
 
@@ -115,16 +115,11 @@ def get_market_signal(direction: str) -> str:
     try:
         signal = _get_market_signal(direction)
         if not signal:
-            dirs = available_directions()
-            hint = "、".join(dirs) if dirs else "（系统无数据）"
-            return (
-                f"「{direction}」未匹配到已有方向。"
-                f"系统可查询：{hint}。"
-                "请从列表中重调（别名如'后端/算法/devops'会自动规范化）；"
-                "若用户问的方向真的不在列表里，直接告诉用户系统无数据，不要编造统计。"
-            )
+            # 只有空输入才会到这里
+            return "没听清你想问哪个方向，能再说具体点吗？"
 
         resolved = signal.get("_resolved_family", direction)
+        confidence = signal.get("_confidence", "exact")
         demand = signal.get("demand_change_pct", 0)
         salary = signal.get("salary_cagr", 0)
         timing = signal.get("timing_label", "")
@@ -132,8 +127,12 @@ def get_market_signal(direction: str) -> str:
         top_inds = signal.get("top_industries", []) or []
 
         header = f"{resolved} 市场数据"
+        # 用户说法 ≠ 解析结果时，告诉 LLM 一下方便自然表达（"工程经理属于管理类，..."）
         if resolved != direction.strip():
-            header += f"  [用户说的「{direction}」解析为「{resolved}」]"
+            if confidence in ("heuristic", "fallback"):
+                header += f"  [用户说的「{direction}」归入最接近的「{resolved}」类]"
+            else:
+                header += f"  [用户说的「{direction}」解析为「{resolved}」]"
 
         lines = [
             header + "：",
