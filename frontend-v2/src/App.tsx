@@ -6,6 +6,7 @@ import ProfilePage from './pages/ProfilePage'
 import LoginPage from './pages/LoginPage'
 import CoachResultPage from './pages/CoachResultPage'
 import CoachResultsListPage from './pages/CoachResultsListPage'
+import CoachChatPage from './pages/CoachChatPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/report" element={<ReportPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/coach/chat" element={<CoachChatPage />} />
         <Route path="/coach/results" element={<CoachResultsListPage />} />
         <Route path="/coach/result/:id" element={<CoachResultPage />} />
         <Route path="*" element={<NotFoundPage />} />
