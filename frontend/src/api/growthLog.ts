@@ -39,57 +39,6 @@ export interface InterviewRecord {
   created_at: string
 }
 
-/* ── Goal Journey ── */
-
-export interface StageEvent {
-  id: number
-  trigger: 'initial' | 'stage_complete' | 'deep_reeval'
-  stage_completed: number | null
-  readiness_score: number
-  created_at: string
-}
-
-export interface GoalJourney {
-  has_goal: boolean
-  goal?: {
-    id: number
-    target_node_id: string
-    target_label: string
-    set_at: string
-  }
-  stage_events?: StageEvent[]
-  projects_under_goal?: {
-    id: number
-    name: string
-    status: string
-    created_at: string
-  }[]
-  applications_under_goal?: {
-    id: number
-    company: string
-    position: string
-    status: string
-    created_at: string
-  }[]
-}
-
-export interface GoalHistoryItem {
-  id: number
-  target_node_id: string
-  target_label: string
-  is_active: boolean
-  is_primary: boolean
-  set_at: string
-  cleared_at: string | null
-  duration_days: number
-}
-
-export const getGoalJourney = () =>
-  rawFetch<GoalJourney>(`${BASE}/journey`)
-
-export const getGoalHistory = () =>
-  rawFetch<{ goals: GoalHistoryItem[] }>(`${BASE}/goal-history`)
-
 /* ── Growth Dashboard ── */
 
 export interface TierCoverage {

@@ -1,32 +1,37 @@
-import { FolderGit2, Briefcase, Sparkles } from 'lucide-react'
 import type { ComponentType } from 'react'
 
-export type FilterKey = 'all' | 'project' | 'pursuit' | 'refine'
+export type FilterKey = 'all' | 'project' | 'pursuit'
 
 export const FILTERS: { key: FilterKey; label: string; icon?: ComponentType<{ className?: string }> }[] = [
   { key: 'all',      label: '全部' },
-  { key: 'project',  label: '项目',  icon: FolderGit2 },
-  { key: 'pursuit',  label: '实战',  icon: Briefcase },
-  { key: 'refine',   label: '精修', icon: Sparkles },
+  { key: 'project',  label: '项目' },
+  { key: 'pursuit',  label: '实战' },
 ]
 
 export function FilterChips({ value, onChange }: { value: FilterKey; onChange: (v: FilterKey) => void }) {
   return (
-    <div className="inline-flex gap-1 bg-[var(--bg-card)] p-1 rounded-md border border-[var(--line)] shadow-[0_1px_2px_rgba(60,40,20,0.03)]">
-      {FILTERS.map(f => (
-        <button
-          key={f.key}
-          onClick={() => onChange(f.key)}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded text-[12px] font-medium transition-all cursor-pointer ${
-            value === f.key
-              ? 'bg-[var(--chestnut)] text-white shadow-sm'
-              : 'text-[var(--ink-2)] hover:text-[var(--ink-1)] hover:bg-[var(--bg-paper)]'
-          }`}
-        >
-          {f.icon && <f.icon className="w-3.5 h-3.5" />}
-          {f.label}
-        </button>
-      ))}
+    <div className="flex items-center gap-6">
+      {FILTERS.map(f => {
+        const active = value === f.key
+        return (
+          <button
+            key={f.key}
+            onClick={() => onChange(f.key)}
+            className={[
+              'relative text-[13px] font-medium transition-colors cursor-pointer pb-1',
+              active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900',
+            ].join(' ')}
+          >
+            {f.label}
+            <span
+              className={[
+                'absolute left-0 right-0 -bottom-0 h-[2px] bg-slate-900 transition-opacity',
+                active ? 'opacity-100' : 'opacity-0',
+              ].join(' ')}
+            />
+          </button>
+        )
+      })}
     </div>
   )
 }

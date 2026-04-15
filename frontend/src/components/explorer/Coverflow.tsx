@@ -108,7 +108,7 @@ function drawRadar(canvas: HTMLCanvasElement, abilities: Record<string, number>,
       if (progress > 0.4) {
         const la = Math.min(1, (progress - 0.4) / 0.3)
         const lx = cx + Math.cos(a) * (r + 14), ly = cy + Math.sin(a) * (r + 14)
-        ctx.font = "500 9px 'Plus Jakarta Sans',sans-serif"
+        ctx.font = "500 9px 'Commissioner','Noto Sans SC',sans-serif"
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
         ctx.fillStyle = `rgba(100,116,139,${la})`; ctx.fillText(keys[i], lx, ly)
       }
@@ -548,7 +548,7 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
               onCompositionEnd={handleCompositionEnd}
               placeholder="搜索岗位..."
               className="w-full pl-10 pr-10 py-3 rounded-[20px] text-[13px] font-medium text-[var(--text-1)] bg-white/[0.38] backdrop-blur-[24px] backdrop-saturate-[140%] border-[1.5px] border-white/50 outline-none transition-all focus:bg-white/60 focus:border-[var(--blue)]/30 focus:shadow-[0_8px_32px_rgba(37,99,235,.10)] placeholder:text-[var(--text-3)]"
-              style={{ fontFamily: "'Plus Jakarta Sans', 'Noto Sans SC', sans-serif", boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}
+              style={{ fontFamily: "var(--font-sans)", boxShadow: '0 4px 20px rgba(0,0,0,.05)' }}
             />
             {searchQuery && (
               <button onClick={() => { setSearchQuery(''); setSearchResults([]); setSearchOpen(false) }}

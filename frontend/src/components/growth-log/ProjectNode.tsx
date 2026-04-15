@@ -64,7 +64,8 @@ export function ProjectNode({ id, data, selected }: {
       {/* Node card */}
       <div
         style={{
-          background: 'var(--bg-card)',
+          background: 'rgba(255,255,255,0.85)',
+          backdropFilter: 'blur(12px)',
           border: selected ? `2px solid ${color}` : '1.5px solid rgba(255,255,255,0.6)',
           borderRadius: 12,
           boxShadow: selected

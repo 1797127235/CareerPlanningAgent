@@ -21,15 +21,10 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import Command
 
 from agent.llm import get_chat_model
+from agent.market import all_signals as _all_market_signals, get_signal_for_node as _get_market_signal_for_node
 from agent.state import CareerState
 
 logger = logging.getLogger(__name__)
-
-# ── Market signals loader (lazy, cached) ──────────────────────────────────────
-
-_market_signals: dict | None = None
-_industry_signals: dict | None = None
-_graph_family_map: dict | None = None  # node_id → role_family
 
 
 def _get_global_market_summary() -> str:
@@ -38,22 +33,12 @@ def _get_global_market_summary() -> str:
     This ensures coach always has real data to reference, preventing hallucination
     when no specific career goal is set.
     """
-    global _market_signals
-    import json
-    from pathlib import Path
-
-    if _market_signals is None:
-        try:
-            data_dir = Path(__file__).resolve().parent.parent / "data"
-            _market_signals = json.loads((data_dir / "market_signals.json").read_text(encoding="utf-8"))
-        except Exception:
-            return ""
-
-    if not _market_signals:
+    signals = _all_market_signals()
+    if not signals:
         return ""
 
     best, good, caution = [], [], []
-    for family, sig in _market_signals.items():
+    for family, sig in signals.items():
         if sig.get("is_proxy"):
             continue
         timing = sig.get("timing", "")
@@ -76,41 +61,6 @@ def _get_global_market_summary() -> str:
     lines.append("  [这是系统招聘库的真实数据，用这些数字回答用户，禁止编造其他统计]")
 
     return "\n".join(lines)
-
-
-def _get_market_signal_for_node(node_id: str) -> dict | None:
-    """Return precomputed market signal + top industries for a graph node_id."""
-    global _market_signals, _industry_signals, _graph_family_map
-    import json
-    from pathlib import Path
-    data_dir = Path(__file__).resolve().parent.parent / "data"
-
-    if _market_signals is None:
-        try:
-            _market_signals = json.loads((data_dir / "market_signals.json").read_text(encoding="utf-8"))
-        except Exception:
-            _market_signals = {}
-    if _industry_signals is None:
-        try:
-            _industry_signals = json.loads((data_dir / "industry_signals.json").read_text(encoding="utf-8"))
-        except Exception:
-            _industry_signals = {}
-    if _graph_family_map is None:
-        try:
-            nodes = json.loads((data_dir / "graph.json").read_text(encoding="utf-8")).get("nodes", [])
-            _graph_family_map = {n["node_id"]: n.get("role_family", "") for n in nodes}
-        except Exception:
-            _graph_family_map = {}
-
-    role_family = _graph_family_map.get(node_id, "")
-    if not role_family:
-        return None
-    sig = _market_signals.get(role_family)
-    if sig:
-        # Merge top industries from separate file
-        sig = dict(sig)
-        sig["top_industries"] = _industry_signals.get(role_family, [])[:3]
-    return sig
 
 
 # ── Context summary builder ───────────────────────────────────────────────────
@@ -641,11 +591,11 @@ def _make_agent_node(agent, agent_name: str):
         # ── 构造 SystemMessage（coach 分支特殊处理）─────────────────
         if agent_name == "coach_agent":
             from agent.agents.coach_agent import BASE_IDENTITY
-            from agent.skills.loader import format_catalog_for_prompt
+            from agent.skills.loader import format_skills_for_prompt
 
-            skill_catalog = format_catalog_for_prompt()
+            available_skills = format_skills_for_prompt()
             sys_prompt = BASE_IDENTITY.replace(
-                "{SKILL_CATALOG}", skill_catalog
+                "{AVAILABLE_SKILLS}", available_skills
             ).replace(
                 "{CONTEXT}", context
             )
@@ -663,17 +613,15 @@ def _make_agent_node(agent, agent_name: str):
         # Coach 专属：pull tool 的 ContextVar
         if agent_name == "coach_agent":
             from agent.tools.coach_context_tools import (
-                _ctx_profile, _ctx_goal, _ctx_user_id, _ctx_market_loader,
+                _ctx_profile, _ctx_goal, _ctx_user_id,
             )
             tok_p = _ctx_profile.set(state.get("user_profile"))
             tok_g = _ctx_goal.set(state.get("career_goal"))
             tok_u = _ctx_user_id.set(state.get("user_id"))
-            tok_m = _ctx_market_loader.set(_get_market_signal_for_node)
             _ctx_resets.extend([
                 (_ctx_profile, tok_p),
                 (_ctx_goal, tok_g),
                 (_ctx_user_id, tok_u),
-                (_ctx_market_loader, tok_m),
             ])
 
         # 其他 agent 的原有 ContextVar 注入（growth/jd/search/navigator）保持不变

@@ -1,11 +1,15 @@
-import { useState, useMemo, useEffect, type ReactNode } from 'react'
+import { useState, useMemo, useEffect, useRef, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Sparkles } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
 
-import { getGrowthDashboard, getGoalJourney, getGoalHistory } from '@/api/growthLog'
+import { listProjects, getGrowthDashboard, deleteProject } from '@/api/growthLog'
+import type { ProjectRecord } from '@/api/growthLog'
+import { listApplications, deleteApplication } from '@/api/applications'
+import type { JobApplication } from '@/types/application'
 
+import { GoalBar } from '@/components/growth-log/GoalBar'
 import { FilterChips } from '@/components/growth-log/FilterChips'
 import type { FilterKey } from '@/components/growth-log/FilterChips'
 import { RecordRow } from '@/components/growth-log/RecordRow'
@@ -13,12 +17,7 @@ import type { UnifiedRecord, RecordType } from '@/components/growth-log/RecordRo
 import { NewRecordDialog } from '@/components/growth-log/NewRecordDialog'
 import { AddProjectForm } from '@/components/growth-log/ProjectsSection'
 import { AddPursuitForm } from '@/components/growth-log/PursuitsSection'
-import { RefineSection } from '@/components/growth-log/RefineSection'
-import { GrowthDashboard } from '@/components/growth-log/GrowthDashboard'
-import { Chapter } from '@/components/growth-log/Chapter'
-import { SectionDivider } from '@/components/growth-log/SectionDivider'
-import { PaperCard } from '@/components/growth-log/PaperCard'
-import { JourneyTimeline } from '@/components/growth-log/JourneyTimeline'
+import { ToastContainer, type ToastState } from '@/components/shared/Toast'
 
 interface DateGroup {
   label: string
@@ -48,45 +47,30 @@ function groupByDate(records: UnifiedRecord[]): DateGroup[] {
     .map(([label, items]) => ({ label, items }))
 }
 
-interface SimpleProject {
-  id: number
-  name: string
-  status?: string
-  created_at: string
-}
-
-interface SimpleApplication {
-  id: number
-  company?: string
-  position?: string
-  status?: string
-  created_at: string
-}
-
-function mergeGoalRecords(
-  projects: SimpleProject[],
-  applications: SimpleApplication[],
+function mergeRecords(
+  projects: ProjectRecord[],
+  applications: JobApplication[],
 ): UnifiedRecord[] {
   const records: UnifiedRecord[] = [
     ...projects.map(p => ({
       id: `proj-${p.id}`,
       type: 'project' as RecordType,
       title: p.name,
-      subtitle: '',
+      subtitle: p.description || '',
       status: p.status,
-      tags: [],
+      tags: p.skills_used,
       date: p.created_at,
-      raw: p as unknown as RecordType extends 'project' ? SimpleProject : never,
+      raw: p,
     })),
     ...applications.map(a => ({
       id: `app-${a.id}`,
       type: 'pursuit' as RecordType,
-      title: `${a.company || '未知公司'} · ${a.position || '未命名岗位'}`,
+      title: `${a.company || '未知公司'} · ${a.position || (a as any).jd_title || '未命名岗位'}`,
       subtitle: '',
       status: a.status,
       tags: [],
       date: a.created_at,
-      raw: a as unknown as RecordType extends 'pursuit' ? SimpleApplication : never,
+      raw: a,
     })),
   ]
   return records.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -102,6 +86,29 @@ function FormModal({ children, onClose }: { children: ReactNode; onClose: () => 
       />
       <div className="relative w-full max-w-[480px] z-10">
         {children}
+      </div>
+    </div>
+  )
+}
+
+function EmptyState({ onAddRecord, hasGoal }: { onAddRecord: () => void; hasGoal: boolean }) {
+  return (
+    <div className="pt-16 pb-8 px-1">
+      <p className="text-[14px] text-slate-500 leading-relaxed">
+        这一页还是空白 —— 从任何一笔开始都可以。
+      </p>
+      <div className="mt-5 flex items-center gap-5">
+        <button
+          onClick={onAddRecord}
+          className="flex items-center gap-1 text-[13px] font-medium text-blue-600 hover:text-blue-800 transition-colors cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" /> 记第一笔
+        </button>
+        {!hasGoal && (
+          <a href="/graph" className="text-[13px] text-slate-500 hover:text-slate-800 underline underline-offset-4 decoration-slate-300 transition-colors">
+            或先选一个方向
+          </a>
+        )}
       </div>
     </div>
   )
@@ -123,22 +130,80 @@ export default function GrowthLogPage() {
 
   const [showNewDialog, setShowNewDialog] = useState(false)
   const [activeForm, setActiveForm] = useState<RecordType | null>(null)
+  const [toast, setToast] = useState<ToastState | null>(null)
 
-  useQuery({ queryKey: ['growth-dashboard'], queryFn: getGrowthDashboard, staleTime: 120_000 })
-  const { data: journeyData } = useQuery({ queryKey: ['goal-journey'], queryFn: getGoalJourney, staleTime: 120_000 })
-  const { data: historyData } = useQuery({ queryKey: ['goal-history'], queryFn: getGoalHistory, staleTime: 120_000 })
+  const { data: dashboardData } = useQuery({ queryKey: ['growth-dashboard'], queryFn: getGrowthDashboard, staleTime: 120_000 })
+  const { data: projectsData } = useQuery({ queryKey: ['growth-projects'], queryFn: listProjects })
+  const { data: appsData } = useQuery({ queryKey: ['pursuits-apps'], queryFn: listApplications })
 
-  const projects = journeyData?.projects_under_goal ?? []
-  const applications = journeyData?.applications_under_goal ?? []
+  // Deferred delete — optimistic remove + undo toast. Commits to server after 4.5s.
+  const pendingDeleteRef = useRef<{
+    record: UnifiedRecord
+    timer: number
+    prevProjects?: { projects: ProjectRecord[] } | undefined
+    prevApps?: JobApplication[] | undefined
+  } | null>(null)
 
-  const allRecords = useMemo(() => mergeGoalRecords(projects, applications), [projects, applications])
-  const filtered = filterParam === 'all' || filterParam === 'refine' ? allRecords : allRecords.filter(r => r.type === filterParam)
+  const stageDelete = (record: UnifiedRecord) => {
+    // Snapshot cache so undo can restore exactly.
+    const prevProjects = qc.getQueryData<{ projects: ProjectRecord[] }>(['growth-projects'])
+    const prevApps = qc.getQueryData<JobApplication[]>(['pursuits-apps'])
+
+    if (record.type === 'project') {
+      qc.setQueryData<{ projects: ProjectRecord[] }>(['growth-projects'], (old) => ({
+        projects: (old?.projects ?? []).filter(p => `proj-${p.id}` !== record.id),
+      }))
+    } else if (record.type === 'pursuit') {
+      qc.setQueryData<JobApplication[]>(['pursuits-apps'], (old) =>
+        (old ?? []).filter(a => `app-${a.id}` !== record.id)
+      )
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        if (record.type === 'project') await deleteProject((record.raw as ProjectRecord).id)
+        else if (record.type === 'pursuit') await deleteApplication((record.raw as JobApplication).id)
+      } catch {
+        // Roll back cache on server failure.
+        if (prevProjects) qc.setQueryData(['growth-projects'], prevProjects)
+        if (prevApps) qc.setQueryData(['pursuits-apps'], prevApps)
+        setToast({ message: '删除失败，已恢复', type: 'error' })
+      } finally {
+        pendingDeleteRef.current = null
+      }
+    }, 4500)
+
+    pendingDeleteRef.current = { record, timer, prevProjects, prevApps }
+
+    setToast({
+      message: `已删除「${record.title}」`,
+      type: 'info',
+      durationMs: 4500,
+      action: {
+        label: '撤销',
+        onClick: () => {
+          const pending = pendingDeleteRef.current
+          if (!pending) return
+          window.clearTimeout(pending.timer)
+          if (pending.prevProjects) qc.setQueryData(['growth-projects'], pending.prevProjects)
+          if (pending.prevApps) qc.setQueryData(['pursuits-apps'], pending.prevApps)
+          pendingDeleteRef.current = null
+        },
+      },
+    })
+  }
+
+  const projects = projectsData?.projects ?? []
+  const applications = appsData ?? []
+
+  const allRecords = useMemo(() => mergeRecords(projects, applications), [projects, applications])
+  const filtered = filterParam === 'all' ? allRecords : allRecords.filter(r => r.type === filterParam)
   const groups = useMemo(() => groupByDate(filtered), [filtered])
 
   useEffect(() => {
     const urlTab = searchParams.get('tab')
+    // tab → filter 映射：前端 FilterChips 用单数 key（pursuit/project），URL 惯用复数
     const tabToFilter: Record<string, FilterKey> = {
-      refine: 'refine',
       pursuits: 'pursuit',
       pursuit: 'pursuit',
       projects: 'project',
@@ -159,145 +224,52 @@ export default function GrowthLogPage() {
     setActiveForm(null)
     qc.invalidateQueries({ queryKey: ['growth-projects'] })
     qc.invalidateQueries({ queryKey: ['pursuits-apps'] })
-    qc.invalidateQueries({ queryKey: ['goal-journey'] })
   }
 
-  const hasGoal = !!(journeyData?.has_goal)
-  const goalLabel = journeyData?.goal?.target_label
-  const setAt = journeyData?.goal?.set_at
-
-  const daysSinceStart = useMemo(() => {
-    if (!setAt) return 0
-    return Math.floor((Date.now() - new Date(setAt).getTime()) / 86400000)
-  }, [setAt])
-
-  const chapterITitle = hasGoal
-    ? <>你选了 {goalLabel}，<br/>从那天到今天，{daysSinceStart} 天。</>
-    : <>先看清你在哪，<br/>再决定往哪走。</>
-
-  const chapterIIntro = hasGoal
-    ? `系统看见你在这条路上走了 ${allRecords.length} 步。继续走下去，每一步都算数。`
-    : `职业规划不是从"选方向"开始的。但总得先知道想去哪。`
-
-  const hasHistory = (historyData?.goals?.length ?? 0) > 1
-
   return (
-    <div className="max-w-[900px] mx-auto px-6 md:px-16 lg:px-24 min-h-screen bg-[var(--bg-paper)]">
-      <Chapter numeral="I" label="你的旅程" title={chapterITitle} intro={chapterIIntro}>
-        {hasGoal && setAt && (
-          <div className="mb-8">
-            <JourneyTimeline
-              targetLabel={goalLabel!}
-              setAt={setAt}
-              stageEvents={journeyData?.stage_events ?? []}
-            />
-          </div>
-        )}
-        <GrowthDashboard />
-      </Chapter>
-
-      {filterParam === 'refine' ? (
-        <>
-          <SectionDivider numeral="II" />
-          <Chapter numeral="II" label="档案精修" title="精修一下你的档案" intro="补一笔细节，未来的你会感谢现在的自己。">
-            <RefineSection />
-            <div className="mt-8 pt-6 border-t border-[var(--line)]">
-              <button
-                onClick={() => setFilter('all')}
-                className="text-[12px] text-[var(--ink-3)] hover:text-[var(--ink-1)] underline underline-offset-4 transition-colors cursor-pointer"
-              >
-                ← 回到全部记录
-              </button>
-            </div>
-          </Chapter>
-        </>
-      ) : (
-        <>
-          <SectionDivider numeral="II" />
-          <Chapter
-            numeral="II"
-            label="在这条路上"
-            title={
-              allRecords.length === 0
-                ? <>还没有第一笔，<br/>不急。</>
-                : <>到今天，<br/>你已经记下了 {allRecords.length} 笔。</>
-            }
-            intro="下面是你给自己留的脚印。不用每天都有 — 但每一笔都算数。"
+    <div className="max-w-[900px] mx-auto px-4 py-5 md:px-8 min-h-screen">
+      {/* Header cluster — goal + actions packed tight */}
+      <section className="space-y-2 mb-8">
+        <GoalBar />
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <button
+            onClick={() => setShowNewDialog(true)}
+            className="group inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900 pb-1 border-b-2 border-slate-900 hover:border-blue-700 hover:text-blue-700 transition-colors cursor-pointer"
           >
-            {/* Action bar: 记一笔 + 档案精修 + filter */}
-            <div className="flex items-center justify-between gap-3 flex-wrap mb-8">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowNewDialog(true)}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-[var(--chestnut)] text-white rounded-md text-[13px] font-semibold hover:bg-[var(--ink-1)] transition-colors cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" /> 记一笔
-                </button>
-                <button
-                  onClick={() => setFilter('refine')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 border border-[var(--line)] bg-[var(--bg-card)] text-[var(--ink-1)] rounded-md text-[13px] font-medium hover:bg-[var(--bg-paper)] transition-colors cursor-pointer"
-                >
-                  <Sparkles className="w-4 h-4 text-[var(--ember)]" /> 档案精修
-                </button>
+            <Plus className="w-4 h-4" /> 新记一笔
+          </button>
+          <FilterChips value={filterParam} onChange={setFilter} />
+        </div>
+      </section>
+
+      <div>
+        {allRecords.length === 0 ? (
+          <EmptyState onAddRecord={() => setShowNewDialog(true)} hasGoal={!!(dashboardData as any)?.has_goal} />
+        ) : groups.length === 0 ? (
+          <div className="pt-12 text-slate-400 text-[13px]">没有符合条件的记录</div>
+        ) : (
+          groups.map((group, idx) => (
+            <div key={group.label}>
+              {/* Date group head — editorial section marker */}
+              <div className={`flex items-center gap-4 ${idx === 0 ? 'pt-2' : 'pt-10'} pb-5`}>
+                <div className="flex-1 h-px bg-slate-300" />
+                <span className="text-[11px] font-bold text-slate-500 tracking-[0.2em]">
+                  {group.label}
+                </span>
+                <div className="flex-1 h-px bg-slate-300" />
               </div>
-              {allRecords.length > 0 && (
-                <FilterChips value={filterParam} onChange={setFilter} />
-              )}
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}
+              >
+                {group.items.map(record => (
+                  <RecordRow key={record.id} record={record} onDelete={stageDelete} />
+                ))}
+              </div>
             </div>
-
-            <div className="space-y-6">
-              {allRecords.length === 0 ? (
-                <PaperCard className="text-center py-14">
-                  <p className="text-[14px] text-[var(--ink-2)]">点上面「记一笔」 — 从一件最小的开始就好。</p>
-                </PaperCard>
-              ) : groups.length === 0 ? (
-                <div className="text-center py-12 text-[var(--ink-3)] text-[13px]">这个分类下还是空的</div>
-              ) : (
-                groups.map(group => (
-                  <div key={group.label}>
-                    <div className="flex items-center gap-3 mb-3">
-                      <span className="text-[11px] font-bold text-[var(--ink-3)] uppercase">{group.label}</span>
-                      <div className="flex-1 h-px bg-[var(--line)]" />
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {group.items.map(record => (
-                        <RecordRow key={record.id} record={record} />
-                      ))}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </Chapter>
-        </>
-      )}
-
-      {hasHistory && (
-        <>
-          <SectionDivider numeral="III" />
-          <Chapter
-            numeral="III"
-            label="回头看"
-            title={<>你曾经选过 {historyData!.goals.filter(g => !g.is_active).length} 个方向。</>}
-            intro="这些不是走错的路 — 是你一步步走过来的轨迹。"
-          >
-            <div className="space-y-3">
-              {historyData!.goals.filter(g => !g.is_active).map(g => (
-                <div key={g.id} className="flex items-center gap-3 text-[13px]">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[var(--ink-3)]" />
-                  <span className="font-medium text-[var(--ink-1)]">{g.target_label}</span>
-                  <span className="text-[var(--ink-3)] tabular-nums">
-                    {g.set_at ? new Date(g.set_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : ''}
-                    {' → '}
-                    {g.cleared_at ? new Date(g.cleared_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '现在'}
-                  </span>
-                  <span className="text-[var(--ink-3)] tabular-nums">· {g.duration_days} 天</span>
-                </div>
-              ))}
-            </div>
-          </Chapter>
-        </>
-      )}
+          ))
+        )}
+      </div>
 
       <AnimatePresence>
         {showNewDialog && (
@@ -318,9 +290,12 @@ export default function GrowthLogPage() {
             {activeForm === 'pursuit' && (
               <AddPursuitForm onSuccess={handleFormSuccess} onCancel={() => setActiveForm(null)} />
             )}
+
           </FormModal>
         )}
       </AnimatePresence>
+
+      <ToastContainer toast={toast} onClose={() => setToast(null)} />
     </div>
   )
 }

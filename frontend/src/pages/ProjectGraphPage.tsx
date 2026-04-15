@@ -23,10 +23,11 @@ interface LogEntry extends ProjectLogEntry {
 const STATUS_CFG: Record<TaskStatus, { color: string; bg: string; label: string }> = {
   done:        { color: '#fff', bg: '#16A34A', label: '已完成' },
   in_progress: { color: '#fff', bg: '#2563EB', label: '进行中' },
-  blocked:     { color: '#fff', bg: '#EA580C', label: '遇到问题' },
+  blocked:     { color: '#fff', bg: '#EF4444', label: '遇到问题' },
 }
 
-const COLORS = ['#7C3AED', '#2563EB', '#0891B2', '#16A34A', '#EA580C', '#DB2777']
+// Decorative cycling palette — blue+slate shades only, no rainbow
+const COLORS = ['#2563EB', '#475569', '#60A5FA', '#64748B', '#3B82F6', '#94A3B8']
 
 function fmtDate(iso: string) {
   const d = new Date(iso)
@@ -247,7 +248,12 @@ export default function ProjectGraphPage() {
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-[20px] font-bold text-slate-900 truncate">{project?.name ?? '项目'}</p>
+          <p
+            className="text-[20px] font-bold text-slate-900 truncate"
+            style={{ viewTransitionName: `record-proj-${projectId}` } as React.CSSProperties}
+          >
+            {project?.name ?? '项目'}
+          </p>
           {project?.description && (
             <p className="text-[12px] text-slate-500 truncate mt-0.5">{project.description}</p>
           )}

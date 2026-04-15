@@ -20,7 +20,7 @@ export function NewRecordDialog({
     {
       type: 'pursuit',
       icon: Briefcase,
-      color: 'var(--ember)',
+      color: '#2563EB',
       title: '追踪岗位',
       desc: '记录投递的公司和岗位进展',
     },
@@ -28,7 +28,7 @@ export function NewRecordDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.35)' }}
+      <motion.div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(4px)' }}
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
       
       <motion.div

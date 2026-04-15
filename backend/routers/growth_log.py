@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -176,6 +175,128 @@ class UpdateInterviewRequest(BaseModel):
     result: Optional[str] = None
     reflection: Optional[str] = None
     self_rating: Optional[str] = None
+
+
+# ── Timeline ──────────────────────────────────────────────────────────────────
+
+@router.get("/dashboard")
+def get_growth_dashboard(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取成长看板数据：目标方向 + 分层技能覆盖率 + 匹配度曲线。"""
+    from backend.db_models import CareerGoal, GrowthSnapshot
+    from backend.services.graph_service import GraphService
+    from backend.services.growth_log_service import _skill_matches
+
+    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    if not profile:
+        return {"has_goal": False, "has_profile": False}
+
+    goal = (
+        db.query(CareerGoal)
+        .filter(
+            CareerGoal.user_id == user.id,
+            CareerGoal.profile_id == profile.id,
+            CareerGoal.is_active == True,
+        )
+        .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
+        .first()
+    )
+
+    if not goal or not goal.target_node_id:
+        return {"has_goal": False, "has_profile": True}
+
+    svc = GraphService()
+    svc.load()
+    node = svc.get_node(goal.target_node_id)
+    if not node:
+        return {"has_goal": False, "has_profile": True}
+
+    # Build user skill set
+    try:
+        profile_data = json.loads(profile.profile_json or "{}")
+    except Exception:
+        profile_data = {}
+    raw_skills = profile_data.get("skills", [])
+    if raw_skills and isinstance(raw_skills[0], dict):
+        user_skills = {s.get("name", "").lower().strip() for s in raw_skills if s.get("name")}
+    else:
+        user_skills = {s.lower().strip() for s in raw_skills if isinstance(s, str) and s.strip()}
+
+    # Tiered skill coverage
+    tiers = node.get("skill_tiers", {}) or {}
+    core_list = tiers.get("core", []) or []
+    imp_list = tiers.get("important", []) or []
+    bonus_list = tiers.get("bonus", []) or []
+
+    def _count_matched(skills_list):
+        matched_items = [s for s in skills_list if _skill_matches(s.get("name", ""), user_skills)]
+        return len(matched_items), [s.get("name") for s in matched_items]
+
+    core_cnt, core_matched = _count_matched(core_list)
+    imp_cnt, imp_matched = _count_matched(imp_list)
+    bonus_cnt, bonus_matched = _count_matched(bonus_list)
+
+    def _pct(cnt: int, total: int) -> int:
+        return int(round(cnt / total * 100)) if total > 0 else 0
+
+    # Missing (gap) skills for each tier — for project form selector
+    core_missing = [s.get("name") for s in core_list if not _skill_matches(s.get("name", ""), user_skills)]
+    imp_missing = [s.get("name") for s in imp_list if not _skill_matches(s.get("name", ""), user_skills)]
+
+    # Readiness curve from GrowthSnapshot (up to last 12 points)
+    snapshots = (
+        db.query(GrowthSnapshot)
+        .filter(GrowthSnapshot.profile_id == profile.id)
+        .order_by(GrowthSnapshot.created_at.asc())
+        .limit(12)
+        .all()
+    )
+    curve = [
+        {
+            "date": s.created_at.strftime("%m/%d") if s.created_at else "",
+            "score": round(s.readiness_score or 0, 1),
+        }
+        for s in snapshots
+    ]
+
+    # Days since journey started (profile creation date)
+    start_date = profile.created_at
+    days_since_start = (datetime.now(timezone.utc) - start_date.replace(tzinfo=timezone.utc)).days if start_date else 0
+
+    return {
+        "has_goal": True,
+        "has_profile": True,
+        "goal": {
+            "target_node_id": goal.target_node_id,
+            "target_label": goal.target_label,
+        },
+        "days_since_start": days_since_start,
+        "skill_coverage": {
+            "core": {
+                "covered": core_cnt,
+                "total": len(core_list),
+                "pct": _pct(core_cnt, len(core_list)),
+                "matched": core_matched,
+                "missing": core_missing,
+            },
+            "important": {
+                "covered": imp_cnt,
+                "total": len(imp_list),
+                "pct": _pct(imp_cnt, len(imp_list)),
+                "matched": imp_matched,
+                "missing": imp_missing,
+            },
+            "bonus": {
+                "covered": bonus_cnt,
+                "total": len(bonus_list),
+                "pct": _pct(bonus_cnt, len(bonus_list)),
+            },
+        },
+        "gap_skills": goal.gap_skills or [],  # For project form selector
+        "readiness_curve": curve,
+    }
 
 
 # ── Projects ──────────────────────────────────────────────────────────────────
@@ -632,286 +753,4 @@ def _serialize_interview(i: InterviewRecord) -> dict:
     }
 
 
-
-
-@router.get("/journey")
-def get_goal_journey(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """当前 active goal 的完整旅程：阶段事件 + 关联 records。"""
-    from backend.db_models import CareerGoal, GrowthSnapshot, ProjectRecord, JobApplication
-
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    if not profile:
-        return {"has_goal": False}
-
-    goal = (
-        db.query(CareerGoal)
-        .filter(
-            CareerGoal.user_id == user.id,
-            CareerGoal.profile_id == profile.id,
-            CareerGoal.is_active == True,
-        )
-        .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
-        .first()
-    )
-
-    if not goal or not goal.target_node_id:
-        return {"has_goal": False}
-
-    # ── Stage events from GrowthSnapshot ──
-    snapshots = (
-        db.query(GrowthSnapshot)
-        .filter(
-            GrowthSnapshot.profile_id == profile.id,
-            GrowthSnapshot.target_node_id == goal.target_node_id,
-        )
-        .order_by(GrowthSnapshot.created_at.asc())
-        .all()
-    )
-
-    stage_events = [
-        {
-            "id": s.id,
-            "trigger": s.trigger,
-            "stage_completed": s.stage_completed,
-            "readiness_score": round(s.readiness_score or 0, 1),
-            "created_at": s.created_at.isoformat() if s.created_at else None,
-        }
-        for s in snapshots
-    ]
-
-    # ── Records under this goal (按 goal.set_at 之后) ──
-    projects = (
-        db.query(ProjectRecord)
-        .filter(
-            ProjectRecord.profile_id == profile.id,
-            ProjectRecord.created_at >= goal.set_at,
-        )
-        .order_by(ProjectRecord.created_at.asc())
-        .all()
-    )
-    applications = (
-        db.query(JobApplication)
-        .filter(
-            JobApplication.user_id == user.id,
-            JobApplication.created_at >= goal.set_at,
-        )
-        .order_by(JobApplication.created_at.asc())
-        .all()
-    )
-
-    return {
-        "has_goal": True,
-        "goal": {
-            "id": goal.id,
-            "target_node_id": goal.target_node_id,
-            "target_label": goal.target_label,
-            "set_at": goal.set_at.isoformat() if goal.set_at else None,
-        },
-        "stage_events": stage_events,
-        "projects_under_goal": [
-            {
-                "id": p.id,
-                "name": p.name,
-                "status": p.status,
-                "created_at": p.created_at.isoformat(),
-            }
-            for p in projects
-        ],
-        "applications_under_goal": [
-            {
-                "id": a.id,
-                "company": a.company,
-                "position": a.position,
-                "status": a.status,
-                "created_at": a.created_at.isoformat(),
-            }
-            for a in applications
-        ],
-    }
-
-
-@router.get("/goal-history")
-def get_goal_history(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """所有 career_goal（active + cleared），按 set_at 降序。"""
-    from backend.db_models import CareerGoal
-
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    if not profile:
-        return {"goals": []}
-
-    goals = (
-        db.query(CareerGoal)
-        .filter(
-            CareerGoal.user_id == user.id,
-            CareerGoal.profile_id == profile.id,
-        )
-        .order_by(CareerGoal.set_at.desc())
-        .all()
-    )
-
-    return {
-        "goals": [
-            {
-                "id": g.id,
-                "target_node_id": g.target_node_id,
-                "target_label": g.target_label,
-                "is_active": g.is_active,
-                "is_primary": g.is_primary,
-                "set_at": g.set_at.isoformat() if g.set_at else None,
-                "cleared_at": g.cleared_at.isoformat() if g.cleared_at else None,
-                "duration_days": (
-                    ((g.cleared_at or datetime.now(timezone.utc)) - g.set_at).days
-                    if g.set_at else 0
-                ),
-            }
-            for g in goals
-        ],
-    }
-
-
-@router.get("/skills-harvest")
-def get_skills_harvest(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """本月技能收获：新触达技能 + 所有已积累技能。"""
-    from backend.db_models import JobApplication, InterviewRecord
-
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    if not profile:
-        return {
-            "has_records": False,
-            "month_label": datetime.now(timezone.utc).strftime("%Y 年 %m 月").replace(" 0", " "),
-            "monthly_record_count": 0,
-            "newly_touched_skills": [],
-            "all_touched_skills": [],
-        }
-
-    now = datetime.now(timezone.utc)
-    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-    monthly_count = (
-        db.query(ProjectRecord).filter(
-            ProjectRecord.profile_id == profile.id,
-            ProjectRecord.created_at >= month_start,
-        ).count()
-        + db.query(JobApplication).filter(
-            JobApplication.user_id == user.id,
-            JobApplication.created_at >= month_start,
-        ).count()
-        + db.query(InterviewRecord).filter(
-            InterviewRecord.user_id == user.id,
-            InterviewRecord.created_at >= month_start,
-        ).count()
-    )
-
-    projects = (
-        db.query(ProjectRecord)
-        .filter(ProjectRecord.profile_id == profile.id)
-        .order_by(ProjectRecord.created_at.asc())
-        .all()
-    )
-    skill_map: dict[str, dict] = {}
-    for p in projects:
-        for s in (p.skills_used or []):
-            s_clean = s.strip()
-            if not s_clean:
-                continue
-            if s_clean not in skill_map:
-                skill_map[s_clean] = {"name": s_clean, "first_seen_at": p.created_at, "use_count": 0}
-            skill_map[s_clean]["use_count"] += 1
-
-    all_skills = sorted(skill_map.values(), key=lambda x: x["first_seen_at"], reverse=True)
-    newly_touched = [s for s in all_skills if s["first_seen_at"] >= month_start]
-
-    return {
-        "has_records": monthly_count > 0 or len(all_skills) > 0,
-        "month_label": now.strftime("%Y 年 %m 月").replace(" 0", " "),
-        "monthly_record_count": monthly_count,
-        "newly_touched_skills": [
-            {"name": s["name"], "first_seen_at": s["first_seen_at"].isoformat()}
-            for s in newly_touched
-        ],
-        "all_touched_skills": [
-            {
-                "name": s["name"],
-                "first_seen_at": s["first_seen_at"].isoformat(),
-                "use_count": s["use_count"],
-            }
-            for s in all_skills
-        ],
-    }
-
-
-@router.get("/activity-pulse")
-def get_activity_pulse(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """12 周活动节奏柱 + 连续活跃周数。"""
-    from backend.db_models import JobApplication, InterviewRecord
-
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    if not profile:
-        return {"current_streak_weeks": 0, "total_records": 0, "weeks": []}
-
-    now = datetime.now(timezone.utc)
-    twelve_weeks_ago = now - timedelta(weeks=12)
-
-    projects = db.query(ProjectRecord).filter(
-        ProjectRecord.profile_id == profile.id,
-        ProjectRecord.created_at >= twelve_weeks_ago,
-    ).all()
-    applications = db.query(JobApplication).filter(
-        JobApplication.user_id == user.id,
-        JobApplication.created_at >= twelve_weeks_ago,
-    ).all()
-    interviews = db.query(InterviewRecord).filter(
-        InterviewRecord.user_id == user.id,
-        InterviewRecord.created_at >= twelve_weeks_ago,
-    ).all()
-
-    bucket: dict[str, dict] = defaultdict(lambda: {"projects": 0, "applications": 0, "interviews": 0})
-    for p in projects:
-        key = p.created_at.strftime("%G-W%V")
-        bucket[key]["projects"] += 1
-    for a in applications:
-        key = a.created_at.strftime("%G-W%V")
-        bucket[key]["applications"] += 1
-    for i in interviews:
-        key = i.created_at.strftime("%G-W%V")
-        bucket[key]["interviews"] += 1
-
-    weeks = []
-    for i in range(11, -1, -1):
-        wk_date = now - timedelta(weeks=i)
-        iso_key = wk_date.strftime("%G-W%V")
-        weeks.append({
-            "week_label": wk_date.strftime("%m/%d").lstrip("0").replace("/0", "/"),
-            "iso_week": iso_key,
-            "projects": bucket[iso_key]["projects"],
-            "applications": bucket[iso_key]["applications"],
-            "interviews": bucket[iso_key]["interviews"],
-        })
-
-    streak = 0
-    for w in reversed(weeks):
-        if (w["projects"] + w["applications"] + w["interviews"]) > 0:
-            streak += 1
-        else:
-            break
-
-    total = sum(w["projects"] + w["applications"] + w["interviews"] for w in weeks)
-
-    return {
-        "current_streak_weeks": streak,
-        "total_records": total,
-        "weeks": weeks,
-    }
 

@@ -17,7 +17,7 @@ import {
 
 const STATUS = {
   planning:    { label: '计划中', color: '#8E8E93', bg: 'rgba(142,142,147,0.12)' },
-  in_progress: { label: '进行中', color: 'var(--chestnut)', bg: 'rgba(80,50,30,0.10)'   },
+  in_progress: { label: '进行中', color: '#2563EB', bg: 'rgba(37,99,235,0.10)'   },
   completed:   { label: '已完成', color: '#16A34A', bg: 'rgba(22,163,74,0.10)'   },
 }
 
@@ -91,7 +91,8 @@ function ProjectCard({ project, logCount, onClick }: {
         className="h-full rounded-[20px] p-5 flex flex-col gap-3"
         style={{
           background: 'rgba(255,255,255,0.58)',
-          /* backdrop filter removed per editorial style */
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
           border: '1px solid rgba(255,255,255,0.65)',
           boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
           transition: 'box-shadow 0.2s ease, background 0.2s ease',
@@ -121,18 +122,18 @@ function ProjectCard({ project, logCount, onClick }: {
         {/* Gap skill links (高亮显示，这个项目补了哪些缺口) */}
         {project.gap_skill_links && project.gap_skill_links.length > 0 && (
           <div className="flex flex-wrap gap-1.5 items-center">
-            <span className="text-[9px] font-bold text-[var(--chestnut)] uppercase tracking-wider">补缺口</span>
+            <span className="text-[9px] font-bold text-blue-600 uppercase tracking-wider">补缺口</span>
             {project.gap_skill_links.slice(0, 4).map(s => (
               <span
                 key={s}
                 className="text-[10px] font-semibold px-2 py-0.5 rounded-[5px]"
-                style={{ background: 'rgba(80,50,30,0.08)', color: 'var(--chestnut)', border: '1px solid rgba(80,50,30,0.2)' }}
+                style={{ background: 'rgba(37,99,235,0.08)', color: '#2563EB', border: '1px solid rgba(37,99,235,0.2)' }}
               >
                 {s}
               </span>
             ))}
             {project.gap_skill_links.length > 4 && (
-              <span className="text-[10px] text-[var(--chestnut)]">+{project.gap_skill_links.length - 4}</span>
+              <span className="text-[10px] text-blue-500">+{project.gap_skill_links.length - 4}</span>
             )}
           </div>
         )}
@@ -156,7 +157,7 @@ function ProjectCard({ project, logCount, onClick }: {
 
         {/* Footer */}
         <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}>
-          <span className="text-[11px] font-semibold" style={{ color: 'var(--chestnut)' }}>查看详情</span>
+          <span className="text-[11px] font-semibold" style={{ color: '#2563EB' }}>查看详情</span>
           {project.github_url && (
             <ExternalLink className="w-3.5 h-3.5" style={{ color: '#C7C7CC' }} />
           )}
@@ -196,12 +197,12 @@ function LogInput({ projectId, logType, placeholder, onAdded }: {
         placeholder={placeholder}
         className="flex-1 px-3 py-2.5 text-[12px] rounded-[10px] outline-none transition-all"
         style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.07)', color: '#1a1a1a' }}
-        onFocus={e => { e.currentTarget.style.border = '1px solid var(--moss)'; e.currentTarget.style.background = '#fff' }}
+        onFocus={e => { e.currentTarget.style.border = '1px solid rgba(37,99,235,0.4)'; e.currentTarget.style.background = '#fff' }}
         onBlur={e => { e.currentTarget.style.border = '1px solid rgba(0,0,0,0.07)'; e.currentTarget.style.background = 'rgba(0,0,0,0.04)' }}
       />
       <button onClick={submit} disabled={!val.trim() || saving}
         className="px-3 py-2.5 text-[11px] font-semibold text-white rounded-[10px] cursor-pointer shrink-0 transition-all"
-        style={{ background: val.trim() ? 'var(--chestnut)' : 'rgba(80,50,30,0.35)' }}>
+        style={{ background: val.trim() ? '#2563EB' : 'rgba(37,99,235,0.3)' }}>
         {saving ? '...' : '记录'}
       </button>
     </div>
@@ -295,7 +296,7 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <motion.div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.35)' }}
+      <motion.div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.2)', backdropFilter: 'blur(8px)' }}
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
 
       <motion.div
@@ -305,14 +306,16 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
         transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
         className="relative w-full max-w-[540px] min-h-[620px] max-h-[88vh] flex flex-col rounded-[22px] overflow-hidden"
         style={{
-          background: 'var(--bg-card)',
-          border: '1px solid var(--line)',
-          boxShadow: '0 8px 40px rgba(60,40,20,0.12), 0 2px 8px rgba(60,40,20,0.06)',
+          background: 'rgba(248,250,255,0.88)',
+          backdropFilter: 'blur(40px)',
+          WebkitBackdropFilter: 'blur(40px)',
+          border: '1px solid rgba(255,255,255,0.7)',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.14), 0 4px 16px rgba(0,0,0,0.06)',
         }}
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
-        <div className="px-6 pt-5 pb-4 shrink-0" style={{ background: 'var(--bg-paper)', borderBottom: '1px solid var(--line)' }}>
+        <div className="px-6 pt-5 pb-4 shrink-0" style={{ background: 'linear-gradient(to bottom, rgba(37,99,235,0.03), transparent)', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
           <div className="flex items-start justify-between gap-2 mb-3">
             <div className="min-w-0 flex-1">
               <h2 className="text-[18px] font-extrabold text-[#1a1a1a] leading-tight truncate">{project.name}</h2>
@@ -345,7 +348,7 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
             {project.github_url && (
               <a href={project.github_url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-1 px-2.5 py-1 rounded-[20px] text-[10px] font-medium cursor-pointer ml-auto"
-                style={{ color: 'var(--chestnut)', background: 'rgba(80,50,30,0.08)' }}
+                style={{ color: '#2563EB', background: 'rgba(37,99,235,0.08)' }}
                 onClick={e => e.stopPropagation()}>
                 <ExternalLink className="w-2.5 h-2.5" /> GitHub
               </a>
@@ -369,15 +372,15 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
             <button key={t.key} onClick={() => setActiveTab(t.key)}
               className="flex-1 flex items-center justify-center gap-1.5 py-3 text-[11px] font-semibold cursor-pointer transition-all border-b-2"
               style={{
-                color: activeTab === t.key ? 'var(--chestnut)' : '#C7C7CC',
-                borderBottomColor: activeTab === t.key ? 'var(--chestnut)' : 'transparent',
-                background: activeTab === t.key ? 'rgba(80,50,30,0.04)' : 'transparent',
+                color: activeTab === t.key ? '#2563EB' : '#C7C7CC',
+                borderBottomColor: activeTab === t.key ? '#2563EB' : 'transparent',
+                background: activeTab === t.key ? 'rgba(37,99,235,0.03)' : 'transparent',
               }}>
               <t.Icon className="w-3.5 h-3.5" />
               {t.label}
               {t.count != null && t.count > 0 && (
                 <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'rgba(80,50,30,0.08)', color: 'var(--chestnut)' }}>
+                  style={{ background: 'rgba(37,99,235,0.1)', color: '#2563EB' }}>
                   {t.count}
                 </span>
               )}
@@ -400,7 +403,7 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
                   {progressLogs.map(log => (
                     <div key={log.id} className="flex gap-3 py-2.5">
                       <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 -ml-4 relative z-10"
-                        style={{ background: 'var(--chestnut)', boxShadow: '0 0 0 2px var(--bg-card)' }} />
+                        style={{ background: '#2563EB', boxShadow: '0 0 0 2px #fff' }} />
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] text-[#1a1a1a] leading-relaxed">{log.content}</p>
                         <p className="text-[9px] mt-0.5" style={{ color: '#C7C7CC' }}>{timeAgo(log.created_at)}</p>
@@ -426,7 +429,7 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
                 <div className="space-y-2">
                   {noteLogs.map(log => (
                     <div key={log.id} className="px-3.5 py-3 rounded-[12px]"
-                      style={{ background: 'var(--bg-paper)', border: '1px solid var(--line)' }}>
+                      style={{ background: 'rgba(124,58,237,0.05)', border: '1px solid rgba(124,58,237,0.1)' }}>
                       <p className="text-[12px] text-[#1a1a1a] leading-relaxed">{log.content}</p>
                       <p className="text-[9px] mt-1.5" style={{ color: '#C7C7CC' }}>{timeAgo(log.created_at)}</p>
                     </div>
@@ -441,8 +444,8 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
             <div className="py-2">
               {/* Context preview */}
               <div className="p-3.5 rounded-[14px] mb-4"
-                style={{ background: 'var(--bg-paper)', border: '1px solid var(--line)' }}>
-                <p className="text-[10px] font-bold mb-2" style={{ color: 'var(--chestnut)' }}>教练会知道</p>
+                style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.05), rgba(124,58,237,0.05))', border: '1px solid rgba(37,99,235,0.1)' }}>
+                <p className="text-[10px] font-bold mb-2" style={{ color: '#2563EB' }}>教练会知道</p>
                 <div className="space-y-1">
                   <p className="text-[11px]" style={{ color: '#374151' }}>· 项目：{project.name}（{st.label}）</p>
                   {project.skills_used.length > 0 && (
@@ -461,7 +464,7 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
 
               <button onClick={handleAskCoach}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-[14px] text-[13px] font-semibold text-white cursor-pointer"
-                style={{ background: 'var(--chestnut)', boxShadow: '0 4px 12px rgba(60,40,20,0.15)' }}
+                style={{ background: 'linear-gradient(135deg, #2563EB, #7C3AED)', boxShadow: '0 4px 16px rgba(37,99,235,0.3)' }}
                 onMouseEnter={e => (e.currentTarget.style.opacity = '0.9')}
                 onMouseLeave={e => (e.currentTarget.style.opacity = '1')}>
                 <Sparkles className="w-4 h-4" />
@@ -487,7 +490,7 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
           </button>
           <button onClick={onClose}
             className="text-[11px] font-semibold px-4 py-1.5 rounded-[9px] text-white cursor-pointer"
-            style={{ background: 'var(--chestnut)' }}>
+            style={{ background: '#2563EB' }}>
             完成
           </button>
         </div>
@@ -559,7 +562,7 @@ export function AddProjectForm({ onSuccess, onCancel }: { onSuccess: () => void;
         <div className="flex gap-2 pt-2">
           <button type="submit" disabled={saving}
             className="flex-1 py-2.5 text-[13px] font-semibold text-white rounded-xl cursor-pointer transition-colors"
-            style={{ background: saving ? 'rgba(80,50,30,0.5)' : 'var(--chestnut)' }}>
+            style={{ background: saving ? 'rgba(37,99,235,0.5)' : '#2563EB' }}>
             {saving ? '创建中...' : '创建项目'}
           </button>
           <button type="button" onClick={onCancel}
@@ -645,7 +648,7 @@ export function ProjectsSection() {
           className="rounded-[20px] flex flex-col items-center justify-center gap-2 min-h-[200px]"
           style={{
             background: 'rgba(255,255,255,0.3)',
-            border: '2px dashed rgba(80,50,30,0.2)',
+            border: '2px dashed rgba(37,99,235,0.2)',
             opacity: showAdd ? 0 : 1,
             pointerEvents: showAdd ? 'none' : 'auto',
             cursor: showAdd ? 'default' : 'pointer',
@@ -655,10 +658,10 @@ export function ProjectsSection() {
           onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.3)' }}
         >
           <div className="w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ background: 'rgba(80,50,30,0.08)' }}>
-            <Plus className="w-5 h-5" style={{ color: 'var(--chestnut)' }} />
+            style={{ background: 'rgba(37,99,235,0.08)' }}>
+            <Plus className="w-5 h-5" style={{ color: '#2563EB' }} />
           </div>
-          <p className="text-[12px] font-semibold" style={{ color: 'var(--chestnut)' }}>添加项目</p>
+          <p className="text-[12px] font-semibold" style={{ color: '#2563EB' }}>添加项目</p>
         </div>
       </div>
 

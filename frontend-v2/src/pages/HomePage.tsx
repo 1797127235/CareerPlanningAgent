@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
-import { Kicker, Chapter, PaperCard } from '@/components/editorial'
+import { Block, BlockGrid } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfileData } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
@@ -94,8 +94,8 @@ export default function HomePage() {
     secondaryLabel = '手动填写'
     secondaryAction = () => navigate('/profile')
   } else {
-    title = '你回来了'
-    subtitle = `欢迎回来${profile?.name ? '，' + profile.name : ''}。你的画像、报告和成长日志都在等你。`
+    title = `你回来了${profile?.name ? '，' + profile.name : ''}`
+    subtitle = '你的画像、报告和成长日志都在等你。'
     primaryLabel = '查看画像'
     primaryAction = () => navigate('/profile')
     secondaryLabel = '去成长日志'
@@ -112,121 +112,104 @@ export default function HomePage() {
         onChange={onFileSelected}
       />
 
-      <section className="min-h-[60vh] flex flex-col justify-center px-6 md:px-12 lg:px-20 py-20">
-        <div className="max-w-[720px] mx-auto w-full">
-          <Kicker>EDITORIAL · 职途智析</Kicker>
-          <p className="font-serif italic text-[clamp(28px,4vw,42px)] text-[var(--chestnut)] mb-4">
-            职途智析
-          </p>
-          <h1 className="font-display font-medium text-[length:var(--fs-display-xl)] leading-[var(--lh-display)] tracking-tight text-[var(--ink-1)]">
+      <div className="max-w-[860px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] py-[var(--space-6)]">
+        <section className="mb-[var(--space-5)]">
+          <h1 className="text-[var(--text-2xl)] font-semibold text-[var(--ink-1)] tracking-tight">
             {title}
           </h1>
-          <p className="mt-6 font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[48ch]">
+          <p className="mt-2 text-[var(--text-base)] text-[var(--ink-2)] max-w-[48ch]">
             {subtitle}
           </p>
-          <div className="mt-10 flex flex-wrap items-center gap-6">
+          <div className="mt-6 flex flex-wrap items-center gap-4">
             <button
               onClick={primaryAction}
               disabled={uploading}
-              className="inline-flex items-center justify-center px-6 py-3 rounded-full bg-[var(--chestnut)] text-white text-[15px] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-base)] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {primaryLabel}
             </button>
             <button
               onClick={secondaryAction}
-              className="text-[var(--ink-2)] hover:text-[var(--ink-1)] underline underline-offset-4 transition-colors text-[15px]"
+              className="text-[var(--ink-2)] hover:text-[var(--ink-1)] underline underline-offset-4 transition-colors text-[var(--text-base)]"
             >
               {secondaryLabel}
             </button>
           </div>
           {uploadError && (
-            <p className="mt-4 text-[var(--ember)] text-[13px]">{uploadError}</p>
+            <p className="mt-3 text-[var(--ember)] text-[var(--text-sm)]">{uploadError}</p>
           )}
-        </div>
-      </section>
+        </section>
 
-      {hasProfile && (
-        <div className="px-6 md:px-12 lg:px-20 pb-20">
-          <div className="max-w-[720px] mx-auto w-full">
-            <Chapter numeral="I" label="你的路径" title="从这里继续">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <PaperCard className="group cursor-pointer" onClick={() => navigate('/profile')}>
-                  <Kicker>画像</Kicker>
-                  <h3 className="font-display font-medium text-[length:var(--fs-body-lg)] text-[var(--ink-1)]">
-                    {profile?.name || '我的画像'}
-                  </h3>
-                  <p className="mt-2 text-[length:var(--fs-body-sm)] text-[var(--ink-2)]">
-                    已完成 {sectionsCompleted} / 6 个章节
-                  </p>
-                  <div className="mt-4 flex items-center text-[length:var(--fs-body-sm)] text-[var(--chestnut)] font-medium">
-                    <span>去查看</span>
-                    <ArrowRight className="ml-1 w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </PaperCard>
-
-                <PaperCard className="group cursor-pointer" onClick={() => navigate('/report')}>
-                  <Kicker>报告</Kicker>
-                  <h3 className="font-display font-medium text-[length:var(--fs-body-lg)] text-[var(--ink-1)]">
-                    职业分析报告
-                  </h3>
-                  <p className="mt-2 text-[length:var(--fs-body-sm)] text-[var(--ink-2)]">
-                    {report ? `上次生成于 ${formatRelativeTime(report.created_at)}` : '还没生成'}
-                  </p>
-                  <div className="mt-4 flex items-center text-[length:var(--fs-body-sm)] text-[var(--chestnut)] font-medium">
-                    <span>{report ? '查看报告' : '去生成'}</span>
-                    <ArrowRight className="ml-1 w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </PaperCard>
-
-                <PaperCard className="group cursor-pointer" onClick={() => navigate('/growth-log')}>
-                  <Kicker>成长</Kicker>
-                  <h3 className="font-display font-medium text-[length:var(--fs-body-lg)] text-[var(--ink-1)]">
-                    成长日志
-                  </h3>
-                  <p className="mt-2 text-[length:var(--fs-body-sm)] text-[var(--ink-2)]">
-                    {pulse ? `${pulse.total_records} 条笔记` : '还空着'}
-                  </p>
-                  <div className="mt-4 flex items-center text-[length:var(--fs-body-sm)] text-[var(--chestnut)] font-medium">
-                    <span>{pulse && pulse.total_records > 0 ? '去回顾' : '去记录'}</span>
-                    <ArrowRight className="ml-1 w-4 h-4 transition-transform group-hover:translate-x-0.5" />
-                  </div>
-                </PaperCard>
-              </div>
-            </Chapter>
-
-            <Chapter numeral="II" label="最近动向" title="最近的变化">
-              <div className="font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)] max-w-[68ch] space-y-4">
-                <p>
-                  你上次更新档案是 {formatRelativeTime(profile?.updated_at)}。
-                  {report
-                    ? `报告还留在 ${formatRelativeTime(report.created_at)} 那版 —— 如果最近有新经历，值得重新跑一次。`
-                    : '报告还没有生成 —— 准备好了就去试试。'}
+        {hasProfile && (
+          <div className="space-y-[var(--space-5)]">
+            <BlockGrid>
+              <Block
+                kicker="画像"
+                title={profile?.name || '我的画像'}
+                span={2}
+              >
+                <p className="text-[var(--text-sm)] text-[var(--ink-2)]">
+                  已完成 {sectionsCompleted} / 6 个章节
                 </p>
-                {pulse && pulse.current_streak_weeks > 0 ? (
-                  <p>
-                    成长日志里，你已连续记录了 {pulse.current_streak_weeks} 周。
-                  </p>
-                ) : (
-                  <p>
-                    成长日志还是空白 —— 第一笔从哪里开始都可以。
-                  </p>
-                )}
-              </div>
-            </Chapter>
+                <button
+                  onClick={() => navigate('/profile')}
+                  className="mt-4 inline-flex items-center text-[var(--text-sm)] text-[var(--chestnut)] font-medium hover:opacity-90"
+                >
+                  去查看 <ArrowRight className="ml-1 w-4 h-4" />
+                </button>
+              </Block>
 
-            <section className="relative py-16 md:py-24 text-center">
-              <div className="max-w-[58ch] mx-auto">
-                <p className="font-sans text-[length:var(--fs-body)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] italic">
-                  档案只给自己看，但每一步都算数。
+              <Block
+                kicker="报告"
+                title="职业分析报告"
+              >
+                <p className="text-[var(--text-sm)] text-[var(--ink-2)]">
+                  {report ? `上次生成于 ${formatRelativeTime(report.created_at)}` : '还没生成'}
                 </p>
-                <p className="mt-6 font-mono text-[length:var(--fs-caption)] text-[var(--ink-3)]">
-                  v2.0 · {new Date().toLocaleDateString('zh-CN')} · 编辑部
+                <button
+                  onClick={() => navigate('/report')}
+                  className="mt-4 inline-flex items-center text-[var(--text-sm)] text-[var(--chestnut)] font-medium hover:opacity-90"
+                >
+                  {report ? '查看报告' : '去生成'} <ArrowRight className="ml-1 w-4 h-4" />
+                </button>
+              </Block>
+
+              <Block
+                kicker="成长"
+                title="成长日志"
+              >
+                <p className="text-[var(--text-sm)] text-[var(--ink-2)]">
+                  {pulse ? `${pulse.total_records} 条笔记` : '还空着'}
                 </p>
-              </div>
-            </section>
+                <button
+                  onClick={() => navigate('/growth-log')}
+                  className="mt-4 inline-flex items-center text-[var(--text-sm)] text-[var(--chestnut)] font-medium hover:opacity-90"
+                >
+                  {pulse && pulse.total_records > 0 ? '去回顾' : '去记录'} <ArrowRight className="ml-1 w-4 h-4" />
+                </button>
+              </Block>
+            </BlockGrid>
+
+            <div className="text-[var(--text-sm)] text-[var(--ink-2)] max-w-[68ch] space-y-2">
+              <p>
+                你上次更新档案是 {formatRelativeTime(profile?.updated_at)}。
+                {report
+                  ? `报告还留在 ${formatRelativeTime(report.created_at)} 那版 —— 如果最近有新经历，值得重新跑一次。`
+                  : '报告还没有生成 —— 准备好了就去试试。'}
+              </p>
+              {pulse && pulse.current_streak_weeks > 0 ? (
+                <p>成长日志里，你已连续记录了 {pulse.current_streak_weeks} 周。</p>
+              ) : (
+                <p>成长日志还是空白 —— 第一笔从哪里开始都可以。</p>
+              )}
+            </div>
+
+            <p className="pt-[var(--space-5)] border-t border-[var(--line)] text-[var(--text-sm)] text-[var(--ink-3)] italic">
+              档案只给自己看，但每一步都算数。
+            </p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </main>
   )
 }

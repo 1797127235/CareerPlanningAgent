@@ -1,5 +1,9 @@
-/* ── Fonts ── */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&display=swap');
+/* ── Fonts ──
+   Commissioner (variable 100-900) + Noto Sans SC for Chinese.
+   Commissioner is humanist geometric — calm, slightly warmer than Inter, built
+   for small-size UI reading. Chosen deliberately off the reflex-font list.
+*/
+@import url('https://fonts.googleapis.com/css2?family=Commissioner:wght@200..900&family=Noto+Sans+SC:wght@400;500;600;700;800&display=swap');
 
 @import "tailwindcss";
 
@@ -14,61 +18,42 @@
 
 /* ── Theme ── */
 @theme {
-  --font-sans: 'Geist Variable', 'Noto Sans SC', system-ui, sans-serif;
-  --font-display: 'Bricolage Grotesque', 'Noto Sans SC', sans-serif;
-  --font-serif: 'Source Serif 4', 'Noto Serif SC', Georgia, serif;
+  --font-sans: 'Commissioner', 'Noto Sans SC', system-ui, sans-serif;
   --ease-glass: cubic-bezier(0.23, 1, 0.32, 1);
-  --ease-quart: cubic-bezier(0.25, 1, 0.5, 1);
 }
 
-/* ── Editorial Morning Light · 晨光编辑体 ── */
+/* ── Light Liquid Glass Design System ── */
 :root {
-  /* 纸感暖色板 */
-  --bg-paper:    oklch(0.97 0.012 75);
-  --bg-card:     oklch(0.99 0.006 75);
-  --ink-1:       oklch(0.20 0.018 60);
-  --ink-2:       oklch(0.42 0.012 60);
-  --ink-3:       oklch(0.62 0.008 60);
-  --moss:        oklch(0.55 0.090 145);
-  --ember:       oklch(0.66 0.13 50);
-  --chestnut:    oklch(0.32 0.05 30);
-  --line:        oklch(0.88 0.012 75);
-
-  /* shadcn 兼容映射 */
-  --background: transparent;
-  --foreground: var(--ink-1);
-  --card: var(--bg-card);
-  --card-foreground: var(--ink-1);
-  --popover: var(--bg-card);
-  --popover-foreground: var(--ink-1);
-  --primary: var(--moss);
-  --primary-foreground: oklch(0.99 0.006 75);
-  --secondary: oklch(0.94 0.010 75);
-  --secondary-foreground: var(--ink-1);
-  --muted: oklch(0.94 0.010 75);
-  --muted-foreground: var(--ink-3);
-  --accent: var(--ember);
-  --accent-foreground: oklch(0.99 0.006 75);
-  --destructive: oklch(0.55 0.18 30);
-  --border: var(--line);
-  --input: var(--line);
-  --ring: var(--moss);
-  --radius: 0.375rem;
-
-  /* 遗留变量（供其他页面兼容，不主动在新组件使用） */
   --blue: #2563EB;
   --blue-deep: #1d4ed8;
-  --text-1: var(--ink-1);
-  --text-2: var(--ink-2);
-  --text-3: var(--ink-3);
-  --bg: var(--bg-paper);
-
-  /* chart / sidebar 保留 */
-  --chart-1: oklch(0.55 0.090 145);
-  --chart-2: oklch(0.66 0.13 50);
-  --chart-3: oklch(0.32 0.05 30);
-  --chart-4: oklch(0.42 0.012 60);
-  --chart-5: oklch(0.62 0.008 60);
+  --text-1: #0f172a;
+  --text-2: #334155;
+  --text-3: #64748b;
+  --bg: #E8ECF1;
+  --background: transparent;
+  --foreground: var(--text-1);
+  --card: rgba(255, 255, 255, 0.75);
+  --card-foreground: var(--text-1);
+  --popover: rgba(255, 255, 255, 0.95);
+  --popover-foreground: var(--text-1);
+  --primary: var(--blue);
+  --primary-foreground: #ffffff;
+  --secondary: rgba(255, 255, 255, 0.50);
+  --secondary-foreground: var(--text-1);
+  --muted: rgba(255, 255, 255, 0.40);
+  --muted-foreground: var(--text-3);
+  --accent: rgba(255, 255, 255, 0.50);
+  --accent-foreground: var(--text-1);
+  --destructive: #ef4444;
+  --border: rgba(255, 255, 255, 0.35);
+  --input: rgba(255, 255, 255, 0.50);
+  --ring: var(--blue);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.205 0 0);
@@ -79,17 +64,18 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
-/* ── Background Canvas ── */
+/* ── Background Canvas ──
+   Single cool wash: soft blue radial at top-left on a cool-tinted off-white base.
+   Was: 4 radial gradients (blue/orange/teal/light-blue) — too busy for a work-focused app.
+*/
 @utility bg-canvas {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background-color: var(--bg);
+  background-color: oklch(0.975 0.006 240);
   background-image:
-    radial-gradient(circle 600px at 30% 20%, rgba(59,130,246,0.22), transparent),
-    radial-gradient(circle 520px at 75% 75%, rgba(251,146,60,0.16), transparent),
-    radial-gradient(circle 480px at 25% 65%, rgba(20,184,166,0.14), transparent),
-    radial-gradient(circle 400px at 60% 35%, rgba(147,197,253,0.14), transparent);
+    radial-gradient(ellipse 90% 70% at 15% 0%, oklch(0.90 0.05 240 / 0.55), transparent 65%),
+    radial-gradient(ellipse 70% 60% at 100% 100%, oklch(0.93 0.03 240 / 0.35), transparent 70%);
   background-attachment: fixed;
 }
 
@@ -322,6 +308,22 @@
   }
 }
 
+/* ── View Transitions (progressive enhancement) ── */
+@supports (view-transition-name: a) {
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 320ms;
+    animation-timing-function: var(--ease-glass);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation-duration: 0.01ms !important;
+  }
+}
+
+
 /* ── Typography tuning ── */
 body {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
@@ -511,9 +513,6 @@ main::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', 'Noto Sans SC', system-ui, sans-serif;
-  --font-display: 'Bricolage Grotesque', 'Noto Sans SC', sans-serif;
-  --font-serif: 'Source Serif 4', 'Noto Serif SC', Georgia, serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

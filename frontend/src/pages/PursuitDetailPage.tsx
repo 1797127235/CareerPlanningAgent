@@ -29,12 +29,13 @@ import { sendToCoach } from '@/hooks/useCoachTrigger'
 
 /* ─────────── constants ─────────── */
 
+// 3-color palette: blue=in-progress, green=success, red=failure, slate=abandoned
 const STATUS_CFG: Record<string, { bg: string; label: string }> = {
   applied:     { bg: '#2563EB', label: '已投递' },
-  screening:   { bg: '#7C3AED', label: '筛选中' },
-  scheduled:   { bg: '#D97706', label: '已约面' },
-  interviewed: { bg: '#EA580C', label: '已面试' },
-  debriefed:   { bg: '#0891B2', label: '已复盘' },
+  screening:   { bg: '#2563EB', label: '筛选中' },
+  scheduled:   { bg: '#2563EB', label: '已约面' },
+  interviewed: { bg: '#2563EB', label: '已面试' },
+  debriefed:   { bg: '#2563EB', label: '已复盘' },
   offer:       { bg: '#16A34A', label: 'Offer'  },
   rejected:    { bg: '#EF4444', label: '未通过' },
   withdrawn:   { bg: '#94A3B8', label: '已放弃' },
@@ -54,11 +55,12 @@ const ROUND_OPTIONS = ['笔试', '一面', '二面', '三面', 'HR面', '终面'
 
 const SELF_RATING = [
   { key: 'good',   label: '发挥好', color: '#16A34A' },
-  { key: 'medium', label: '正常',   color: '#D97706' },
+  { key: 'medium', label: '正常',   color: '#64748B' },
   { key: 'bad',    label: '较差',   color: '#EF4444' },
 ]
 
-const COLORS = ['#2563EB', '#7C3AED', '#0891B2', '#EA580C', '#16A34A', '#D97706']
+// Decorative cycling palette — blue+slate shades only, no rainbow
+const COLORS = ['#2563EB', '#475569', '#60A5FA', '#64748B', '#3B82F6', '#94A3B8']
 
 /* ─────────── helpers ─────────── */
 
@@ -617,7 +619,12 @@ export default function PursuitDetailPage() {
           <ArrowLeft className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-[20px] font-bold text-slate-900 truncate">{app.company || '未知公司'}</p>
+          <p
+            className="text-[20px] font-bold text-slate-900 truncate"
+            style={{ viewTransitionName: `record-app-${appId}` } as React.CSSProperties}
+          >
+            {app.company || '未知公司'}
+          </p>
           <p className="text-[13px] text-slate-500 mt-0.5 truncate">{app.position || '未命名岗位'}</p>
           <PipelineStatus status={app.status} onSelect={handleStatusChange} />
         </div>

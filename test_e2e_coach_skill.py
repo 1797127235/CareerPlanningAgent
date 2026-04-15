@@ -11,12 +11,11 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 
 from agent.agents.coach_agent import BASE_IDENTITY, create_coach_agent
-from agent.skills.loader import format_catalog_for_prompt, SkillLoader
+from agent.skills.loader import format_skills_for_prompt
 from agent.supervisor import build_context_summary
 from agent.tools.coach_context_tools import (
-    _ctx_profile, _ctx_goal, _ctx_user_id, _ctx_market_loader,
+    _ctx_profile, _ctx_goal, _ctx_user_id,
 )
-from agent.supervisor import _get_market_signal_for_node
 
 PROFILE = {
     "skills": [
@@ -52,8 +51,8 @@ def make_sys_prompt(msgs: list) -> str:
         "user_profile": PROFILE,
     }
     context = build_context_summary(state, agent_name="coach_agent")
-    skills_catalog = format_catalog_for_prompt()
-    return BASE_IDENTITY.replace("{SKILL_CATALOG}", skills_catalog).replace("{CONTEXT}", context)
+    skills = format_skills_for_prompt()
+    return BASE_IDENTITY.replace("{AVAILABLE_SKILLS}", skills).replace("{CONTEXT}", context)
 
 
 async def run_coach_turn(msgs: list) -> tuple[str, list[dict]]:
@@ -65,7 +64,6 @@ async def run_coach_turn(msgs: list) -> tuple[str, list[dict]]:
     tok_p = _ctx_profile.set(PROFILE)
     tok_g = _ctx_goal.set(GOAL)
     tok_u = _ctx_user_id.set(1)
-    tok_m = _ctx_market_loader.set(_get_market_signal_for_node)
 
     full_text = ""
     tool_calls_by_id: dict[str, dict] = {}
@@ -104,7 +102,7 @@ async def run_coach_turn(msgs: list) -> tuple[str, list[dict]]:
             if content:
                 full_text += content
     finally:
-        for var, tok in [(_ctx_profile, tok_p), (_ctx_goal, tok_g), (_ctx_user_id, tok_u), (_ctx_market_loader, tok_m)]:
+        for var, tok in [(_ctx_profile, tok_p), (_ctx_goal, tok_g), (_ctx_user_id, tok_u)]:
             try:
                 var.reset(tok)
             except Exception:

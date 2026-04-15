@@ -1,11 +1,7 @@
-"""Skill loader — Progressive Disclosure 版本。
-
-职责拆分：
-  - scan / catalog: 启动时加载 name + description，~500 tokens，永久驻留
-  - full: 按需加载 body，首次读文件 + memoize
+"""Skill loader — 扫 agent/skills/*/SKILL.md 加载所有 skill。
 
 遵循 Anthropic Skill 规范：目录 + SKILL.md 结构。
-LLM 读 catalog 后调 load_skill(name) tool 拿 full body，不做硬编码预匹配。
+LLM 读完所有 skill 的 description + body 自行判断该用哪个。
 """
 from __future__ import annotations
 
@@ -20,27 +16,24 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
-class SkillCatalogEntry:
-    """Lightweight metadata（只含 name + description + 目录路径）。"""
+class Skill:
     name: str
     description: str
-    path: Path  # skill 目录路径（load_full 用）
+    body: str
+    path: Path  # skill 目录路径，供未来 progressive disclosure 使用
 
 
 class SkillLoader:
-    """Skill 存储层。启动加载 catalog，body 按需 + cache。"""
-
-    _catalog: list[SkillCatalogEntry] = []
-    _body_cache: dict[str, str] = {}
+    _skills: list[Skill] = []
     _loaded: bool = False
 
     @classmethod
-    def load_catalog(cls, skills_dir: Optional[Path] = None) -> None:
-        """扫描所有子目录，只解析 frontmatter（快速启动）。"""
+    def load_all(cls, skills_dir: Optional[Path] = None) -> None:
+        """扫描 skills_dir 下所有子目录，加载其中的 SKILL.md。"""
         if skills_dir is None:
             skills_dir = Path(__file__).parent
 
-        catalog: list[SkillCatalogEntry] = []
+        skills: list[Skill] = []
         for sub_dir in sorted(skills_dir.iterdir()):
             if not sub_dir.is_dir() or sub_dir.name.startswith("__"):
                 continue
@@ -56,67 +49,43 @@ class SkillLoader:
                 if len(parts) < 3:
                     continue
                 frontmatter = yaml.safe_load(parts[1]) or {}
-                catalog.append(SkillCatalogEntry(
+                body = parts[2].strip()
+                skills.append(Skill(
                     name=frontmatter.get("name", sub_dir.name),
                     description=frontmatter.get("description", "").strip(),
+                    body=body,
                     path=sub_dir,
                 ))
             except Exception as e:
-                logger.warning("Failed to scan skill %s: %s", sub_dir.name, e)
+                logger.warning("Failed to load skill %s: %s", sub_dir.name, e)
 
-        cls._catalog = catalog
-        cls._body_cache = {}
+        cls._skills = skills
         cls._loaded = True
-        logger.info("SkillLoader catalog loaded: %d skills %s",
-                    len(catalog), [s.name for s in catalog])
+        logger.info("SkillLoader loaded %d skills: %s",
+                    len(skills), [s.name for s in skills])
 
     @classmethod
-    def all_catalog(cls) -> list[SkillCatalogEntry]:
+    def all_skills(cls) -> list[Skill]:
         if not cls._loaded:
-            cls.load_catalog()
-        return cls._catalog
-
-    @classmethod
-    def skill_names(cls) -> list[str]:
-        """用于 load_skill tool 的 docstring 动态注入。"""
-        return [s.name for s in cls.all_catalog()]
-
-    @classmethod
-    def load_full(cls, name: str) -> Optional[str]:
-        """按需加载 skill 的完整 body，memoize。
-
-        返回 None = skill 不存在。
-        """
-        if name in cls._body_cache:
-            return cls._body_cache[name]
-
-        entry = next((s for s in cls.all_catalog() if s.name == name), None)
-        if entry is None:
-            logger.warning("load_full: unknown skill %r", name)
-            return None
-
-        skill_file = entry.path / "SKILL.md"
-        try:
-            text = skill_file.read_text(encoding="utf-8")
-            parts = text.split("---", 2)
-            body = parts[2].strip() if len(parts) >= 3 else ""
-            cls._body_cache[name] = body
-            return body
-        except Exception as e:
-            logger.warning("load_full(%s) failed: %s", name, e)
-            return None
+            cls.load_all()
+        return cls._skills
 
 
-def format_catalog_for_prompt() -> str:
-    """把 catalog（name + description）拼成轻量 prompt 片段。
+def format_skills_for_prompt() -> str:
+    """把所有 skill 的 name + description + body 拼成 prompt 片段。
 
-    LLM 读 catalog 后判断需要哪个 skill，调 load_skill(name) 按需加载 body。
+    LLM 读这个片段后，根据用户本轮消息自行判断该应用哪个 skill（或都不应用）。
+    这是 Anthropic 官方 skill 激活机制——信任 LLM 的判断，不做硬编码预匹配。
     """
-    catalog = SkillLoader.all_catalog()
-    if not catalog:
+    skills = SkillLoader.all_skills()
+    if not skills:
         return "（尚无可用 skill）"
 
-    lines = ["## 可用场景 skill（读完本轮消息后判断是否需要其中某个，需要则调 `load_skill` 工具加载详细规则）", ""]
-    for s in catalog:
-        lines.append(f"- **{s.name}**: {s.description}")
-    return "\n".join(lines)
+    parts = []
+    for s in skills:
+        parts.append(f"### Skill: `{s.name}`")
+        parts.append(f"**适用场景**：{s.description}")
+        parts.append("")
+        parts.append(s.body)
+        parts.append("")
+    return "\n".join(parts)

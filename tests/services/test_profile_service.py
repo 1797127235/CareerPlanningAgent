@@ -11,7 +11,7 @@ import pytest
 @pytest.fixture(scope="session")
 def profile_service(graph_service):
     """Session-scoped ProfileService instance."""
-    from backend.services.profile import ProfileService
+    from backend.services.profile_service import ProfileService
     return ProfileService(graph_service)
 
 

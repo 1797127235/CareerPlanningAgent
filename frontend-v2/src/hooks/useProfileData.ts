@@ -17,7 +17,7 @@ export interface ManualProfilePayload {
 
 export function useProfileData(enabled = true) {
   const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(enabled)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)

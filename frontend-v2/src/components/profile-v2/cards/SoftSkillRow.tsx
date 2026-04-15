@@ -1,5 +1,3 @@
-import { PullQuote } from '@/components/editorial'
-
 const DIM_NAME: Record<string, string> = {
   communication: '沟通表达',
   learning: '学习成长',
@@ -30,21 +28,25 @@ export function SoftSkillRow({
   return (
     <div className="py-4 border-b border-[var(--line)] last:border-0">
       <div className="flex items-baseline gap-3 mb-1">
-        <span className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+        <span className="font-sans text-[var(--text-lg)] font-medium text-[var(--ink-1)]">
           {name}
         </span>
         {levelText && (
-          <span className="text-[12px] font-semibold text-[var(--chestnut)]">
+          <span className="text-[var(--text-xs)] font-semibold text-[var(--chestnut)]">
             · {levelText}
           </span>
         )}
       </div>
       {advice && (
-        <p className="text-[length:var(--fs-body)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
+        <p className="text-[var(--text-base)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
           {advice}
         </p>
       )}
-      {evidence && <PullQuote>{evidence}</PullQuote>}
+      {evidence && (
+        <p className="mt-2 font-serif italic text-[var(--text-base)] text-[var(--chestnut)]">
+          {evidence}
+        </p>
+      )}
     </div>
   )
 }

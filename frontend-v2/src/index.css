@@ -36,9 +36,9 @@
   --lh-ui: 1.4;
 
   /* Font families */
-  --font-sans: "Geist Variable", "Noto Sans SC", system-ui, sans-serif;
-  --font-serif: "Source Serif 4", "Noto Serif SC", Georgia, serif;
-  --font-display: "Bricolage Grotesque", "Noto Sans SC", system-ui, sans-serif;
+  --font-sans: "Commissioner Variable", "Noto Sans SC", system-ui, sans-serif;
+  --font-serif: "Literata Variable", "Noto Serif SC", Georgia, serif;
+  --font-display: "Commissioner Variable", "Noto Sans SC", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   font-family: var(--font-sans);
@@ -52,6 +52,7 @@
 body {
   margin: 0;
   min-height: 100svh;
+  font-size: var(--text-base);
 }
 
 * {
@@ -86,4 +87,84 @@ body::before {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+:root[data-theme='night'] {
+  /* 深枣青底，冷而有温度，不是纯黑 */
+  --bg-paper: oklch(0.20 0.015 215);
+  --bg-card: oklch(0.24 0.018 215);
+  --bg-paper-2: oklch(0.18 0.012 215);
+  --bg-card-hover: oklch(0.26 0.020 215);
+
+  /* 暖老纸色 ink on dark */
+  --ink-1: oklch(0.92 0.020 75);
+  --ink-2: oklch(0.75 0.018 70);
+  --ink-3: oklch(0.58 0.015 65);
+
+  /* 栗色在暗底上要提亮 */
+  --chestnut: oklch(0.68 0.095 40);
+  --ember: oklch(0.72 0.14 50);
+  --moss: oklch(0.62 0.10 150);
+
+  /* hairline 改为暗黄 */
+  --line: oklch(0.32 0.015 80);
+  --highlight: oklch(0.35 0.04 85);
+
+  /* 阴影几乎消失（深底不需要物理光影） */
+  --warm-shadow-1: oklch(0.10 0.02 220 / 0.40);
+  --warm-shadow-2: oklch(0.08 0.02 220 / 0.60);
+  --grain-color: oklch(0.85 0.02 75 / 0.020);
+}
+
+/* v3 Design Tokens — from .impeccable.md v3 */
+:root {
+  /* Colors */
+  --bg-paper: oklch(0.98 0.008 80);
+  --bg-paper-2: oklch(0.965 0.010 80);
+  --bg-card: oklch(0.995 0.005 80);
+  --bg-card-hover: oklch(0.985 0.008 80);
+
+  --ink-1: oklch(0.22 0.010 50);
+  --ink-2: oklch(0.48 0.010 50);
+  --ink-3: oklch(0.72 0.008 50);
+
+  --line: oklch(0.90 0.010 80);
+  --highlight: oklch(0.94 0.025 85);
+
+  --chestnut: oklch(0.42 0.10 30);
+  --chestnut-soft: oklch(0.92 0.04 30);
+  --moss: oklch(0.58 0.09 145);
+  --ember: oklch(0.65 0.13 40);
+  --ember-soft: oklch(0.94 0.04 40);
+
+  /* Type scale */
+  --text-2xs: 10px;
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 21px;
+  --text-2xl: 28px;
+  --text-3xl: 40px;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+  --space-9: 96px;
+
+  /* Elevation */
+  --shadow-block: 0 1px 2px oklch(0.50 0.02 50 / 0.06);
+  --shadow-float: 0 4px 12px oklch(0.50 0.02 50 / 0.10);
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 9999px;
 }

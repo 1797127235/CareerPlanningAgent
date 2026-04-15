@@ -16,7 +16,7 @@ def locate_on_graph(profile_json: str) -> str:
 
     try:
         from backend.services.graph_service import GraphService
-        from backend.services.profile import ProfileService
+        from backend.services.profile_service import ProfileService
 
         graph_svc = GraphService()
         graph_svc.load()
@@ -106,7 +106,7 @@ def score_profile(profile_json: str, node_id: str) -> str:
 
     try:
         from backend.services.graph_service import GraphService
-        from backend.services.profile import ProfileService
+        from backend.services.profile_service import ProfileService
 
         graph_svc = GraphService()
         graph_svc.load()

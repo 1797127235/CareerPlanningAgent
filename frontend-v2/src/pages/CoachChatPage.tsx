@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Kicker } from '@/components/editorial'
 import { ChatBubble } from '@/components/coach-v2'
 import { postChat } from '@/api/coach'
 import type { ChatMessage } from '@/types/coach'
@@ -60,13 +59,17 @@ export default function CoachChatPage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg-paper)] flex flex-col text-[var(--ink-1)]">
-      <div className="flex-1 max-w-[720px] mx-auto w-full px-6 md:px-12 lg:px-20 py-16">
-        <Kicker>CONVERSATION · 对话</Kicker>
-        <h1 className="font-display font-medium text-[length:var(--fs-display-md)] leading-[var(--lh-display)] tracking-tight">
-          和教练聊聊
-        </h1>
+      <div className="flex-1 max-w-[860px] mx-auto w-full px-[var(--space-6)] md:px-[var(--space-7)] py-[var(--space-6)]">
+        <div className="flex items-baseline gap-3 mb-6">
+          <span className="text-[var(--text-xs)] font-bold uppercase tracking-[0.22em] text-[var(--chestnut)]">
+            CONVERSATION · 对话
+          </span>
+          <span className="text-[var(--text-lg)] font-medium text-[var(--ink-1)]">
+            和教练聊聊
+          </span>
+        </div>
 
-        <div className="mt-10 space-y-6">
+        <div className="space-y-5">
           {messages.map((m, i) => (
             <ChatBubble key={i} role={m.role} text={m.content} />
           ))}
@@ -74,7 +77,7 @@ export default function CoachChatPage() {
             <ChatBubble role="assistant" text={streamBuffer} streaming />
           )}
           {errorMsg && !streaming && (
-            <p className="text-[length:var(--fs-body-sm)] text-[var(--ember)]">{errorMsg}</p>
+            <p className="text-[var(--text-sm)] text-[var(--ember)]">{errorMsg}</p>
           )}
         </div>
       </div>
@@ -82,19 +85,19 @@ export default function CoachChatPage() {
       <div className="sticky bottom-0 bg-[var(--bg-paper)] border-t border-[var(--line)]">
         <form
           onSubmit={handleSubmit}
-          className="max-w-[720px] mx-auto px-6 py-4 flex gap-3"
+          className="max-w-[860px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] py-4 flex gap-3"
         >
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="想到什么就写下来"
             disabled={streaming}
-            className="flex-1 bg-transparent border border-[var(--line)] rounded-full px-5 py-3 font-serif italic text-[length:var(--fs-body)] text-[var(--ink-1)] placeholder:text-[var(--ink-3)] outline-none focus:border-[var(--chestnut)]/60 transition-colors"
+            className="flex-1 bg-transparent border border-[var(--line)] rounded-full px-5 py-3 font-serif italic text-[var(--text-base)] text-[var(--ink-1)] placeholder:text-[var(--ink-3)] outline-none focus:border-[var(--chestnut)]/60 transition-colors"
           />
           <button
             type="submit"
             disabled={streaming || !input.trim()}
-            className="px-6 py-3 rounded-full bg-[var(--ink-1)] text-[var(--bg-paper)] text-[length:var(--fs-body)] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="px-6 py-3 rounded-full bg-[var(--ink-1)] text-[var(--bg-paper)] text-[var(--text-base)] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {streaming ? '发送中…' : '发送'}
           </button>

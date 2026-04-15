@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { motion, useScroll, useTransform, useSpring } from 'framer-motion'
 import { fetchGraphMap } from '@/api/graph'
 import { fetchProfile } from '@/api/profiles'
-import { Kicker, Chapter, PaperCard } from '@/components/editorial'
+import { Block, BlockGrid, DataRow, Tooltip } from '@/components/ui'
+import { GLOSSARY } from '@/lib/glossary'
 import type { GraphNode, Zone } from '@/types/graph'
 import type { ProfileData } from '@/types/profile'
 
@@ -42,30 +42,30 @@ const mockProfile: ProfileData = {
 }
 
 /* ── Helpers ── */
-const zoneMeta: Record<Zone, { numeral: string; label: string; title: string; intro: string }> = {
+const zoneMeta: Record<Zone, { label: string; title: string; intro: string; glossaryKey: keyof typeof GLOSSARY }> = {
   safe: {
-    numeral: 'I',
     label: '安全区',
     title: '稳扎稳打',
-    intro: '这些岗位门槛相对明确，技能体系成熟，市场需求稳定。如果你刚入行或希望稳步积累，这里是最好的起点。',
+    intro: '门槛明确，技能成熟，市场稳定。',
+    glossaryKey: 'zone_safe',
   },
   leverage: {
-    numeral: 'II',
     label: '杠杆区',
     title: '放大优势',
-    intro: '人类独特价值与 AI 工具结合得最紧密的方向。这里的岗位更看重判断力、架构思维和影响力，回报率也更高。',
+    intro: '人类价值与 AI 结合最紧密的方向。',
+    glossaryKey: 'zone_leverage',
   },
   transition: {
-    numeral: 'III',
     label: '过渡区',
     title: '变道加速',
-    intro: '技能半衰期较短，或行业正在剧烈重组。选择这里意味着更快的学习节奏，但也可能带来更大的不确定性。',
+    intro: '技能半衰期较短，学习节奏更快。',
+    glossaryKey: 'zone_transition',
   },
   danger: {
-    numeral: 'IV',
     label: '危险区',
     title: '谨慎踏入',
-    intro: '重复性高、标准化程度高的岗位正面临最大替代压力。如果已经身处其中，建议尽早向相邻 zone 迁移。',
+    intro: '重复性高、标准化程度高的岗位。',
+    glossaryKey: 'zone_danger',
   },
 }
 
@@ -81,136 +81,10 @@ function formatSalary(n?: number) {
   return `¥${Math.round(n / 1000)}K`
 }
 
-/* ── Components ── */
-function RoleCard({
-  node,
-  isFrom,
-  isTarget,
-  onClick,
-}: {
-  node: GraphNode
-  isFrom?: boolean
-  isTarget?: boolean
-  onClick: () => void
-}) {
-  return (
-    <div
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onClick()
-      }}
-      role="button"
-      tabIndex={0}
-      className="relative shrink-0 w-[280px] md:w-[320px] cursor-pointer group"
-      style={{ scrollSnapAlign: 'start' }}
-    >
-      <PaperCard className="h-full transition-transform duration-200 group-hover:-translate-y-1">
-        {(isFrom || isTarget) && (
-          <div className={`absolute -top-2 left-4 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${isTarget ? 'bg-[var(--chestnut)] text-white' : 'bg-[var(--moss)] text-white'}`}>
-            {isTarget ? '你想去那里' : '你现在在这里'}
-          </div>
-        )}
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <h3 className="font-display font-medium text-[length:var(--fs-body-lg)] leading-[var(--lh-display)] text-[var(--ink-1)] max-w-[20ch]">
-            {node.label}
-          </h3>
-          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-paper-2)] text-[var(--ink-3)] border border-[var(--line)]">
-            {levelLabel(node.career_level)}
-          </span>
-        </div>
-        <p className="text-[length:var(--fs-body-sm)] text-[var(--ink-3)] mb-2">{node.role_family}</p>
-        <p className="font-serif italic text-[length:var(--fs-body)] text-[var(--chestnut)] mb-3">
-          {formatSalary(node.salary_p50)}
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {(node.must_skills || []).slice(0, 3).map((s) => (
-            <span key={s} className="px-2 py-0.5 rounded-full border border-[var(--line)] text-[11px] text-[var(--ink-2)]">
-              {s}
-            </span>
-          ))}
-        </div>
-      </PaperCard>
-    </div>
-  )
-}
-
-function Carousel({
-  nodes,
-  fromNodeId,
-  targetNodeId,
-}: {
-  nodes: GraphNode[]
-  fromNodeId?: string
-  targetNodeId?: string
-}) {
-  const navigate = useNavigate()
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const onWheel = (e: WheelEvent) => {
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        e.preventDefault()
-        el.scrollLeft += e.deltaY
-      }
-    }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [])
-
-  return (
-    <div
-      ref={ref}
-      className="flex gap-4 overflow-x-auto pb-4"
-      style={{ scrollSnapType: 'x mandatory', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-    >
-      {nodes.map((n) => (
-        <RoleCard
-          key={n.node_id}
-          node={n}
-          isFrom={n.node_id === fromNodeId}
-          isTarget={n.node_id === targetNodeId}
-          onClick={() => navigate(`/role/${n.node_id}`)}
-        />
-      ))}
-    </div>
-  )
-}
-
-function PositionCards({
-  fromNode,
-  targetNode,
-}: {
-  fromNode?: GraphNode
-  targetNode?: GraphNode
-}) {
-  if (!fromNode && !targetNode) return null
-  return (
-    <div className="mt-8 flex flex-wrap gap-4">
-      {fromNode && (
-        <div className="px-4 py-3 rounded-lg border border-[var(--line)] bg-[var(--bg-card)]">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--moss)] mb-1">你现在在这里</p>
-          <p className="font-display font-medium text-[length:var(--fs-body)] text-[var(--ink-1)]">{fromNode.label}</p>
-        </div>
-      )}
-      {targetNode && (
-        <div className="px-4 py-3 rounded-lg border border-[var(--line)] bg-[var(--bg-card)]">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--chestnut)] mb-1">你想去那里</p>
-          <p className="font-display font-medium text-[length:var(--fs-body)] text-[var(--ink-1)]">{targetNode.label}</p>
-        </div>
-      )}
-    </div>
-  )
-}
-
 /* ── Main Page ── */
 export default function GraphPage() {
   const [isMock] = useState(() => new URLSearchParams(window.location.search).get('mock') === '1')
-  const containerRef = useRef<HTMLDivElement>(null)
-  const { scrollYProgress } = useScroll({ container: containerRef })
-  const rawProgress = useTransform(scrollYProgress, [0, 1], [0, 1])
-  const progress = useSpring(rawProgress, { stiffness: 100, damping: 30, restDelta: 0.001 })
+  const navigate = useNavigate()
 
   const mapQ = useQuery({
     queryKey: ['graph-map'],
@@ -248,72 +122,101 @@ export default function GraphPage() {
 
   if (mapQ.isLoading) {
     return (
-      <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-6">
-        <p className="font-serif italic text-[length:var(--fs-body-lg)] text-[var(--ink-2)]">正在绘制图谱…</p>
+      <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-[var(--space-5)]">
+        <p className="font-serif italic text-[var(--text-lg)] text-[var(--ink-2)]">正在绘制图谱…</p>
       </main>
     )
   }
 
   if (mapQ.error || nodes.length === 0) {
     return (
-      <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-6">
+      <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-[var(--space-5)]">
         <div className="text-center max-w-md">
-          <p className="font-sans text-[length:var(--fs-body-lg)] text-[var(--ink-1)]">图谱加载失败</p>
-          <p className="mt-2 text-[length:var(--fs-body)] text-[var(--ink-3)]">{mapQ.error instanceof Error ? mapQ.error.message : '暂无数据'}</p>
+          <p className="text-[var(--text-lg)] text-[var(--ink-1)]">图谱加载失败</p>
+          <p className="mt-2 text-[var(--text-base)] text-[var(--ink-3)]">{mapQ.error instanceof Error ? mapQ.error.message : '暂无数据'}</p>
         </div>
       </main>
     )
   }
 
   return (
-    <main
-      ref={containerRef}
-      className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)] overflow-y-auto"
-    >
-      {/* Progress bar */}
-      <div className="fixed top-0 left-0 right-0 h-1 bg-[var(--line)]/30 z-50">
-        <motion.div
-          className="h-full bg-[var(--chestnut)]"
-          style={{ scaleX: progress, transformOrigin: '0%' }}
-        />
-      </div>
-
-      <div className="max-w-[720px] mx-auto px-6 md:px-12 lg:px-20 pb-32">
-        {/* Prologue */}
-        <section className="pt-16 md:pt-24 pb-8">
-          <Kicker>EDITORIAL · 本期图谱</Kicker>
-          <h1 className="font-display font-medium text-[length:var(--fs-display-xl)] leading-[var(--lh-display)] tracking-tight text-[var(--ink-1)] max-w-[18ch]">
-            你的岗位图谱
+    <main className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
+      <div className="max-w-[960px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] py-[var(--space-6)]">
+        <section className="mb-[var(--space-5)]">
+          <h1 className="text-[var(--text-2xl)] font-semibold text-[var(--ink-1)] tracking-tight">
+            岗位图谱
           </h1>
-          <p className="mt-6 font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[58ch]">
-            我们把市场上的岗位按四个 zone 重新排列：安全区适合扎根，杠杆区适合放大优势，过渡区需要变道加速，危险区则提醒谨慎踏入。
+          <p className="mt-2 text-[var(--text-base)] text-[var(--ink-2)] max-w-[58ch]">
+            四个 zone 重新排列：安全区适合扎根，杠杆区适合放大优势，过渡区需要变道加速，危险区则提醒谨慎踏入。
           </p>
-          <PositionCards fromNode={fromNode} targetNode={targetNode} />
+          {(fromNode || targetNode) && (
+            <div className="mt-4 flex flex-wrap gap-3">
+              {fromNode && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-pill)] border border-[var(--line)] bg-[var(--bg-card)] text-[var(--text-sm)] text-[var(--ink-1)]">
+                  <span className="w-2 h-2 rounded-full bg-[var(--moss)]" />
+                  你现在在这里 · {fromNode.label}
+                </span>
+              )}
+              {targetNode && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-pill)] border border-[var(--line)] bg-[var(--bg-card)] text-[var(--text-sm)] text-[var(--ink-1)]">
+                  <span className="w-2 h-2 rounded-full bg-[var(--chestnut)]" />
+                  你想去那里 · {targetNode.label}
+                </span>
+              )}
+            </div>
+          )}
         </section>
 
-        {/* Chapters */}
-        {zones.map((zone) => {
-          const meta = zoneMeta[zone]
-          const list = grouped[zone]
-          if (list.length === 0) return null
-          return (
-            <Chapter key={zone} numeral={meta.numeral} label={meta.label} title={meta.title} intro={meta.intro}>
-              <Carousel nodes={list} fromNodeId={fromNodeId} targetNodeId={targetNodeId} />
-            </Chapter>
-          )
-        })}
+        <BlockGrid>
+          {zones.map((zone) => {
+            const meta = zoneMeta[zone]
+            const list = grouped[zone]
+            if (list.length === 0) return null
+            const isCurrentZone = fromNode?.zone === zone
+            return (
+              <Block
+                key={zone}
+                kicker={
+                  <Tooltip content={GLOSSARY[meta.glossaryKey].desc} storageKey={meta.glossaryKey}>
+                    <span>{meta.label}</span>
+                  </Tooltip>
+                }
+                title={meta.title}
+                accent={isCurrentZone}
+              >
+                <p className="text-[var(--text-sm)] text-[var(--ink-2)] mb-3">{meta.intro}</p>
+                <div className="space-y-1">
+                  {list.slice(0, 5).map((node) => (
+                    <div
+                      key={node.node_id}
+                      onClick={() => navigate(`/role/${node.node_id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') navigate(`/role/${node.node_id}`)
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      className="cursor-pointer rounded-[var(--radius-sm)] hover:bg-[var(--bg-paper-2)] transition-colors"
+                    >
+                      <DataRow
+                        label={node.label}
+                        value={
+                          <Tooltip content={GLOSSARY.p50.desc} storageKey="p50">
+                            <span>{formatSalary(node.salary_p50)}</span>
+                          </Tooltip>
+                        }
+                        hint={`${levelLabel(node.career_level)} · ${node.role_family}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Block>
+            )
+          })}
+        </BlockGrid>
 
-        {/* Epilogue */}
-        <section className="relative py-16 md:py-24 text-center">
-          <div className="max-w-[58ch] mx-auto">
-            <p className="font-sans text-[length:var(--fs-body)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] italic">
-              图谱会随市场变化而更新，但你的位置和目标，只由你自己定义。
-            </p>
-            <p className="mt-6 font-mono text-[length:var(--fs-caption)] text-[var(--ink-3)]">
-              generated at {new Date().toLocaleDateString('zh-CN')}
-            </p>
-          </div>
-        </section>
+        <p className="mt-[var(--space-6)] text-[var(--text-sm)] text-[var(--ink-3)] italic text-center">
+          图谱会随市场变化而更新，但你的位置和目标，只由你自己定义。
+        </p>
       </div>
     </main>
   )
