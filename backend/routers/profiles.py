@@ -1720,7 +1720,30 @@ def reset_profile(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Reset the user's profile to empty state (keeps the record, clears data)."""
+    """Reset the user's profile and wipe all profile-derived artifacts.
+
+    Previously this only cleared profile_json + CareerGoal. That left stale
+    ProjectRecord / JobApplication / Report / CoachResult / etc. in the DB,
+    which the report pipeline then mixed with a newly uploaded resume
+    (e.g. a "Muduo" project surviving into a new cardiac-imaging profile).
+
+    Now every per-user artifact that depends on the profile is cleared.
+    Kept: the user row, profile row (reset to blank), chat sessions +
+    notifications (unrelated to the profile).
+    """
+    # Lazy-import to keep top-of-file imports lean and stable.
+    from backend.db_models import (
+        CoachResult,
+        InterviewDebrief,
+        InterviewRecord,
+        JDDiagnosis,
+        JobApplication,
+        ProjectLog,
+        ProjectRecord,
+        Report,
+        SjtSession,
+    )
+
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     if not profile:
         return ok(message="画像已清空")
@@ -1730,8 +1753,55 @@ def reset_profile(
     profile.name = ""
     profile.source = "manual"
 
-    # Single-profile system: delete all career goals by user_id
-    # (profile_id filter alone misses residual rows from old multi-profile data)
+    # Children first (FK dependencies): project_logs → project_records,
+    # interview_records → job_applications (via application_id).
+    project_ids = [
+        pid for (pid,) in db.query(ProjectRecord.id)
+        .filter(ProjectRecord.user_id == user.id)
+        .all()
+    ]
+    if project_ids:
+        db.query(ProjectLog).filter(
+            ProjectLog.project_id.in_(project_ids)
+        ).delete(synchronize_session=False)
+
+    db.query(InterviewRecord).filter(
+        InterviewRecord.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    db.query(InterviewDebrief).filter(
+        InterviewDebrief.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    db.query(JobApplication).filter(
+        JobApplication.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    db.query(ProjectRecord).filter(
+        ProjectRecord.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    # Report history + JD diagnostic runs + coach results all bake in
+    # the old profile snapshot. Fresh upload must produce fresh reports.
+    db.query(Report).filter(
+        Report.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    db.query(JDDiagnosis).filter(
+        JDDiagnosis.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    db.query(CoachResult).filter(
+        CoachResult.user_id == user.id
+    ).delete(synchronize_session=False)
+
+    # SJT is profile-scoped (no user_id column); filter by the profile.id
+    # we just cleared.
+    db.query(SjtSession).filter(
+        SjtSession.profile_id == profile.id
+    ).delete(synchronize_session=False)
+
+    # Single-profile system: delete all career goals by user_id.
     db.query(CareerGoal).filter(
         CareerGoal.user_id == user.id
     ).delete(synchronize_session=False)
