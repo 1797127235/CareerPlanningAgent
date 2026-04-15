@@ -1,4 +1,4 @@
-import type { CoachResultDetail } from '@/types/coach'
+import type { CoachResultDetail, CoachResultListItem } from '@/types/coach'
 
 export const mockJdDiagnosis: CoachResultDetail = {
   id: 101,
@@ -78,3 +78,30 @@ export const mockInterviewReview: CoachResultDetail = {
   metadata: {},
   created_at: '2025-01-14T14:00:00Z',
 }
+
+export const mockCoachResultsList: CoachResultListItem[] = [
+  {
+    id: 101,
+    result_type: 'jd_diagnosis',
+    title: 'Bytedance · 后端开发工程师',
+    summary: '匹配度 68%，具备 3 项核心技能，还有 4 项缺口待补齐。',
+    metadata: { match_score: 68 },
+    created_at: '2025-01-10T08:00:00Z',
+  },
+  {
+    id: 102,
+    result_type: 'career_report',
+    title: '前端工程师 · 职业发展报告',
+    summary: '基于你的画像和市场需求，整理出未来 1-3 年的职业路径建议。',
+    metadata: {},
+    created_at: '2025-01-12T10:30:00Z',
+  },
+  {
+    id: 103,
+    result_type: 'interview_review',
+    title: '蚂蚁集团 · 前端一面复盘',
+    summary: '整体表现中等偏上，技术深度足够，但项目叙述的结构性可以更强。',
+    metadata: {},
+    created_at: '2025-01-14T14:00:00Z',
+  },
+]
