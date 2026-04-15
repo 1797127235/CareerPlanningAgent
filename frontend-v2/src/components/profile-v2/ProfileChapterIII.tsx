@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Chapter, ChapterOpener, DropCap } from '@/components/editorial'
+import { Chapter, ChapterOpener } from '@/components/editorial'
 import { SoftSkillRow, SjtCta } from './cards'
 import type { ProfileData } from '@/types/profile'
 
@@ -37,7 +37,7 @@ export function ProfileChapterIII({
         </h3>
         {hasSjt ? (
           <>
-            <DropCap>这是系统根据你的自评给出的观察，不是打分，只是一种描述方式。</DropCap>
+            <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">这是系统根据你的自评给出的观察，不是打分，只是一种描述方式。</p>
             <div className="mt-6">
               {sjtDims.map((d) => {
                 const info = softSkills[d]

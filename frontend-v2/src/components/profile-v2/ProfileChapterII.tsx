@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
-import { Chapter, ChapterOpener, DropCap } from '@/components/editorial'
+import { Chapter, ChapterOpener } from '@/components/editorial'
 import { SkillChips, KnowledgeChips } from './cards'
 import { SkillEdit } from './forms'
 import { updateProfile } from '@/api/profiles'
@@ -57,7 +57,7 @@ export function ProfileChapterII({ data, onRefresh }: { data: ProfileData; onRef
         <h3 className="font-sans text-[13px] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-3">
           2.1 · 技能清单
         </h3>
-        <DropCap>下面是你告诉系统的技能，以及你对自己熟练度的估计。随时可以调整。</DropCap>
+        <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">下面是你告诉系统的技能，以及你对自己熟练度的估计。随时可以调整。</p>
         <div className="mt-6">
           <SkillChips skills={skills} onDelete={handleDeleteSkill} />
         </div>

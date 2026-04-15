@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Chapter, ChapterOpener, DropCap } from '@/components/editorial'
+import { Chapter, ChapterOpener } from '@/components/editorial'
 import { GoalCard, RecommendationCard } from './cards'
 import type { ProfileData } from '@/types/profile'
 import type { Recommendation } from './cards/RecommendationCard'
@@ -38,7 +38,7 @@ export function ProfileChapterIV({
           <GoalCard goal={goal} onExplore={onExploreGoal} onChange={onChangeGoal} />
         ) : (
           <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-card)] p-5 md:p-6">
-            <DropCap>还没有明确的目标 —— 这很正常。</DropCap>
+            <p className="text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">还没有明确的目标 —— 这很正常。</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button className="px-4 py-2 rounded-full bg-[var(--chestnut)] text-white text-[13px] font-medium hover:opacity-90">
                 让 AI 帮我推荐

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
-import { Chapter, ChapterOpener, DropCap } from '@/components/editorial'
+import { Chapter, ChapterOpener } from '@/components/editorial'
 import { EducationCard, InternshipCard, ProjectCard } from './cards'
 import { EducationEdit, InternshipEdit, ProjectEdit } from './forms'
 import { updateProfile } from '@/api/profiles'
@@ -48,13 +48,13 @@ export function ProfileChapterI({ data, onRefresh }: { data: ProfileData; onRefr
       {/* 1.1 教育背景 */}
       <div className="mt-8">
         <h3 className="font-sans text-[13px] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-3">
-          1.1 · 你在读什么
+          1.1 · 你在读哪里
         </h3>
         {education?.school ? (
-          <DropCap>
+          <p className="text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">
             你在 {education.school} 学 {education.major || '…'}，
             {experienceYears > 0 ? `已有 ${experienceYears} 年经验。` : '目前还在积累经验的路上。'}
-          </DropCap>
+          </p>
         ) : (
           <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有教育背景记录 —— 有也好，没有也行，这些都可以晚点补。</p>
         )}

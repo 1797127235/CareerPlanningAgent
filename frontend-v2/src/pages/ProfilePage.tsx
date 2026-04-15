@@ -146,9 +146,7 @@ export default function ProfilePage() {
     <main className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
       <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={onFileSelected} />
 
-      <div className="max-w-[1200px] mx-auto px-6 md:px-12 lg:px-20 pb-32">
-        <div className="lg:grid lg:grid-cols-[1fr_200px] lg:gap-12">
-          <div className="max-w-[720px] mx-auto lg:mx-0">
+      <div className="max-w-[720px] mx-auto px-6 md:px-12 lg:px-20 pb-32">
             <ProfilePrologue
               hasProfile={hasProfile}
               name={data?.name}
@@ -190,20 +188,18 @@ export default function ProfilePage() {
                 />
               </>
             )}
-          </div>
-
-          {hasProfile && (
-            <TableOfContents
-              items={[
-                { id: 'chapter-1', numeral: 'I', label: '你从哪里来' },
-                { id: 'chapter-2', numeral: 'II', label: '你会什么' },
-                { id: 'chapter-3', numeral: 'III', label: '你是怎样的人' },
-                { id: 'chapter-4', numeral: 'IV', label: '你想去哪' },
-              ]}
-            />
-          )}
-        </div>
       </div>
+
+      {hasProfile && (
+        <TableOfContents
+          items={[
+            { id: 'chapter-1', numeral: 'I', label: '你从哪里来' },
+            { id: 'chapter-2', numeral: 'II', label: '你会什么' },
+            { id: 'chapter-3', numeral: 'III', label: '你是怎样的人' },
+            { id: 'chapter-4', numeral: 'IV', label: '你想去哪' },
+          ]}
+        />
+      )}
 
       {/* Name prompt modal */}
       {showNamePrompt && (
