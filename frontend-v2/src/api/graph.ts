@@ -63,3 +63,13 @@ export async function addCareerGoal(
   })
 }
 
+export async function patchCareerGoalGaps(
+  gap_skills: string[],
+  source: string,
+): Promise<{ ok: boolean; gap_count: number; target_label: string }> {
+  return rawFetch('/graph/career-goal/gaps', {
+    method: 'PATCH',
+    body: JSON.stringify({ gap_skills, source }),
+  })
+}
+

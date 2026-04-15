@@ -1,7 +1,7 @@
 import { rawFetch } from '@/api/client'
 import type { JobApplication, CreateApplicationRequest, ApplicationStatus, QAItem } from '@/types/application'
 
-const BASE = '/api/applications'
+const BASE = '/applications'
 
 export const listApplications = (): Promise<JobApplication[]> =>
   rawFetch<JobApplication[]>(BASE)
