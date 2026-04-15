@@ -6,10 +6,16 @@ interface PrologueProps {
   regenerating?: boolean
 }
 
+function fmtDate(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return iso
+  return d.toISOString().slice(0, 10)
+}
+
 export function Prologue({ target, matchScore, generatedAt, onRegenerate, regenerating }: PrologueProps) {
-  const date = new Date(generatedAt).toISOString().slice(0, 10)
+  const date = fmtDate(generatedAt)
   return (
-    <header className="pt-6 md:pt-8 pb-8">
+    <header className="pt-6 md:pt-8 pb-4">
       <p className="flex items-center gap-2 text-[11px] font-bold tracking-[0.22em] uppercase text-slate-400 mb-3">
         <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-500" />
         职业生涯发展报告

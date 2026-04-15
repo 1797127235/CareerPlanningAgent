@@ -11,6 +11,7 @@ export { TableOfContents } from './TableOfContents'
 
 // ── Narrative report chapters (4-act structure) ──
 export { Prologue } from './Prologue'
+export { HistoryStrip } from './HistoryStrip'
 export { ChapterI } from './ChapterI'
 export { ChapterII } from './ChapterII'
 export { ChapterIII } from './ChapterIII'

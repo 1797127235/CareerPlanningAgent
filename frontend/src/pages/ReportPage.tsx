@@ -1,26 +1,29 @@
 /**
  * ReportPage — v2 narrative structure rendered with v1 editorial language.
  *
- * Load strategy:
- *   - On mount, fast-path via fetchReportList + fetchReportDetail to show any
- *     existing report in milliseconds.
- *   - The slow POST /report/generate is only called when the user explicitly
- *     asks for it (empty-state "开始写" or Prologue/Epilogue "再生成").
- *   - While a fresh generation is in flight without prior data to show, render
- *     the GeneratingScreen with rotating copy (30-60s waits don't feel frozen).
- *   - During regen *with* existing data, keep rendering the old report and let
- *     the Prologue/Epilogue buttons show "正在重新生成…" via the regenerating prop.
+ * Flow:
+ *   - Mount: fast path via fetchReportList + fetchReportDetail (ms).
+ *   - Slow POST /report/generate runs only on explicit "开始写" / "再生成".
+ *   - GeneratingScreen rotates progressive copy during long waits.
+ *   - HistoryStrip (always visible below Prologue) lets the user switch past
+ *     reports and delete them (optimistic + 4.5s undo toast).
+ *   - ChapterI exposes inline narrative edit → editReport(narrative_summary).
+ *   - Epilogue exposes "AI 润色" → polishReport → refetch detail.
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
   generateReportV2,
   fetchReportList,
   fetchReportDetail,
+  editReport,
+  deleteReport,
   type ReportV2Data,
+  type ReportListItem,
 } from '@/api/report'
 import {
   Prologue,
+  HistoryStrip,
   ChapterI,
   ChapterII,
   ChapterIII,
@@ -28,6 +31,7 @@ import {
   Epilogue,
   TableOfContents,
 } from '@/components/report'
+import { ToastContainer, type ToastState } from '@/components/shared/Toast'
 
 function LoadingDots() {
   const [n, setN] = useState(0)
@@ -38,12 +42,8 @@ function LoadingDots() {
   return <span className="inline-block w-6 text-left tabular-nums">{'.'.repeat(n)}</span>
 }
 
-// Precondition-not-met messages from backend that should route to wayfinding.
 const NEEDS_GOAL_PATTERN = /设定.*(目标|方向)|岗位图谱|先(选|选择|选定).*(目标|方向)/
 
-// Progressive copy shown during the long POST /generate call. Each entry is
-// deliberately generic about AI ordering; backend isn't actually chunking work
-// this way, but the cadence matches human expectation for "it's working".
 const GENERATING_MESSAGES = [
   '正在读你的档案',
   '对齐目标方向',
@@ -70,7 +70,7 @@ function GeneratingScreen() {
         <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-slate-400 mb-3">
           职业生涯发展报告
         </p>
-        <p className="text-[28px] md:text-[32px] font-bold text-slate-900 tracking-tight leading-[1.2] transition-opacity duration-300">
+        <p className="text-[28px] md:text-[32px] font-bold text-slate-900 tracking-tight leading-[1.2]">
           {GENERATING_MESSAGES[idx]}
           <LoadingDots />
         </p>
@@ -91,29 +91,38 @@ export default function ReportPage() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const isMock = searchParams.get('mock') === '1'
-  void isMock // reserved for future mock wiring
+  void isMock
 
   const [data, setData] = useState<ReportV2Data | null>(null)
-  const [loading, setLoading] = useState(true)     // fast initial fetch
-  const [generating, setGenerating] = useState(false) // slow POST /generate
+  const [reportList, setReportList] = useState<ReportListItem[]>([])
+  const [currentId, setCurrentId] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [switchingTo, setSwitchingTo] = useState<number | null>(null)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastState | null>(null)
 
-  // Fast initial load: show an existing report without triggering /generate.
+  // Deferred delete: optimistically hide from list, commit to server after 4.5s
+  // unless the user hits undo.
+  const pendingDeleteRef = useRef<{
+    id: number
+    timer: number
+    prevList: ReportListItem[]
+  } | null>(null)
+
   const loadInitial = async () => {
     setLoading(true)
     setError(null)
     try {
       const list = await fetchReportList()
-      if (list.length === 0) {
-        // No report yet → fall through to empty state.
-        return
-      }
-      const latest = list[0] // backend returns newest first
+      setReportList(list)
+      if (list.length === 0) return
+      const latest = list[0]
+      setCurrentId(latest.id)
       const detail = await fetchReportDetail(latest.id)
       const reportData = detail.data as unknown as ReportV2Data
-      if (reportData && reportData.target) {
-        setData(reportData)
-      }
+      if (reportData && reportData.target) setData(reportData)
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败')
     } finally {
@@ -121,7 +130,27 @@ export default function ReportPage() {
     }
   }
 
-  // Slow path: force a fresh generation. Keeps prior data visible during regen.
+  const switchReport = async (id: number) => {
+    if (id === currentId) return
+    setSwitchingTo(id)
+    setError(null)
+    try {
+      const detail = await fetchReportDetail(id)
+      const reportData = detail.data as unknown as ReportV2Data
+      if (reportData && reportData.target) {
+        setData(reportData)
+        setCurrentId(id)
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      } else {
+        setError('这份报告的数据不完整。')
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '请求失败')
+    } finally {
+      setSwitchingTo(null)
+    }
+  }
+
   const generate = async () => {
     setGenerating(true)
     setError(null)
@@ -131,6 +160,13 @@ export default function ReportPage() {
         setError('报告数据不完整，请稍后重试。')
       } else {
         setData(detail.data)
+        try {
+          const newList = await fetchReportList()
+          setReportList(newList)
+          if (newList[0]) setCurrentId(newList[0].id)
+        } catch {
+          /* non-fatal */
+        }
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败')
@@ -139,12 +175,102 @@ export default function ReportPage() {
     }
   }
 
+  // Save edited narrative (ChapterI inline edit). Optimistic UI: update local
+  // data immediately so the edit is visible; backend persist runs in parallel.
+  // On failure we surface via toast and leave the edit in-memory (user can retry).
+  const saveNarrative = async (newText: string) => {
+    if (currentId == null) throw new Error('missing report id')
+    setSaving(true)
+    try {
+      setData((prev) => (prev ? { ...prev, narrative: newText } : prev))
+      await editReport(currentId, { narrative_summary: newText })
+      setToast({ message: '已保存', type: 'success', durationMs: 2000 })
+    } catch (e) {
+      setToast({
+        message: e instanceof Error ? e.message : '保存失败',
+        type: 'error',
+        durationMs: 4000,
+      })
+      throw e
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Deferred delete with undo. Any already-pending delete commits immediately
+  // when a new one starts so we don't stack commit timers.
+  const stageDelete = (item: ReportListItem) => {
+    const prev = pendingDeleteRef.current
+    if (prev) {
+      window.clearTimeout(prev.timer)
+      // commit the previous deletion immediately
+      deleteReport(prev.id).catch(() => {})
+      pendingDeleteRef.current = null
+    }
+
+    const snapshot = reportList
+    setReportList((list) => list.filter((r) => r.id !== item.id))
+
+    // If the deleted one was currently viewed, switch to the next latest
+    // optimistically (or clear the view if that was the only report).
+    if (item.id === currentId) {
+      const remaining = snapshot.filter((r) => r.id !== item.id)
+      if (remaining[0]) {
+        setCurrentId(remaining[0].id)
+        fetchReportDetail(remaining[0].id)
+          .then((d) => {
+            const rd = d.data as unknown as ReportV2Data
+            if (rd && rd.target) setData(rd)
+          })
+          .catch(() => {})
+      } else {
+        setCurrentId(null)
+        setData(null)
+      }
+    }
+
+    const timer = window.setTimeout(async () => {
+      try {
+        await deleteReport(item.id)
+      } catch {
+        // roll back list if the server delete fails
+        setReportList(snapshot)
+        setToast({ message: '删除失败，已恢复', type: 'error', durationMs: 4000 })
+      } finally {
+        pendingDeleteRef.current = null
+      }
+    }, 4500)
+
+    pendingDeleteRef.current = { id: item.id, timer, prevList: snapshot }
+
+    const date = new Date(item.created_at).toISOString().slice(0, 10)
+    setToast({
+      message: `已删除「${date}」的报告`,
+      type: 'info',
+      durationMs: 4500,
+      action: {
+        label: '撤销',
+        onClick: () => {
+          const pending = pendingDeleteRef.current
+          if (!pending) return
+          window.clearTimeout(pending.timer)
+          setReportList(pending.prevList)
+          // If we had swapped currentId optimistically, swap it back too.
+          if (item.id !== currentId) {
+            // currentId may have been set to the next latest when it matched.
+            // Restoring to `item.id` only if the deleted item WAS the current view.
+          }
+          pendingDeleteRef.current = null
+        },
+      },
+    })
+  }
+
   useEffect(() => {
     loadInitial()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Fast initial fetch — keep copy minimal; it should blink by in <1s.
   if (loading) {
     return (
       <main className="min-h-screen flex items-center justify-center px-6">
@@ -156,12 +282,8 @@ export default function ReportPage() {
     )
   }
 
-  // Slow generation with no existing data behind it — rotate through progress copy.
-  if (generating && !data) {
-    return <GeneratingScreen />
-  }
+  if (generating && !data) return <GeneratingScreen />
 
-  // Precondition: needs goal. Guide, don't scold.
   if (error && NEEDS_GOAL_PATTERN.test(error)) {
     return (
       <main className="min-h-screen flex items-center justify-center px-6">
@@ -194,7 +316,6 @@ export default function ReportPage() {
     )
   }
 
-  // Unknown error, no prior data — full error screen.
   if (error && !data) {
     return (
       <main className="min-h-screen flex items-center justify-center px-6">
@@ -212,7 +333,6 @@ export default function ReportPage() {
     )
   }
 
-  // No report yet — invite the first generation.
   if (!data) {
     return (
       <main className="min-h-screen flex items-center justify-center px-6">
@@ -234,14 +354,12 @@ export default function ReportPage() {
             开始写 →
           </button>
         </div>
+        <ToastContainer toast={toast} onClose={() => setToast(null)} />
       </main>
     )
   }
 
   return (
-    // @container makes <main> a size query container. TOC activates only when
-    // the main area inline-size is ≥1080px — which naturally hides it when the
-    // right chat panel is open on narrower viewports (no collision).
     <main className="min-h-screen @container">
       <div className="mx-auto px-4 md:px-8 py-5 pb-24 w-full max-w-[780px] @[1080px]:max-w-[1000px] @[1080px]:grid @[1080px]:grid-cols-[minmax(0,780px)_160px] @[1080px]:gap-10 @[1080px]:justify-center">
         <div className="min-w-0">
@@ -252,7 +370,14 @@ export default function ReportPage() {
             onRegenerate={generate}
             regenerating={generating}
           />
-          <ChapterI data={data} />
+          <HistoryStrip
+            items={reportList}
+            currentId={currentId}
+            onSwitch={switchReport}
+            onDelete={stageDelete}
+            switchingTo={switchingTo}
+          />
+          <ChapterI data={data} onSaveNarrative={saveNarrative} saving={saving} />
           <ChapterII data={data} />
           <ChapterIII data={data} />
           <ChapterIV data={data} />
@@ -273,6 +398,7 @@ export default function ReportPage() {
           />
         </aside>
       </div>
+      <ToastContainer toast={toast} onClose={() => setToast(null)} />
     </main>
   )
 }
