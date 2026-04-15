@@ -193,6 +193,37 @@ export default function HomePage() {
                 </PaperCard>
               </div>
             </Chapter>
+
+            <Chapter numeral="II" label="最近动向" title="最近的变化">
+              <div className="font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)] max-w-[68ch] space-y-4">
+                <p>
+                  你上次更新档案是 {formatRelativeTime(profile?.updated_at)}。
+                  {report
+                    ? `报告还留在 ${formatRelativeTime(report.created_at)} 那版 —— 如果最近有新经历，值得重新跑一次。`
+                    : '报告还没有生成 —— 准备好了就去试试。'}
+                </p>
+                {pulse && pulse.current_streak_weeks > 0 ? (
+                  <p>
+                    成长日志里，你已连续记录了 {pulse.current_streak_weeks} 周。
+                  </p>
+                ) : (
+                  <p>
+                    成长日志还是空白 —— 第一笔从哪里开始都可以。
+                  </p>
+                )}
+              </div>
+            </Chapter>
+
+            <section className="relative py-16 md:py-24 text-center">
+              <div className="max-w-[58ch] mx-auto">
+                <p className="font-sans text-[length:var(--fs-body)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] italic">
+                  档案只给自己看，但每一步都算数。
+                </p>
+                <p className="mt-6 font-mono text-[length:var(--fs-caption)] text-[var(--ink-3)]">
+                  v2.0 · {new Date().toLocaleDateString('zh-CN')} · 编辑部
+                </p>
+              </div>
+            </section>
           </div>
         </div>
       )}
