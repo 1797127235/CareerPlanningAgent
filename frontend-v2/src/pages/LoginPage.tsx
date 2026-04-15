@@ -58,8 +58,20 @@ export default function LoginPage() {
         transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
         className="w-full max-w-[420px]"
       >
-        <p className="font-sans text-[13px] font-bold uppercase tracking-[0.22em] text-[var(--chestnut)] mb-5">
-          Editorial · 职途智析
+        <p
+          className="text-[var(--chestnut)] mb-2"
+          style={{
+            fontFamily: 'var(--font-serif)',
+            fontStyle: 'italic',
+            fontSize: 'clamp(26px, 2.8vw, 38px)',
+            lineHeight: 1.2,
+            fontWeight: 500,
+          }}
+        >
+          职途智析
+        </p>
+        <p className="font-sans text-[11px] font-bold uppercase tracking-[0.22em] text-[var(--ink-3)] mb-8">
+          Editorial Entry · 入口
         </p>
 
         <AnimatePresence mode="wait">
@@ -69,7 +81,13 @@ export default function LoginPage() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.2 }}
-            className="font-display font-medium text-[var(--fs-display-lg)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight"
+            className="text-[var(--ink-1)] tracking-tight"
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontSize: 'var(--fs-display-lg)',
+              fontWeight: 500,
+              lineHeight: 'var(--lh-display)',
+            }}
           >
             {tab === 'login' ? '登录' : '注册'}
           </motion.h1>
