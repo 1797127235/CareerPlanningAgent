@@ -130,25 +130,16 @@ def get_market_signal(direction: str) -> str:
         timing = signal.get("timing_label", "")
         ai_label = signal.get("ai_label", "")
         top_inds = signal.get("top_industries", []) or []
-        base = signal.get("baseline_year", 2021)
-        cmp_yr = signal.get("compare_year", 2024)
 
-        from datetime import date as _date
-        today = _date.today()
-
-        # 数据里的 timing_label 常含"现在"（如"现在进入正是时候"），今日已距窗口 2+ 年，替换成窗口期表述避免误导
-        for stale_word in ("现在", "目前", "当下"):
-            timing = timing.replace(stale_word, f"{cmp_yr} 年时")
-
-        header = f"{resolved} 招聘趋势（观察窗口 {base}→{cmp_yr}；今日 {today.isoformat()}）"
+        header = f"{resolved} 市场数据"
         if resolved != direction.strip():
             header += f"  [用户说的「{direction}」解析为「{resolved}」]"
 
         lines = [
             header + "：",
-            f"- 需求变化：{demand:+.0f}%（{cmp_yr} 相对 {base} 基线）",
+            f"- 需求变化：{demand:+.0f}%",
             f"- 薪资年涨：{salary:+.1f}%",
-            f"- 时机标签：{timing}",
+            f"- 时机：{timing}",
         ]
         if ai_label:
             lines.append(f"- AI 渗透：{ai_label}")
@@ -157,11 +148,6 @@ def get_market_signal(direction: str) -> str:
                 (i.get("industry", "") or "")[:10] for i in top_inds[:3]
             )
             lines.append(f"- 主要招聘行业：{ind_names}")
-
-        lines.append(
-            f"注：以上是 {base}→{cmp_yr} 观察到的趋势，不是当前快照（今日 {today.year}-{today.month:02d}）。"
-            f"回复时用「过去三年/截至 {cmp_yr}/近年」等表达，**不要用「现在/目前/当下」**——数据窗口已结束 {today.year - cmp_yr} 年。"
-        )
 
         return "\n".join(lines)
     except Exception as e:
