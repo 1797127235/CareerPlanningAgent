@@ -57,3 +57,33 @@ body {
 * {
   box-sizing: border-box;
 }
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background-image: url("/noise.svg");
+  opacity: 0.025;
+  mix-blend-mode: multiply;
+}
+
+#root > * {
+  position: relative;
+  z-index: 2;
+}
+
+:root {
+  --shadow-paper: 0 1px 2px var(--warm-shadow-1), 0 4px 12px var(--warm-shadow-2);
+  --shadow-chapter: 0 2px 4px var(--warm-shadow-1), 0 12px 40px var(--warm-shadow-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
