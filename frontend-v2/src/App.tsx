@@ -7,6 +7,7 @@ import LoginPage from './pages/LoginPage'
 import CoachResultPage from './pages/CoachResultPage'
 import CoachResultsListPage from './pages/CoachResultsListPage'
 import CoachChatPage from './pages/CoachChatPage'
+import GraphPage from './pages/GraphPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -21,6 +22,7 @@ function App() {
         <Route path="/coach/chat" element={<CoachChatPage />} />
         <Route path="/coach/results" element={<CoachResultsListPage />} />
         <Route path="/coach/result/:id" element={<CoachResultPage />} />
+        <Route path="/graph" element={<GraphPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
