@@ -1,1 +1,6 @@
-// coach-v2 component barrel — populated in C2/C3/C4
+export * from './EditorialMarkdown'
+export * from './CoachResultPrologue'
+export * from './JdDiagnosisChapters'
+export * from './MarkdownNarrativeView'
+export * from './NextStepsCard'
+export * from './CoachResultEpilogue'

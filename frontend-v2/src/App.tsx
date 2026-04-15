@@ -4,6 +4,7 @@ import DemoPage from './pages/DemoPage'
 import ReportPage from './pages/ReportPage'
 import ProfilePage from './pages/ProfilePage'
 import LoginPage from './pages/LoginPage'
+import CoachResultPage from './pages/CoachResultPage'
 import NotFoundPage from './pages/NotFoundPage'
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
         <Route path="/report" element={<ReportPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/coach/result/:id" element={<CoachResultPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
