@@ -1,6 +1,6 @@
 import { useSearchParams, Link } from 'react-router-dom'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { listCoachResults, deleteCoachResult } from '@/api/coach'
+import { useQuery } from '@tanstack/react-query'
+import { listCoachResults } from '@/api/coach'
 import { ResultListRow } from '@/components/coach-v2'
 import { mockCoachResultsList } from '@/components/coach-v2/mockData'
 import { Kicker } from '@/components/editorial'
@@ -8,19 +8,12 @@ import { Kicker } from '@/components/editorial'
 export default function CoachResultsListPage() {
   const [searchParams] = useSearchParams()
   const isMock = searchParams.get('mock') === '1'
-  const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['coach-results'],
     queryFn: listCoachResults,
+    enabled: !isMock,
     initialData: isMock ? mockCoachResultsList : undefined,
-  })
-
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => deleteCoachResult(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['coach-results'] })
-    },
   })
 
   const items = data || []
