@@ -6,11 +6,11 @@ import { splitParagraphs, firstSentence } from './reportUtils'
 
 interface ChapterIProps {
   data: ReportV2Data
-  onSaveNarrative?: (text: string) => Promise<void>
+  onSave?: (text: string) => Promise<void>
   saving?: boolean
 }
 
-export function ChapterI({ data, onSaveNarrative, saving }: ChapterIProps) {
+export function ChapterI({ data, onSave, saving }: ChapterIProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
@@ -47,11 +47,11 @@ export function ChapterI({ data, onSaveNarrative, saving }: ChapterIProps) {
     setEditing(false)
   }
   const save = async () => {
-    if (!onSaveNarrative) return
+    if (!onSave) return
     const trimmed = draft.trim()
     if (!trimmed) return
     try {
-      await onSaveNarrative(trimmed)
+      await onSave(trimmed)
       setEditing(false)
     } catch {
       // keep draft; parent surfaces the error
@@ -91,8 +91,8 @@ export function ChapterI({ data, onSaveNarrative, saving }: ChapterIProps) {
           </div>
         ) : (
           <>
-            {onSaveNarrative && (
-              <div className="flex justify-end mb-2 -mt-2">
+            {onSave && (
+              <div className="flex justify-end mb-2 -mt-2 print:hidden">
                 <button
                   onClick={enterEdit}
                   className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-slate-900 transition-colors cursor-pointer"

@@ -32,7 +32,7 @@ export function HistoryStrip({
   if (items.length === 0) return null
 
   return (
-    <div className="my-10 border-t border-b border-slate-200 py-4">
+    <div className="my-10 border-t border-b border-slate-200 py-4 print:hidden">
       <div className="flex items-baseline gap-6">
         <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400">
           历史 · {items.length} 份

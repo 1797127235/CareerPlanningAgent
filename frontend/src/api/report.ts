@@ -78,6 +78,9 @@ export interface ReportV2Data {
     potential: number | null
   }
   narrative: string
+  /** User-written overrides, keyed "chapter-1" .. "chapter-4".
+   * When present, chapters prefer the override text over AI-generated prose. */
+  chapter_narratives?: Record<string, string>
   diagnosis: Array<{
     source: string
     source_type: string

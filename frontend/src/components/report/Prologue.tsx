@@ -42,7 +42,7 @@ export function Prologue({ target, matchScore, generatedAt, onRegenerate, regene
           <button
             onClick={onRegenerate}
             disabled={regenerating}
-            className="font-semibold text-slate-900 border-b-2 border-slate-900 pb-0.5 hover:border-blue-700 hover:text-blue-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
+            className="font-semibold text-slate-900 border-b-2 border-slate-900 pb-0.5 hover:border-blue-700 hover:text-blue-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait print:hidden"
           >
             {regenerating ? '正在重新生成…' : '再生成 →'}
           </button>

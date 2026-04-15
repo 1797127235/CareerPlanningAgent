@@ -175,15 +175,25 @@ export default function ReportPage() {
     }
   }
 
-  // Save edited narrative (ChapterI inline edit). Optimistic UI: update local
-  // data immediately so the edit is visible; backend persist runs in parallel.
-  // On failure we surface via toast and leave the edit in-memory (user can retry).
-  const saveNarrative = async (newText: string) => {
+  // Save edited chapter prose. Key "narrative" targets Chapter I (the flat
+  // narrative field, via narrative_summary). Any other key targets
+  // chapter_narratives[key] as a user override — chapters read this in
+  // preference to the AI-generated source text.
+  const saveChapter = async (key: string, newText: string) => {
     if (currentId == null) throw new Error('missing report id')
     setSaving(true)
     try {
-      setData((prev) => (prev ? { ...prev, narrative: newText } : prev))
-      await editReport(currentId, { narrative_summary: newText })
+      if (key === 'narrative') {
+        setData((prev) => (prev ? { ...prev, narrative: newText } : prev))
+        await editReport(currentId, { narrative_summary: newText })
+      } else {
+        setData((prev) => {
+          if (!prev) return prev
+          const nextOverrides = { ...(prev.chapter_narratives ?? {}), [key]: newText }
+          return { ...prev, chapter_narratives: nextOverrides }
+        })
+        await editReport(currentId, { chapter_narratives: { [key]: newText } })
+      }
       setToast({ message: '已保存', type: 'success', durationMs: 2000 })
     } catch (e) {
       setToast({
@@ -377,17 +387,30 @@ export default function ReportPage() {
             onDelete={stageDelete}
             switchingTo={switchingTo}
           />
-          <ChapterI data={data} onSaveNarrative={saveNarrative} saving={saving} />
-          <ChapterII data={data} />
-          <ChapterIII data={data} />
+          <ChapterI
+            data={data}
+            onSave={(t) => saveChapter('narrative', t)}
+            saving={saving}
+          />
+          <ChapterII
+            data={data}
+            onSave={(t) => saveChapter('chapter-2', t)}
+            saving={saving}
+          />
+          <ChapterIII
+            data={data}
+            onSave={(t) => saveChapter('chapter-3', t)}
+            saving={saving}
+          />
           <ChapterIV data={data} />
           <Epilogue
             generatedAt={data.generated_at}
             onRegenerate={generate}
             regenerating={generating}
+            onExport={() => window.print()}
           />
         </div>
-        <aside className="hidden @[1080px]:block pt-32">
+        <aside className="hidden @[1080px]:block pt-32 print:hidden">
           <TableOfContents
             items={[
               { id: 'chapter-1', numeral: 'I', label: '你是谁' },
