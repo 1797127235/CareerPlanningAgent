@@ -9,11 +9,20 @@ async def screenshot_variant(page, variant: str, url: str):
     await page.goto(url)
     await page.wait_for_load_state("networkidle")
     await asyncio.sleep(1.0)
-    # scroll to trigger whileInView animations, then back to top
+    # Incremental scroll so every section crosses the IntersectionObserver
+    # threshold (Chapter uses amount: 0.2 + once: true — a single jump to
+    # scrollHeight skips intermediate sections on tall pages).
+    total = await page.evaluate("document.body.scrollHeight")
+    step = 400
+    y = 0
+    while y < total:
+        await page.evaluate(f"window.scrollTo(0, {y})")
+        await asyncio.sleep(0.25)
+        y += step
     await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-    await asyncio.sleep(0.6)
+    await asyncio.sleep(0.3)
     await page.evaluate("window.scrollTo(0, 0)")
-    await asyncio.sleep(0.4)
+    await asyncio.sleep(0.5)
     path = f"{OUT_DIR}/coach-result-{variant}.png"
     await page.screenshot(path=path, full_page=True)
     print(f"saved {path}")

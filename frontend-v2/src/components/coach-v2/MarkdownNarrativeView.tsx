@@ -8,7 +8,7 @@ export function MarkdownNarrativeView({ data }: { data: CoachResultDetail }) {
   const cleaned = sanitizeAiMarkdown(raw)
 
   return (
-    <Chapter numeral="I" label="全文" title={data.title}>
+    <Chapter numeral="I" label="全文">
       {data.summary && (
         <PullQuote>{data.summary}</PullQuote>
       )}
