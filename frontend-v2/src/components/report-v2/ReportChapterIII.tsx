@@ -40,8 +40,8 @@ export function ReportChapterIII({ data }: { data: ReportV2Data }) {
       <ChapterOpener numeral="III" title={heroTitle} />
       <Chapter numeral="III" label="差距" title="">
         <DropCap>{masteredText}</DropCap>
-        <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{gapText}</p>
-        <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{distanceText}</p>
+        <p className="mt-4 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{gapText}</p>
+        <p className="mt-4 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{distanceText}</p>
         <PullQuote>差距不是你不够 — 是你还没给自己机会碰到这些事。</PullQuote>
       </Chapter>
     </>

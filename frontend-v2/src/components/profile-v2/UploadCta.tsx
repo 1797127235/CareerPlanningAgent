@@ -74,11 +74,11 @@ export function UploadCta({
         )}
       </div>
       <div>
-        <p className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+        <p className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
           {isUploading ? stepLabel : label}
         </p>
         {subLabel && !isUploading && (
-          <p className="text-[var(--fs-body)] text-[var(--ink-2)]">{subLabel}</p>
+          <p className="text-[length:var(--fs-body)] text-[var(--ink-2)]">{subLabel}</p>
         )}
         {isUploading && (
           <p className="text-[13px] text-[var(--ink-3)]">请稍等，正在处理简历…</p>

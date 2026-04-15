@@ -51,12 +51,12 @@ export function ProfileChapterI({ data, onRefresh }: { data: ProfileData; onRefr
           1.1 · 你在读哪里
         </h3>
         {education?.school ? (
-          <p className="text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">
+          <p className="text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">
             你在 {education.school} 学 {education.major || '…'}，
             {experienceYears > 0 ? `已有 ${experienceYears} 年经验。` : '目前还在积累经验的路上。'}
           </p>
         ) : (
-          <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有教育背景记录 —— 有也好，没有也行，这些都可以晚点补。</p>
+          <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">还没有教育背景记录 —— 有也好，没有也行，这些都可以晚点补。</p>
         )}
         {editingEdu ? (
           <div className="mt-4">
@@ -99,7 +99,7 @@ export function ProfileChapterI({ data, onRefresh }: { data: ProfileData; onRefr
             {internships.length > 0 ? (
               internships.map((it, idx) => <InternshipCard key={idx} internship={it} />)
             ) : (
-              <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有实习记录 —— 如果有，加一段；没有也没关系。</p>
+              <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">还没有实习记录 —— 如果有，加一段；没有也没关系。</p>
             )}
             <button
               onClick={() => setEditingInternships(true)}
@@ -133,7 +133,7 @@ export function ProfileChapterI({ data, onRefresh }: { data: ProfileData; onRefr
             {projects.length > 0 ? (
               projects.map((p, idx) => <ProjectCard key={idx} project={p} onEdit={() => setEditingProjects(true)} />)
             ) : (
-              <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有项目记录 —— 哪怕是一个小工具，也值得记下来。</p>
+              <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">还没有项目记录 —— 哪怕是一个小工具，也值得记下来。</p>
             )}
             <button
               onClick={() => setEditingProjects(true)}

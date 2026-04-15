@@ -33,12 +33,12 @@ export function ProfilePrologue({
       </p>
       {hasProfile ? (
         <>
-          <h1 className="font-display font-medium text-[var(--fs-display-xl)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight max-w-[22ch]">
+          <h1 className="font-display font-medium text-[length:var(--fs-display-xl)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight max-w-[22ch]">
             我们已经认识 {daysSince} 天了。
             <br />
             最近更新的是 {updatedAt ? updatedAt.slice(0, 10) : '今天'}。
           </h1>
-          <p className="mt-6 font-sans text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[68ch]">
+          <p className="mt-6 font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[68ch]">
             下面是你之前讲给系统听的，随时可以补。这份档案只给你自己和懂你的系统看，不会给任何第三方。
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-4">
@@ -58,12 +58,12 @@ export function ProfilePrologue({
         </>
       ) : (
         <>
-          <h1 className="font-display font-medium text-[var(--fs-display-xl)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight max-w-[22ch]">
+          <h1 className="font-display font-medium text-[length:var(--fs-display-xl)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight max-w-[22ch]">
             还没开始讲给我听。
             <br />
             一份简历，或者几句话，都行。
           </h1>
-          <p className="mt-6 font-sans text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[68ch]">
+          <p className="mt-6 font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[68ch]">
             这份档案只给系统看，不会给任何第三方。你可以传一份简历让系统自动提取，也可以先手动填几句，以后随时补。
           </p>
           <div className="mt-10 space-y-4 max-w-md">
@@ -82,10 +82,10 @@ export function ProfilePrologue({
               onClick={onManual}
               className="w-full text-left rounded-xl border border-[var(--line)] bg-[var(--bg-card)] px-6 py-5 hover:shadow-[var(--shadow-paper)] transition-shadow"
             >
-              <p className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+              <p className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
                 手动讲给我听
               </p>
-              <p className="text-[var(--fs-body)] text-[var(--ink-2)]">
+              <p className="text-[length:var(--fs-body)] text-[var(--ink-2)]">
                 几个字就够了，不用一次填完
               </p>
             </button>

@@ -50,13 +50,13 @@ export function Chapter({ numeral, label, title, intro, children }: ChapterProps
       {title && (
         <motion.h2
           variants={childVariants}
-          className="font-display font-medium text-[var(--fs-display-lg)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight max-w-[22ch]"
+          className="font-display font-medium text-[length:var(--fs-display-lg)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight max-w-[22ch]"
         >
           {title}
         </motion.h2>
       )}
       {intro && (
-        <motion.div variants={childVariants} className="mt-6 font-sans text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[68ch]">
+        <motion.div variants={childVariants} className="mt-6 font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)] max-w-[68ch]">
           {intro}
         </motion.div>
       )}

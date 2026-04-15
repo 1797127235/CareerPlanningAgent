@@ -30,7 +30,7 @@ export function SoftSkillRow({
   return (
     <div className="py-4 border-b border-[var(--line)] last:border-0">
       <div className="flex items-baseline gap-3 mb-1">
-        <span className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+        <span className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
           {name}
         </span>
         {levelText && (
@@ -40,7 +40,7 @@ export function SoftSkillRow({
         )}
       </div>
       {advice && (
-        <p className="text-[var(--fs-body)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
+        <p className="text-[length:var(--fs-body)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
           {advice}
         </p>
       )}

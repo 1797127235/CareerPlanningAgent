@@ -38,7 +38,7 @@ export function ProfileChapterIV({
           <GoalCard goal={goal} onExplore={onExploreGoal} onChange={onChangeGoal} />
         ) : (
           <div className="rounded-lg border border-[var(--line)] bg-[var(--bg-card)] p-5 md:p-6">
-            <p className="text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">还没有明确的目标 —— 这很正常。</p>
+            <p className="text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">还没有明确的目标 —— 这很正常。</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <button className="px-4 py-2 rounded-full bg-[var(--chestnut)] text-white text-[13px] font-medium hover:opacity-90">
                 让 AI 帮我推荐
@@ -72,7 +72,7 @@ export function ProfileChapterIV({
             )}
           </>
         ) : (
-          <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有推荐方向 —— 等画像再完善一点，系统会帮你列几个选项。</p>
+          <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">还没有推荐方向 —— 等画像再完善一点，系统会帮你列几个选项。</p>
         )}
       </div>
     </Chapter>

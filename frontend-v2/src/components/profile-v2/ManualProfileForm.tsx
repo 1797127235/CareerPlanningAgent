@@ -119,7 +119,7 @@ export function ManualProfileForm({ onSave, onCancel, saving, initialData }: Man
   return (
     <div className="space-y-8">
       <div>
-        <h2 className="font-display text-[var(--fs-display-sm)] text-[var(--ink-1)] mb-6">手动录入档案</h2>
+        <h2 className="font-display text-[length:var(--fs-display-sm)] text-[var(--ink-1)] mb-6">手动录入档案</h2>
       </div>
 
       <div className="space-y-6">

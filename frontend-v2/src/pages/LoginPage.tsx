@@ -93,7 +93,7 @@ export default function LoginPage() {
           </motion.h1>
         </AnimatePresence>
 
-        <p className="mt-3 font-sans text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
+        <p className="mt-3 font-sans text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
           一份只给你自己的档案。
         </p>
 
@@ -101,40 +101,40 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block font-sans text-[var(--fs-body-sm)] text-[var(--ink-3)] mb-2">用户名</label>
+            <label className="block font-sans text-[length:var(--fs-body-sm)] text-[var(--ink-3)] mb-2">用户名</label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
-              className="w-full px-4 py-3 bg-[var(--bg-card)] border border-[var(--line)] rounded-md text-[var(--fs-body)] text-[var(--ink-1)] outline-none focus:border-[var(--chestnut)]/60 focus:ring-2 focus:ring-[var(--chestnut)]/20 transition-colors"
+              className="w-full px-4 py-3 bg-[var(--bg-card)] border border-[var(--line)] rounded-md text-[length:var(--fs-body)] text-[var(--ink-1)] outline-none focus:border-[var(--chestnut)]/60 focus:ring-2 focus:ring-[var(--chestnut)]/20 transition-colors"
             />
           </div>
           <div>
-            <label className="block font-sans text-[var(--fs-body-sm)] text-[var(--ink-3)] mb-2">密码</label>
+            <label className="block font-sans text-[length:var(--fs-body-sm)] text-[var(--ink-3)] mb-2">密码</label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-              className="w-full px-4 py-3 bg-[var(--bg-card)] border border-[var(--line)] rounded-md text-[var(--fs-body)] text-[var(--ink-1)] outline-none focus:border-[var(--chestnut)]/60 focus:ring-2 focus:ring-[var(--chestnut)]/20 transition-colors"
+              className="w-full px-4 py-3 bg-[var(--bg-card)] border border-[var(--line)] rounded-md text-[length:var(--fs-body)] text-[var(--ink-1)] outline-none focus:border-[var(--chestnut)]/60 focus:ring-2 focus:ring-[var(--chestnut)]/20 transition-colors"
             />
           </div>
 
           {error && (
-            <p className="text-[var(--fs-body-sm)] text-[var(--ember)]">{error}</p>
+            <p className="text-[length:var(--fs-body-sm)] text-[var(--ember)]">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 rounded-md bg-[var(--chestnut)] text-white text-[var(--fs-body)] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="w-full py-3 rounded-md bg-[var(--chestnut)] text-white text-[length:var(--fs-body)] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
           >
             {loading ? (tab === 'login' ? '登录中…' : '注册中…') : (tab === 'login' ? '登录' : '注册')}
           </button>
         </form>
 
-        <p className="mt-8 text-[var(--fs-body-sm)] text-[var(--ink-3)]">
+        <p className="mt-8 text-[length:var(--fs-body-sm)] text-[var(--ink-3)]">
           {tab === 'login' ? '没有账号？' : '已有账号？'}
           <button
             type="button"

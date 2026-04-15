@@ -18,11 +18,11 @@ export function GoalCard({
           <Target className="w-5 h-5 text-[var(--chestnut)]" />
         </div>
         <div className="flex-1">
-          <p className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+          <p className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
             {goal.target_label}
           </p>
           {goal.from_node_label && (
-            <p className="text-[var(--fs-body)] text-[var(--ink-2)]">
+            <p className="text-[length:var(--fs-body)] text-[var(--ink-2)]">
               从 {goal.from_node_label} 过来
             </p>
           )}

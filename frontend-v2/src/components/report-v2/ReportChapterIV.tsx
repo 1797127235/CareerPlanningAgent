@@ -14,13 +14,13 @@ function ActionCard({
   const navigate = useNavigate()
   return (
     <div className="mt-10 first:mt-6">
-      <h3 className="font-display font-medium text-[var(--fs-display-sm)] leading-[var(--lh-display)] text-[var(--ink-1)]">
+      <h3 className="font-display font-medium text-[length:var(--fs-display-sm)] leading-[var(--lh-display)] text-[var(--ink-1)]">
         {numerals[idx]} · {item.tag || '这周做这件事'}
       </h3>
-      <p className="mt-2 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
+      <p className="mt-2 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
         为什么这件事先做：{item.text}
       </p>
-      <p className="mt-3 text-[var(--fs-body)] leading-[var(--lh-body-zh)] text-[var(--ink-3)]">
+      <p className="mt-3 text-[length:var(--fs-body)] leading-[var(--lh-body-zh)] text-[var(--ink-3)]">
         优先级：{item.priority === 'high' ? '高' : '中'} · 阶段：{item.phase || 1}
       </p>
       <button
@@ -43,7 +43,7 @@ export function ReportChapterIV({ data }: { data: ReportV2Data }) {
       <ChapterOpener numeral="IV" title={<>先从 <strong>这一件</strong> 开始。</>} />
       <Chapter numeral="IV" label="下一步" title="">
         {items.length === 0 ? (
-          <p className="text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
+          <p className="text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-2)]">
             行动方案正在生成中。你可以先回到岗位图谱，进一步了解目标方向所需的核心技能。
           </p>
         ) : (

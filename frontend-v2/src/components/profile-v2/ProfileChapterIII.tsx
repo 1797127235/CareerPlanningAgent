@@ -37,7 +37,7 @@ export function ProfileChapterIII({
         </h3>
         {hasSjt ? (
           <>
-            <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">这是系统根据你的自评给出的观察，不是打分，只是一种描述方式。</p>
+            <p className="mt-4 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">这是系统根据你的自评给出的观察，不是打分，只是一种描述方式。</p>
             <div className="mt-6">
               {sjtDims.map((d) => {
                 const info = softSkills[d]
@@ -55,7 +55,7 @@ export function ProfileChapterIII({
             </div>
           </>
         ) : (
-          <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有软技能评估 —— 有兴趣的话可以做做看，没有标准答案。</p>
+          <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">还没有软技能评估 —— 有兴趣的话可以做做看，没有标准答案。</p>
         )}
       </div>
 
@@ -66,7 +66,7 @@ export function ProfileChapterIII({
         {!hasSjt ? (
           <SjtCta onStart={onStartSjt} />
         ) : (
-          <p className="text-[var(--fs-body)] text-[var(--ink-2)]">你已经完成过情境判断测评了。如果想重新测，可以回到原页面操作。</p>
+          <p className="text-[length:var(--fs-body)] text-[var(--ink-2)]">你已经完成过情境判断测评了。如果想重新测，可以回到原页面操作。</p>
         )}
       </div>
     </Chapter>

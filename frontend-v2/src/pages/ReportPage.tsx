@@ -50,7 +50,7 @@ export default function ReportPage() {
     return (
       <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-6">
         <div className="text-center">
-          <p className="font-serif italic text-[var(--fs-body-lg)] text-[var(--ink-2)]">
+          <p className="font-serif italic text-[length:var(--fs-body-lg)] text-[var(--ink-2)]">
             正在为你写这封信…
           </p>
         </div>
@@ -62,8 +62,8 @@ export default function ReportPage() {
     return (
       <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-6">
         <div className="text-center max-w-md">
-          <p className="font-sans text-[var(--fs-body-lg)] text-[var(--ink-1)]">生成报告时出错了</p>
-          <p className="mt-2 text-[var(--fs-body)] text-[var(--ink-3)]">{error}</p>
+          <p className="font-sans text-[length:var(--fs-body-lg)] text-[var(--ink-1)]">生成报告时出错了</p>
+          <p className="mt-2 text-[length:var(--fs-body)] text-[var(--ink-3)]">{error}</p>
           <button
             onClick={load}
             className="mt-6 inline-flex items-center px-5 py-2.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] hover:bg-[var(--line)]/10 transition-colors text-sm font-medium"
@@ -78,7 +78,7 @@ export default function ReportPage() {
   if (!data) {
     return (
       <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-6">
-        <p className="text-[var(--fs-body)] text-[var(--ink-3)]">暂无报告数据</p>
+        <p className="text-[length:var(--fs-body)] text-[var(--ink-3)]">暂无报告数据</p>
       </main>
     )
   }

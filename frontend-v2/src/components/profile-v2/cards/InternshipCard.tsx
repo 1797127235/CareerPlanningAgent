@@ -6,17 +6,17 @@ export function InternshipCard({ internship }: { internship: Internship }) {
     <PaperCard>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+          <p className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
             {internship.company}
           </p>
-          <p className="font-sans text-[var(--fs-body)] text-[var(--ink-2)]">
+          <p className="font-sans text-[length:var(--fs-body)] text-[var(--ink-2)]">
             {internship.role}
             {internship.duration ? ` · ${internship.duration}` : ''}
           </p>
         </div>
       </div>
       {internship.highlights && (
-        <p className="mt-3 text-[var(--fs-body)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
+        <p className="mt-3 text-[length:var(--fs-body)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
           {internship.highlights}
         </p>
       )}

@@ -83,7 +83,7 @@ export default function ProfilePage() {
   if (loading && !isMock) {
     return (
       <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-6">
-        <p className="font-serif italic text-[var(--fs-body-lg)] text-[var(--ink-2)]">正在打开档案…</p>
+        <p className="font-serif italic text-[length:var(--fs-body-lg)] text-[var(--ink-2)]">正在打开档案…</p>
       </main>
     )
   }
@@ -92,8 +92,8 @@ export default function ProfilePage() {
     return (
       <main className="min-h-screen bg-[var(--bg-paper)] flex items-center justify-center px-6">
         <div className="text-center max-w-md">
-          <p className="font-sans text-[var(--fs-body-lg)] text-[var(--ink-1)]">画像加载失败</p>
-          <p className="mt-2 text-[var(--fs-body)] text-[var(--ink-3)]">{loadError}</p>
+          <p className="font-sans text-[length:var(--fs-body-lg)] text-[var(--ink-1)]">画像加载失败</p>
+          <p className="mt-2 text-[length:var(--fs-body)] text-[var(--ink-3)]">{loadError}</p>
           <button
             onClick={loadProfile}
             className="mt-6 inline-flex items-center px-5 py-2.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] hover:bg-[var(--line)]/10 transition-colors text-sm font-medium"
@@ -205,8 +205,8 @@ export default function ProfilePage() {
       {showNamePrompt && (
         <div className="fixed inset-0 bg-[var(--ink-1)]/20 backdrop-blur-sm z-[999] flex items-center justify-center p-6">
           <div className="bg-[var(--bg-card)] rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-[var(--line)]">
-            <h3 className="font-display text-[var(--fs-display-sm)] text-[var(--ink-1)] mb-2">为你的档案命名</h3>
-            <p className="text-[var(--fs-body)] text-[var(--ink-2)] mb-4">档案已建立，请确认或修改你的姓名</p>
+            <h3 className="font-display text-[length:var(--fs-display-sm)] text-[var(--ink-1)] mb-2">为你的档案命名</h3>
+            <p className="text-[length:var(--fs-body)] text-[var(--ink-2)] mb-4">档案已建立，请确认或修改你的姓名</p>
             <input
               type="text"
               value={pendingName}

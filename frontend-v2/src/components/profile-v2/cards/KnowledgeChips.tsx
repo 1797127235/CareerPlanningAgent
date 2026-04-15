@@ -8,7 +8,7 @@ export function KnowledgeChips({
   onDelete?: (area: string) => void
 }) {
   if (areas.length === 0) {
-    return <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有知识领域记录。</p>
+    return <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">还没有知识领域记录。</p>
   }
   return (
     <div className="flex flex-wrap gap-2">

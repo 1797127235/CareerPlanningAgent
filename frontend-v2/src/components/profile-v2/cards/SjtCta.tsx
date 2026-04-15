@@ -11,10 +11,10 @@ export function SjtCta({ onStart }: { onStart: () => void }) {
       <div className="w-12 h-12 rounded-full bg-[var(--bg-paper)] flex items-center justify-center mx-auto mb-4">
         <Brain className="w-6 h-6 text-[var(--chestnut)]" />
       </div>
-      <h3 className="font-display text-[var(--fs-display-sm)] text-[var(--ink-1)] mb-2">
+      <h3 className="font-display text-[length:var(--fs-display-sm)] text-[var(--ink-1)] mb-2">
         一个 3 分钟的情境小测
       </h3>
-      <p className="text-[var(--fs-body)] text-[var(--ink-2)] mb-6 max-w-[40ch] mx-auto">
+      <p className="text-[length:var(--fs-body)] text-[var(--ink-2)] mb-6 max-w-[40ch] mx-auto">
         帮系统理解你做事的偏好。没有标准答案，选最真实的就好。
       </p>
       <button

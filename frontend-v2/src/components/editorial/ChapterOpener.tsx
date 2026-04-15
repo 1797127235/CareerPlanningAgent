@@ -26,8 +26,8 @@ export function ChapterOpener({ numeral, title }: { numeral: string; title: Reac
       >
         {numeral}
       </motion.span>
-      <div className="relative z-10 max-w-[26ch]">
-        <h1 className="font-display font-medium text-[var(--fs-display-xl)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight">
+      <div className="relative z-10">
+        <h1 className="font-display font-medium text-[length:var(--fs-display-xl)] leading-[var(--lh-display)] text-[var(--ink-1)] tracking-tight max-w-[26ch]">
           {title}
         </h1>
       </div>

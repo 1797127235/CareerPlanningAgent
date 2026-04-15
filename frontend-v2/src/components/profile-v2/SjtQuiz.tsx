@@ -63,8 +63,8 @@ export function SjtQuiz({ onComplete, onCancel }: { onComplete: () => void; onCa
   if (!started) {
     return (
       <div className="rounded-xl border border-[var(--line)] bg-[var(--bg-card)] p-6 md:p-8 text-center">
-        <p className="font-display text-[var(--fs-display-sm)] text-[var(--ink-1)] mb-2">准备开始 3 分钟小测</p>
-        <p className="text-[var(--fs-body)] text-[var(--ink-2)] mb-6">没有标准答案，选最真实的就好。</p>
+        <p className="font-display text-[length:var(--fs-display-sm)] text-[var(--ink-1)] mb-2">准备开始 3 分钟小测</p>
+        <p className="text-[length:var(--fs-body)] text-[var(--ink-2)] mb-6">没有标准答案，选最真实的就好。</p>
         {error && <p className="mb-4 text-[13px] text-red-600">{error}</p>}
         <div className="flex items-center justify-center gap-3">
           <button onClick={start} disabled={loading} className="px-5 py-2.5 rounded-full bg-[var(--chestnut)] text-white text-[13px] font-medium hover:opacity-90 disabled:opacity-50">
@@ -85,7 +85,7 @@ export function SjtQuiz({ onComplete, onCancel }: { onComplete: () => void; onCa
         return (
           <div key={q.id} className="pb-6 border-b border-[var(--line)] last:border-0 last:pb-0">
             <p className="text-[13px] font-medium text-[var(--ink-3)] mb-2">问题 {idx + 1} / {questions.length}</p>
-            <p className="text-[var(--fs-body-lg)] text-[var(--ink-1)] mb-4 leading-[var(--lh-body-zh)]">{q.scenario}</p>
+            <p className="text-[length:var(--fs-body-lg)] text-[var(--ink-1)] mb-4 leading-[var(--lh-body-zh)]">{q.scenario}</p>
             <div className="space-y-2">
               {q.options.map((o) => (
                 <div key={o.id} className="flex items-center gap-3">
@@ -105,7 +105,7 @@ export function SjtQuiz({ onComplete, onCancel }: { onComplete: () => void; onCa
                     className="accent-[var(--ink-3)]"
                   />
                   <span className="text-[12px] text-[var(--ink-3)] shrink-0">最不像</span>
-                  <span className="text-[var(--fs-body)] text-[var(--ink-2)]">{o.text}</span>
+                  <span className="text-[length:var(--fs-body)] text-[var(--ink-2)]">{o.text}</span>
                 </div>
               ))}
             </div>

@@ -23,15 +23,15 @@ export function EducationCard({
       )}
       {hasData ? (
         <div className="space-y-1">
-          <p className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+          <p className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
             {education?.school}
           </p>
-          <p className="font-sans text-[var(--fs-body)] text-[var(--ink-2)]">
+          <p className="font-sans text-[length:var(--fs-body)] text-[var(--ink-2)]">
             {education?.major} · {education?.degree}
           </p>
         </div>
       ) : (
-        <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">
+        <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">
           还没有教育背景记录 —— 先讲讲学校和专业吧。
         </p>
       )}

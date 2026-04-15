@@ -15,7 +15,7 @@ export interface ManualProfilePayload {
   awards: string[]
 }
 
-export function useProfileData() {
+export function useProfileData(enabled = true) {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -36,8 +36,8 @@ export function useProfileData() {
   }, [])
 
   useEffect(() => {
-    loadProfile()
-  }, [loadProfile])
+    if (enabled) loadProfile()
+  }, [enabled, loadProfile])
 
   const handleSaveEdit = useCallback(async (data: ManualProfilePayload) => {
     setSavingEdit(true)

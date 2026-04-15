@@ -33,14 +33,14 @@ export function PullQuote({ children, attribution }: { children: ReactNode; attr
       />
       <motion.blockquote
         variants={contentVariants}
-        className="py-6 font-serif italic text-[var(--fs-quote)] leading-[1.4] text-[var(--chestnut)]"
+        className="py-6 font-serif italic text-[length:var(--fs-quote)] leading-[1.4] text-[var(--chestnut)]"
       >
         "{children}"
       </motion.blockquote>
       {attribution && (
         <motion.figcaption
           variants={contentVariants}
-          className="pb-6 text-[var(--fs-caption)] uppercase tracking-[0.2em] text-[var(--ink-3)]"
+          className="pb-6 text-[length:var(--fs-caption)] uppercase tracking-[0.2em] text-[var(--ink-3)]"
         >
           — {attribution}
         </motion.figcaption>

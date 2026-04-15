@@ -21,11 +21,11 @@ export function RecommendationCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
+          <p className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)]">
             {rec.label}
           </p>
           {rec.reason && (
-            <p className="mt-1 text-[var(--fs-body)] text-[var(--ink-2)] line-clamp-2">
+            <p className="mt-1 text-[length:var(--fs-body)] text-[var(--ink-2)] line-clamp-2">
               {rec.reason}
             </p>
           )}

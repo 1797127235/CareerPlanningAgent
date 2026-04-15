@@ -41,7 +41,7 @@ export function SkillChips({
   const ordered = Object.keys(grouped).sort((a, b) => LEVEL_ORDER[b] - LEVEL_ORDER[a])
 
   if (skills.length === 0) {
-    return <p className="text-[var(--fs-body)] text-[var(--ink-3)] italic">还没有技能记录 —— 加一个是一个。</p>
+    return <p className="text-[length:var(--fs-body)] text-[var(--ink-3)] italic">还没有技能记录 —— 加一个是一个。</p>
   }
 
   return (

@@ -6,7 +6,7 @@ export function DropCap({ children }: { children: string }) {
   const shouldReduceMotion = useReducedMotion()
 
   return (
-    <p className="text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">
+    <p className="text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">
       <motion.span
         initial={{ color: shouldReduceMotion ? 'var(--chestnut)' : 'var(--ink-2)' }}
         whileInView={{ color: 'var(--chestnut)' }}

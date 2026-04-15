@@ -32,14 +32,14 @@ export function ProjectCard({
         </button>
       )}
       {name && (
-        <p className="font-sans text-[var(--fs-body-lg)] font-medium text-[var(--ink-1)] mb-2">
+        <p className="font-sans text-[length:var(--fs-body-lg)] font-medium text-[var(--ink-1)] mb-2">
           {name}
         </p>
       )}
       {hasQuote ? (
         <PullQuote>{description}</PullQuote>
       ) : (
-        <p className="text-[var(--fs-body)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
+        <p className="text-[length:var(--fs-body)] text-[var(--ink-2)] leading-[var(--lh-body-zh)]">
           {description}
         </p>
       )}

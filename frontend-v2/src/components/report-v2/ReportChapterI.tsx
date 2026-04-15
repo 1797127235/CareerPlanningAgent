@@ -61,15 +61,15 @@ export function ReportChapterI({ data }: { data: ReportV2Data }) {
       <ChapterOpener numeral="I" title={<>{headline}</>} />
       <Chapter numeral="I" label="你是谁">
         <DropCap>{displayParagraphs[0]}</DropCap>
-        {displayParagraphs[1] && <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[1]}</p>}
-        {displayParagraphs[2] && <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[2]}</p>}
+        {displayParagraphs[1] && <p className="mt-4 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[1]}</p>}
+        {displayParagraphs[2] && <p className="mt-4 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[2]}</p>}
         {quoteText ? (
           <PullQuote attribution={`来自你填写的「${quoteSource}」`}>{quoteText}</PullQuote>
         ) : (
           <PullQuote>先把自己正在做的记下来 — 回看时你会看到自己走了多远。</PullQuote>
         )}
-        {displayParagraphs[3] && <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[3]}</p>}
-        {displayParagraphs[4] && <p className="mt-4 text-[var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[4]}</p>}
+        {displayParagraphs[3] && <p className="mt-4 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[3]}</p>}
+        {displayParagraphs[4] && <p className="mt-4 text-[length:var(--fs-body-lg)] leading-[var(--lh-body-zh)] text-[var(--ink-1)]">{displayParagraphs[4]}</p>}
       </Chapter>
     </>
   )
