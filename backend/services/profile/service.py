@@ -30,7 +30,8 @@ class ProfileService:
 
     # ── Public API：薄包装 delegate ──────────────────────────
 
-    def compute_quality(self, profile_data: dict) -> dict:
+    @staticmethod
+    def compute_quality(profile_data: dict) -> dict:
         return scorer.compute_quality(profile_data)
 
     def locate_on_graph(self, profile: dict, nodes: list[dict] | None = None) -> dict:
