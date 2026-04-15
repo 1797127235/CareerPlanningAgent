@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Sprout, Sparkles, Check } from 'lucide-react'
+import { Sprout, Sparkles, Check, ArrowRight } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { fetchReportList, fetchReportDetail } from '@/api/report'
 import { updateProject } from '@/api/growthLog'
@@ -104,7 +104,7 @@ export function RefineSection() {
 
   if (!latestReportId || !reportQuery.data) {
     return (
-      <div className="text-center py-16 text-slate-500 text-[13px]">
+      <div className="text-center py-16 text-[var(--ink-3)] text-[13px]">
         请先生成一份报告
       </div>
     )
@@ -117,9 +117,9 @@ export function RefineSection() {
   if (needsFix.length === 0 || remaining === 0) {
     return (
       <div className="text-center py-16">
-        <Check size={32} className="mx-auto mb-3 text-green-500" />
-        <p className="text-[14px] text-slate-700 font-medium">档案已经很棒了</p>
-        <p className="text-[12px] text-slate-500 mt-1">所有项目描述都完整</p>
+        <Check size={32} className="mx-auto mb-3 text-[var(--moss)]" />
+        <p className="text-[14px] text-[var(--ink-1)] font-medium">档案已经很棒了</p>
+        <p className="text-[12px] text-[var(--ink-3)] mt-1">所有项目描述都完整</p>
       </div>
     )
   }
@@ -127,8 +127,8 @@ export function RefineSection() {
   return (
     <div>
       <div className="flex items-center gap-2 mb-4">
-        <Sparkles size={15} className="text-indigo-500" />
-        <p className="text-[13px] font-semibold text-slate-700">
+        <Sparkles size={15} className="text-[var(--ember)]" />
+        <p className="text-[13px] font-semibold text-[var(--ink-1)]">
           还有 {remaining} 个项目可以更亮眼
         </p>
       </div>
@@ -155,16 +155,14 @@ export function RefineSection() {
               }}
               exit={{ opacity: 0, y: -8, transition: { duration: 0.4 } }}
               transition={{ duration: 0.3 }}
-              className="rounded-[20px] p-5"
+              className="rounded-md p-5 bg-[var(--bg-card)] border"
               style={{
-                background: 'rgba(255,255,255,0.72)',
-                backdropFilter: 'blur(20px)',
-                border: isFresh
-                  ? '1px solid rgba(16,185,129,0.45)'
-                  : '1px solid rgba(99,102,241,0.18)',
+                borderColor: isFresh
+                  ? 'var(--moss)'
+                  : 'var(--line)',
                 boxShadow: isFresh
-                  ? '0 4px 24px rgba(16,185,129,0.15)'
-                  : '0 4px 20px rgba(0,0,0,0.04)',
+                  ? '0 1px 2px rgba(60,40,20,0.04), 0 4px 12px rgba(60,40,20,0.05)'
+                  : '0 1px 2px rgba(60,40,20,0.03)',
                 transition: 'border-color 0.4s ease, box-shadow 0.4s ease',
               }}
             >
@@ -175,8 +173,8 @@ export function RefineSection() {
                   animate={{ opacity: 1, scale: 1 }}
                   className="flex items-center gap-2 py-2"
                 >
-                  <Check size={16} className="text-emerald-500" />
-                  <span className="text-[13px] font-medium text-emerald-700">
+                  <Check size={16} className="text-[var(--moss)]" />
+                  <span className="text-[13px] font-medium text-[var(--moss)]">
                     已焕新 · {item.source}
                   </span>
                 </motion.div>
@@ -184,16 +182,16 @@ export function RefineSection() {
                 <>
                   {/* Header：只保留图标 + 项目名；删除 source tag 和"还差一点"tag */}
                   <div className="flex items-center gap-2 mb-3">
-                    <Sprout size={14} className="text-indigo-500" />
-                    <span className="text-[13px] font-medium text-slate-700">
+                    <Sprout size={14} className="text-[var(--chestnut)]" />
+                    <span className="text-[13px] font-medium text-[var(--ink-1)]">
                       {item.source}
                     </span>
                   </div>
 
                   {/* 现在的样子 */}
                   <div className="mb-3">
-                    <p className="text-[11px] text-slate-400 mb-1">现在的样子</p>
-                    <p className="text-[12px] text-slate-500 px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 leading-relaxed">
+                    <p className="text-[11px] text-[var(--ink-3)] mb-1">现在的样子</p>
+                    <p className="text-[12px] text-[var(--ink-2)] px-3 py-2 rounded-md bg-[var(--bg-paper)] border border-[var(--line)] leading-relaxed">
                       {item.current_text}
                     </p>
                   </div>
@@ -201,13 +199,13 @@ export function RefineSection() {
                   {/* 让它更亮 ✨ —— 启发式，不是罪状清单 */}
                   {item.issues.length > 0 && (
                     <div className="mb-3">
-                      <p className="text-[11px] text-slate-400 mb-1 flex items-center gap-1">
-                        让它更亮 <Sparkles size={10} className="text-amber-500" />
+                      <p className="text-[11px] text-[var(--ink-3)] mb-1 flex items-center gap-1">
+                        让它更亮 <Sparkles size={10} className="text-[var(--ember)]" />
                       </p>
-                      <ul className="text-[12px] text-slate-600 space-y-1 pl-1">
+                      <ul className="text-[12px] text-[var(--ink-2)] space-y-1 pl-1">
                         {item.issues.map((iss, i) => (
                           <li key={i} className="flex gap-1.5">
-                            <span className="text-indigo-400">·</span>
+                            <span className="text-[var(--chestnut)]">·</span>
                             <span>{iss}</span>
                           </li>
                         ))}
@@ -218,8 +216,8 @@ export function RefineSection() {
                   {/* 别人怎么写 */}
                   {item.suggestion && (
                     <div className="mb-3">
-                      <p className="text-[11px] text-slate-400 mb-1">别人怎么写</p>
-                      <p className="text-[12px] text-indigo-600 px-3 py-2 rounded-lg bg-indigo-50/50 border border-indigo-100 leading-relaxed">
+                      <p className="text-[11px] text-[var(--ink-3)] mb-1">别人怎么写</p>
+                      <p className="text-[12px] text-[var(--chestnut)] px-3 py-2 rounded-md bg-[var(--bg-paper)] border border-[var(--line)] leading-relaxed">
                         {item.suggestion}
                       </p>
                     </div>
@@ -227,25 +225,25 @@ export function RefineSection() {
 
                   {/* 你来写 */}
                   <div className="mb-2">
-                    <p className="text-[11px] text-slate-400 mb-1">你来写</p>
+                    <p className="text-[11px] text-[var(--ink-3)] mb-1">你来写</p>
                     <textarea
                       value={draft}
                       onChange={e => setDrafts(d => ({ ...d, [key]: e.target.value }))}
                       rows={3}
                       placeholder="填入真实的性能数据、成果数字、你的具体贡献..."
-                      className="w-full text-[12px] text-slate-700 bg-white/70 border border-slate-200 rounded-lg p-3 resize-none outline-none focus:border-indigo-400 leading-relaxed transition-colors duration-200"
+                      className="w-full text-[12px] text-[var(--ink-1)] bg-[var(--bg-paper)] border border-[var(--line)] rounded-md p-3 resize-none outline-none focus:border-[var(--moss)] leading-relaxed transition-colors duration-200"
                     />
                   </div>
 
                   {/* 校验提示 + CTA */}
                   <div className="flex items-center justify-between gap-3">
-                    <div className="text-[11px] text-slate-400 flex-1 min-w-0">
+                    <div className="text-[11px] text-[var(--ink-3)] flex-1 min-w-0">
                       {draft.trim().length === 0 ? (
-                        <span className="text-slate-300">写下来的文字只会保存到你自己的档案</span>
+                        <span className="text-[var(--ink-3)]">写下来的文字只会保存到你自己的档案</span>
                       ) : v.allPass ? (
-                        <span className="text-emerald-600">看起来很不错 ✨</span>
+                        <span className="text-[var(--moss)]">看起来很不错 ✨</span>
                       ) : (
-                        <span className="text-amber-600">
+                        <span className="text-[var(--ember)]">
                           {hints[0]}
                         </span>
                       )}
@@ -262,10 +260,15 @@ export function RefineSection() {
                           setSavingKey(null)
                         }
                       }}
-                      className="btn-glass flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-medium text-slate-700 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-all duration-200"
+                      className="flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 text-[12px] font-medium text-white bg-[var(--chestnut)] rounded-md cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[var(--ink-1)] transition-colors"
                     >
-                      <Sparkles size={12} />
-                      {isSaving ? '保存中...' : '让它亮起来'}
+                      {isSaving ? '保存中...' : (
+                        <>
+                          <Sparkles size={12} />
+                          让它亮起来
+                          <ArrowRight size={12} />
+                        </>
+                      )}
                     </button>
                   </div>
                 </>
@@ -276,7 +279,7 @@ export function RefineSection() {
         </AnimatePresence>
       </div>
 
-      <p className="text-center text-[11px] text-slate-400 mt-6">
+      <p className="text-center text-[11px] text-[var(--ink-3)] mt-6">
         保存后再次「更新报告」，这些项目会变为"通过"状态
       </p>
     </div>

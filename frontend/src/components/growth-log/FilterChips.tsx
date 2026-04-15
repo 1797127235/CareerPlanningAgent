@@ -7,20 +7,20 @@ export const FILTERS: { key: FilterKey; label: string; icon?: ComponentType<{ cl
   { key: 'all',      label: '全部' },
   { key: 'project',  label: '项目',  icon: FolderGit2 },
   { key: 'pursuit',  label: '实战',  icon: Briefcase },
-  { key: 'refine',   label: '档案精修', icon: Sparkles },
+  { key: 'refine',   label: '精修', icon: Sparkles },
 ]
 
 export function FilterChips({ value, onChange }: { value: FilterKey; onChange: (v: FilterKey) => void }) {
   return (
-    <div className="flex gap-1 bg-white/40 p-1 rounded-xl backdrop-blur-md border border-white/60 shadow-sm">
+    <div className="inline-flex gap-1 bg-[var(--bg-card)] p-1 rounded-md border border-[var(--line)] shadow-[0_1px_2px_rgba(60,40,20,0.03)]">
       {FILTERS.map(f => (
         <button
           key={f.key}
           onClick={() => onChange(f.key)}
-          className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer ${
+          className={`flex items-center gap-1 px-3 py-1.5 rounded text-[12px] font-medium transition-all cursor-pointer ${
             value === f.key
-              ? 'bg-slate-800 text-white shadow-sm'
-              : 'text-slate-500 hover:text-slate-800 hover:bg-white/50'
+              ? 'bg-[var(--chestnut)] text-white shadow-sm'
+              : 'text-[var(--ink-2)] hover:text-[var(--ink-1)] hover:bg-[var(--bg-paper)]'
           }`}
         >
           {f.icon && <f.icon className="w-3.5 h-3.5" />}

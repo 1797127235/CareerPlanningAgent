@@ -62,9 +62,9 @@ export function AddPursuitForm({ onSuccess, onCancel }: {
                 onClick={() => setSource(source === s ? '' : s)}
                 className="px-2.5 py-1 text-[11px] font-medium rounded-lg border transition-all cursor-pointer"
                 style={{
-                  background: source === s ? 'rgba(37,99,235,0.08)' : 'transparent',
-                  borderColor: source === s ? 'rgba(37,99,235,0.4)' : 'rgba(0,0,0,0.1)',
-                  color: source === s ? '#2563EB' : '#94A3B8',
+                  background: source === s ? 'rgba(80,50,30,0.08)' : 'transparent',
+                  borderColor: source === s ? 'rgba(80,50,30,0.35)' : 'rgba(0,0,0,0.1)',
+                  color: source === s ? 'var(--chestnut)' : 'var(--ink-3)',
                 }}
               >
                 {s}
@@ -80,7 +80,7 @@ export function AddPursuitForm({ onSuccess, onCancel }: {
             type="submit"
             disabled={saving}
             className="flex-1 py-2.5 text-[13px] font-semibold text-white rounded-xl cursor-pointer disabled:opacity-50 transition-colors"
-            style={{ background: '#2563EB' }}
+            style={{ background: 'var(--chestnut)' }}
           >
             {saving ? '添加中...' : '添加'}
           </button>
