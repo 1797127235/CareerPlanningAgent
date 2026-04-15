@@ -71,9 +71,11 @@ npm run dev
 - **Lucide Icons** · SVG 图标库
 
 ### AI Agent 架构
-- **Supervisor Pattern** · 中央调度器根据意图路由到专门 Agent
-- **专家 Agent**：`navigator`（图谱探索）/ `growth`（成长追踪）/ `profile`（画像诊断）/ `coach`（教练对话）/ `jd`（JD 诊断）/ `search`（网络搜索）
-- **Tool 层**：每个 Agent 绑定其领域内的工具集
+- **Supervisor Pattern** · 中央调度器（`agent/supervisor.py`）根据意图路由到专门 Agent
+- **6 个专家 Agent**：`navigator`（图谱探索）/ `growth`（成长追踪）/ `profile`（画像诊断）/ `coach`（教练对话）/ `jd`（JD 诊断）/ `search`（网络搜索）
+- **Tool 层**：每个 Agent 绑定领域工具集；`coach_agent` 额外装载 pull-based context tools（`get_user_profile` / `get_career_goal` / `get_market_signal` / `get_memory_recall`）按需查询用户状态，避免 SystemMessage 全量 push
+- **Skill 系统（coach 专用）** · 基于 Anthropic Skill 规范（`agent/skills/coach-*/SKILL.md`），采用 **Progressive Disclosure 模式**：catalog（13 skill 的 name + description）注入 SystemMessage（~830 tokens），LLM 判断场景后调 `load_skill(name)` tool 按需加载完整规则 —— 相比全量 push 节省 ≥ 60% token，扩到 20 skill 也只吃 ~800 tokens base cost
+- **13 个 coach skill** 覆盖大学生职业规划对话场景：`greeting` / `confirmation` / `concern-direct` / `emotional-support` / `comparison-detox` / `direction-scaffold` / `progress-report` / `interview-prep` / `resume-review` / `market-signal` / `request-deliver` / `project-planning` / `decision-socratic`
 
 ---
 
@@ -98,10 +100,13 @@ CareerPlanningAgent/
 │       ├── profile_service.py  # 画像定位 + 评分
 │       └── dashboard_service.py
 ├── agent/                      # LangGraph 多 Agent
-│   ├── supervisor.py           # 中央调度器
-│   ├── intent_router.py        # 意图识别
-│   ├── agents/                 # 专家 Agent 实现
-│   └── tools/                  # Agent 工具集
+│   ├── supervisor.py           # 中央调度器 + agent-aware context builder
+│   ├── intent_router.py        # 语义意图识别
+│   ├── agents/                 # 6 个专家 Agent 实现
+│   ├── tools/                  # Agent 工具集（含 coach_context_tools 等）
+│   └── skills/                 # Anthropic Skill 规范的 coach skill 池
+│       ├── loader.py           #   · Progressive Disclosure loader（catalog + load_full）
+│       └── coach-<scenario>/   #   · 每个场景独立目录 + SKILL.md（当前 13 个）
 ├── frontend/                   # React 前端
 │   └── src/
 │       ├── pages/              # 路由级页面
@@ -137,10 +142,25 @@ CareerPlanningAgent/
 
 ---
 
+## 🛠️ 开发规范
+
+Commit 规范：**Conventional Commits** 格式 `type(scope): subject`。
+
+- `type`：`feat` / `fix` / `refactor` / `docs` / `chore` / `test` / `perf` / `style`
+- `scope`：模块名（`coach` / `backend` / `skills` / `frontend` 等）
+- `subject`：祈使语气，≤ 72 字符，无句号
+
+仓库根 [`.gitmessage`](.gitmessage) 是完整模板。激活：`git config commit.template .gitmessage`（仅本仓库）。
+
+---
+
 ## 📚 进阶阅读
 
-- **[项目详细讲解 + 使用指南](docs/PROJECT_GUIDE.md)** · 设计理念、模块详解、使用流程、常见问题
-- **[方向对齐规范](docs/career-alignment-spec.md)** · LLM + graph.json 绑定的对齐分析设计
-- **[Hero 重构规范 v2](docs/report-hero-redesign-spec-v2.md)** · 报告页信息架构重构
+- **[📑 文档索引 docs/INDEX.md](docs/INDEX.md)** · 所有文档入口（活跃 + 归档说明）
+- **[🧭 项目详细讲解 + 使用指南](docs/PROJECT_GUIDE.md)** · 设计理念、模块详解、使用流程、常见问题
+- **[🤖 Coach Skill 系统架构（Progressive Disclosure）](docs/coach-skill-progressive-disclosure.md)** · 当前 coach 13 skill + PD 架构权威文档
+- **[🔧 Backend 瘦身 Phase 1](docs/backend-slimdown-phase1-profile-service.md)** · profile_service 拆分任务（进行中）
+
+历史文档见 [docs/archive/](docs/archive/)。
 
 ---
