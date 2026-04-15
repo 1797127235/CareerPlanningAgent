@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Pencil } from 'lucide-react'
 import type { ReportV2Data } from '@/api/report'
 import { ChapterOpener, Chapter, DropCap, PullQuote } from './index'
-import { splitParagraphs, firstSentence } from './reportUtils'
+import { splitParagraphs } from './reportUtils'
 
 interface ChapterIProps {
   data: ReportV2Data
@@ -36,7 +36,10 @@ export function ChapterI({ data, onSave, saving }: ChapterIProps) {
     : null
   const quoteSource = quote?.source ?? '你的成长轨迹'
 
-  const headline = firstSentence(paras[0]) || `你像是一个在${data.target.label}方向持续探索的人。`
+  // Hardcoded thematic headline (consistent with Chapter II/III/IV style) —
+  // previously this was extracted from the body's first sentence, which
+  // duplicated what the DropCap paragraph below showed.
+  const headline = '先把你自己看清楚。'
 
   const enterEdit = () => {
     setDraft(narrative || paras.join('\n\n'))
