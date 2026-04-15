@@ -205,20 +205,11 @@ def generate_report(user_id: int, db) -> dict:
     _texts_to_infer = profile_projects_raw[:4] + [p.name for p in projects if not p.skills_used and p.name]
     if _texts_to_infer:
         try:
-            from backend.llm import get_llm_client, get_model as _get_model
-            _proj_list = "\n".join(f"- {t[:100]}" for t in _texts_to_infer)
-            _infer_resp = get_llm_client(timeout=60).chat.completions.create(
-                model=_get_model("fast"),
-                messages=[{"role": "user", "content":
-                    "以下项目描述，提取技术技能（3-8个，JSON数组，不要解释）：\n" + _proj_list}],
-                temperature=0.1, max_tokens=300,
+            from backend.skills import invoke_skill
+            _extra = invoke_skill(
+                "skill-inference",
+                projects_text="\n".join(f"- {t[:100]}" for t in _texts_to_infer),
             )
-            _raw = _infer_resp.choices[0].message.content.strip()
-            if _raw.startswith("```"):
-                _raw = _raw.split("```")[1]
-                if _raw.startswith("json"):
-                    _raw = _raw[4:]
-            _extra = json.loads(_raw.strip())
             if isinstance(_extra, list):
                 _inferred_skills_from_text.extend(s for s in _extra if isinstance(s, str))
             elif isinstance(_extra, dict):
@@ -398,52 +389,7 @@ def generate_report(user_id: int, db) -> dict:
             profile_proj_descs=profile_proj_descs,
         )
 
-    # 10. LLM narrative — 用合并后的 projects（成长档案 + 简历项目），
-    #     防止成长档案为空时 narrative 缺项目素材只能输出套话
-    narrative_text = narrative._generate_narrative(
-        target_label=goal.target_label,
-        match_score=match_score,
-        four_dim=four_dim,
-        gap_skills=goal.gap_skills or [],
-        market_info=market_info,
-        growth_delta=growth_delta,
-        education=profile_data.get("education"),
-        projects=merged_projects,   # ← 关键修复：从 projects 改成 merged_projects
-        claimed_skills=claimed_skills[:3],
-        applications=applications,
-    )
-
-    # 10b. Profile diagnosis (档案体检 — content completeness check)
-    diagnosis = narrative._diagnose_profile(
-        profile_data=profile_data,
-        projects=projects,
-        node_label=goal.target_label,
-    )
-
-    # ── 方向对齐分析（LLM 分析 + graph 绑定）──
-    try:
-        career_alignment_data = career_alignment._build_career_alignment(
-            profile_data=profile_data,
-            projects=projects,
-            graph_nodes=loaders._load_graph_nodes(),
-            target_node_id=node_id,
-        )
-    except Exception as e:
-        logger.warning("Career alignment build failed: %s", e)
-        # 硬兜底：绝不返回 None，避免前端显示「数据不足」的硬编码 UI
-        career_alignment_data = {
-            "observations": "基于当前档案标签，可初步观察与目标岗位的技能重叠情况。",
-            "alignments": [{
-                "node_id": node_id,
-                "label": goal.target_label,
-                "score": 0.5,
-                "evidence": "用户已标定该方向为目标岗位",
-                "gap": "建议补充可量化的项目成果和技术文档以提升对齐度。",
-            }],
-            "cannot_judge": ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
-        }
-
-    # 11. Delta vs previous report
+    # 10. Delta vs previous report（提前计算，供 narrative 使用）
     delta = None
     from backend.db_models import Report
     prev_report = (
@@ -536,6 +482,52 @@ def generate_report(user_id: int, db) -> dict:
             "next_action": next_action,
         }
 
+    # 10b. LLM narrative — 用合并后的 projects（成长档案 + 简历项目），
+    #     防止成长档案为空时 narrative 缺项目素材只能输出套话
+    narrative_text = narrative._generate_narrative(
+        target_label=goal.target_label,
+        match_score=match_score,
+        four_dim=four_dim,
+        gap_skills=goal.gap_skills or [],
+        market_info=market_info,
+        growth_delta=growth_delta,
+        education=profile_data.get("education"),
+        projects=merged_projects,   # ← 关键修复：从 projects 改成 merged_projects
+        claimed_skills=claimed_skills[:3],
+        applications=applications,
+        delta=delta,
+    )
+
+    # 10c. Profile diagnosis (档案体检 — content completeness check)
+    diagnosis = narrative._diagnose_profile(
+        profile_data=profile_data,
+        projects=projects,
+        node_label=goal.target_label,
+    )
+
+    # ── 方向对齐分析（LLM 分析 + graph 绑定）──
+    try:
+        career_alignment_data = career_alignment._build_career_alignment(
+            profile_data=profile_data,
+            projects=projects,
+            graph_nodes=loaders._load_graph_nodes(),
+            target_node_id=node_id,
+        )
+    except Exception as e:
+        logger.warning("Career alignment build failed: %s", e)
+        # 硬兜底：绝不返回 None，避免前端显示「数据不足」的硬编码 UI
+        career_alignment_data = {
+            "observations": "基于当前档案标签，可初步观察与目标岗位的技能重叠情况。",
+            "alignments": [{
+                "node_id": node_id,
+                "label": goal.target_label,
+                "score": 0.5,
+                "evidence": "用户已标定该方向为目标岗位",
+                "gap": "建议补充可量化的项目成果和技术文档以提升对齐度。",
+            }],
+            "cannot_judge": ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
+        }
+
     # 12. Build enriched project recommendations + skill fill path map
     import copy
     project_recs_raw = node.get("project_recommendations", [])[:3]
@@ -592,27 +584,8 @@ def generate_report(user_id: int, db) -> dict:
 def polish_narrative(narrative: str, target_label: str) -> str:
     """Re-polish an existing narrative via LLM."""
     try:
-        from backend.llm import get_llm_client, get_model
-
-        prompt = f"""以下是一段针对「{target_label}」职业方向的发展报告评价段落，请在保留核心信息的前提下进行润色优化：
-- 语言更流畅、专业
-- 保持200-300字
-- 保留所有具体数据
-- 结尾保持鼓励性语气
-
-原文：
-{narrative}
-
-请直接输出润色后的段落，不需要任何解释。"""
-
-        client = get_llm_client(timeout=30)
-        resp = client.chat.completions.create(
-            model=get_model("fast"),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.4,
-            max_tokens=600,
-        )
-        return resp.choices[0].message.content.strip()
+        from backend.skills import invoke_skill
+        return invoke_skill("polish", target_label=target_label, narrative=narrative)
     except Exception as e:
         logger.warning("Polish failed: %s", e)
         return narrative

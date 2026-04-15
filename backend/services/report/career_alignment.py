@@ -96,7 +96,7 @@ def _normalize_project_sources(profile_data: dict, projects: list) -> list[dict]
     return pool
 
 
-def _build_alignment_prompt(skills, projects, soft_skills, candidates, target_node_id, profile_data=None):
+def _build_alignment_ctx(skills, projects, soft_skills, candidates, target_node_id, profile_data=None):
     # 合并简历 + 成长档案项目
     all_projects = _normalize_project_sources(profile_data or {}, projects)
 
@@ -104,7 +104,7 @@ def _build_alignment_prompt(skills, projects, soft_skills, candidates, target_no
     for p in all_projects[:8]:  # 最多 8 个项目，防 prompt 过长
         tag = "简历" if p["source"] == "resume" else "档案"
         proj_lines.append(f"- [{tag}] [{p['name']}] {p['desc'][:220]}")
-    projects_block = "\n".join(proj_lines) or "（无项目数据）"
+    projects_list = "\n".join(proj_lines) or "（无项目数据）"
 
     # 软技能
     ss_lines = []
@@ -113,71 +113,33 @@ def _build_alignment_prompt(skills, projects, soft_skills, candidates, target_no
             continue
         if isinstance(v, (int, float)):
             ss_lines.append(f"- {k}: {int(v)}/100")
-    soft_block = "\n".join(ss_lines) or "（无软技能评估）"
+    soft_skills_summary = "\n".join(ss_lines) or "（无软技能评估）"
 
     # 候选节点
-    cand_lines = []
+    cand_list = []
     for c in candidates:
-        cand_lines.append(
-            f'- {{"node_id": "{c["node_id"]}", '
-            f'"label": "{c["label"]}", '
-            f'"role_family": "{c.get("role_family", "")}", '
-            f'"career_level": "{c.get("career_level", "")}", '
-            f'"key_skills": {c["must_skills"][:5]}}}'
-        )
-    candidates_block = "\n".join(cand_lines)
+        cand_list.append({
+            "node_id": c["node_id"],
+            "label": c["label"],
+            "role_family": c.get("role_family", ""),
+            "career_level": c.get("career_level", ""),
+            "key_skills": c["must_skills"][:5],
+        })
+    candidates_json = json.dumps(cand_list, ensure_ascii=False)
 
     target_hint = ""
     if target_node_id:
-        target_hint = f"\n\n学生目前标定的目标岗位 node_id: {target_node_id}（若此岗位在候选列表中，请给出对齐评估；若不在，请观察其他对齐方向）"
+        target_hint = f"学生目前标定的目标岗位 node_id: {target_node_id}（若此岗位在候选列表中，请给出对齐评估；若不在，请观察其他对齐方向）"
 
-    return f"""你是职业数据分析师。你的任务是根据学生数据**观察 + 对齐**，不做预测、不贴级别、不给时间表。
+    skills_list = ", ".join(str(s) for s in (skills or [])[:30])
 
-# 严格规则
-
-1. **只陈述事实**：所有结论必须能从给定的学生数据里找到依据
-2. **不做时间预测**：禁止输出"N 年到 senior"这类时间表
-3. **不贴等级标签**：禁止输出"你是中级/初级/资深"这类分类判断
-4. **node_id 只能从候选列表里选**：不许自创岗位名、不许拼接新词
-5. **每个 alignment 必须引用具体 evidence**：要么是学生某个项目里的数字、要么是某个技能名、要么是某个软技能分数——不许空泛描述
-6. **不确定就说不知道**：把无法从数据里得出的结论放进 `cannot_judge` 字段
-7. **最多输出 3 条 alignments**，按对齐度排序
-
-# 学生数据
-
-## 技能（来自简历 + 成长档案）
-{", ".join(skills[:30])}
-
-## 项目（含数据）
-{projects_block}
-
-## 软技能评估
-{soft_block}
-{target_hint}
-
-# 候选岗位（你只能从这 {len(candidates)} 个里选）
-
-{candidates_block}
-
-# 输出 JSON schema（严格遵守，不要额外文字）
-
-{{
-  "observations": "2-3 句对学生数据的事实观察，必须引用具体数据",
-  "alignments": [
-    {{
-      "node_id": "从候选列表里选的 node_id",
-      "score": 0.85,
-      "evidence": "引用学生具体项目/数字/技能作为对齐证据",
-      "gap": "对齐到该岗位还差什么（可以为空字符串）"
-    }}
-  ],
-  "cannot_judge": [
-    "你无法从数据里判断的维度，例如：'实际工作节奏与晋升速度'"
-  ]
-}}
-
-只输出 JSON，不要 markdown 代码块包裹，不要解释性文字。
-"""
+    return {
+        "candidates_json": candidates_json,
+        "target_node_id": target_hint,
+        "skills_list": skills_list,
+        "projects_list": projects_list,
+        "soft_skills_summary": soft_skills_summary,
+    }
 
 
 def _build_career_alignment(
@@ -246,8 +208,8 @@ def _build_career_alignment(
                 "_overlap": 0,
             }]
 
-    # ── [Step 2] 构造 Prompt ──
-    prompt = _build_alignment_prompt(
+    # ── [Step 2] 构造 Prompt ctx ──
+    ctx = _build_alignment_ctx(
         skills=skills,
         projects=projects,
         soft_skills=soft_skills,
@@ -259,19 +221,8 @@ def _build_career_alignment(
     # ── [Step 3] 调用 LLM ──
     parsed: dict | None = None
     try:
-        from backend.llm import get_llm_client, get_model
-        resp = get_llm_client(timeout=120).chat.completions.create(
-            model=get_model("slow"),
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.2,
-            max_tokens=1200,
-        )
-        raw = resp.choices[0].message.content.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-        parsed = json.loads(raw.strip())
+        from backend.skills import invoke_skill
+        parsed = invoke_skill("career-alignment", **ctx)
     except Exception as e:
         logger.warning("Career alignment LLM call failed: %s", e)
 

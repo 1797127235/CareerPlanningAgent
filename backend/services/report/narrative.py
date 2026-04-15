@@ -10,17 +10,6 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
-_NARRATIVE_SYSTEM = """你是一位兼具数据敏感度和教练视角的职业规划顾问，正在为一名IT学生撰写职业发展报告的核心评估段落。
-要求：
-- 语言亲切专业，直接称呼"你"，200-300字
-- 结合具体数据说话（技能匹配、分数、差距）
-- 指出最大亮点和最需改进的1-2个方向
-- 适当体现"职业阶段感"：如果是初级方向强调基础与完整度，如果是中高级方向强调系统深度与可量化影响
-- 如果项目描述缺少"动词+动作+数字"的 impact-first 结构，要把它作为简历层面的关键观察点提出来
-- 结尾给出一句鼓励性总结，并传递一种温和的"计划性偶发"（Planned Happenstance）态度：职业路径往往是非线性的，保持好奇心和小步尝试比追求完美规划更重要
-- 直接输出段落文字，不要标题或标签"""
-
-
 _HOLLOW_PATTERNS = [
     {
         "id": "no_numbers",
@@ -61,135 +50,23 @@ def _generate_narrative(
     projects: list | None = None,
     claimed_skills: list[str] | None = None,
     applications: list | None = None,
+    delta: dict | None = None,
 ) -> str:
-    """Call LLM to generate personalized 200-300 char narrative using real student data."""
+    """Call LLM to generate personalized narrative using real student data."""
     try:
-        from backend.llm import get_llm_client, get_model
+        from backend.skills import invoke_skill
 
-        dim_labels = {"foundation": "基础要求", "skills": "职业技能",
-                      "qualities": "职业素养", "potential": "发展潜力"}
-        dim_text = []
-        for k, label in dim_labels.items():
-            v = four_dim.get(k)
-            dim_text.append(f"- {label}: {v if v is not None else '暂无（需完成模拟面试）'}")
-
-        # Education context
-        edu_text = ""
-        if education and isinstance(education, dict):
-            school = education.get("school", "")
-            major = education.get("major", "")
-            if school or major:
-                edu_text = f"学生背景：{school + ' ' if school else ''}{major + '专业' if major else ''}"
-
-        # Projects context（含描述，让 LLM 能基于真实项目推理而不是空谈）
-        proj_text = ""
-        if projects:
-            proj_lines = []
-            for p in projects[:4]:
-                name = getattr(p, "name", "") or "未命名"
-                desc = getattr(p, "description", "") or getattr(p, "_desc", "") or ""
-                status = getattr(p, "status", "")
-                status_tag = "[已完成]" if status == "completed" else "[进行中]" if status == "in_progress" else ""
-                if desc:
-                    proj_lines.append(f"{status_tag}{name}：{desc[:180]}")
-                else:
-                    proj_lines.append(f"{status_tag}{name}")
-            proj_text = "\n".join(proj_lines)
-
-        # Claimed-but-unverified skills (risk signal)
-        # 注：经 6b embedding + 6c LLM 隐式推断之后仍未匹配到项目的，才算真 claimed
-        claimed_text = ""
-        if claimed_skills:
-            claimed_text = (
-                f"简历声称但无项目可对应的技能：{', '.join(claimed_skills[:3])}。"
-                "⚠️ 仅当该技能确实无法从现有项目推理出使用场景时，才当作面试风险点；"
-                "如果学生的项目隐式使用了这些技能（例如 C++ 后端项目必然用 STL），不要当成风险。"
-            )
-
-        # Application status
-        apply_text = ""
-        if applications:
-            total = len(applications)
-            active = [a for a in applications if getattr(a, "status", "") in ("applied", "screening", "scheduled", "interviewed")]
-            apply_text = f"已投递 {total} 家公司，{len(active)} 个进行中"
-
-        market_text = ""
-        if market_info:
-            market_text = (
-                f"市场：该方向需求变化 {market_info.get('demand_change_pct', 0):+.0f}%，"
-                f"入场时机{market_info.get('timing_label', '良好')}"
-            )
-
-        gap_text = "、".join(gap_skills[:4]) if gap_skills else "暂无明显差距"
-
-        context_parts = [p for p in [edu_text, proj_text, claimed_text, apply_text] if p]
-        context_block = "\n".join(context_parts) if context_parts else ""
-
-        # Resume impact-first observation
-        resume_impact_text = ""
-        if projects:
-            has_metrics = any(
-                any(d in (getattr(p, "description", "") + getattr(p, "_desc", "")).lower() for d in ["qps", "latency", "用户", "日活", "准确率", "提升", "%", "倍", "ms", "tps"])
-                for p in projects[:4]
-            )
-            if not has_metrics:
-                resume_impact_text = "注意：该学生项目描述中缺少可量化的结果数字（如 QPS、用户数、准确率等），这意味着简历可能还停留在'做了什么'而不是'做成了什么'的层面。"
-
-        prompt = f"""为以下学生撰写职业发展报告的综合评价段落（200-300字）：
-
-目标岗位：{target_label}
-综合匹配分：{match_score}/100
-近期成长趋势：{growth_delta:+.1f}分
-
-四维评分：
-{chr(10).join(dim_text)}
-
-核心技能差距：{gap_text}
-{market_text}
-
-【学生真实档案】
-{context_block if context_block else '（学生尚未完善档案）'}
-{resume_impact_text}
-
-要求：
-- 语言亲切专业，直接称呼"你"
-- **不要罗列分数**（例如"职业技能维度得分 47，发展潜力 50"这类 X 分 Y 分的堆砌）。分数已经在页面其他地方展示，你的文字要讲**故事**，不要复读数据
-- 必须引用学生项目里的具体细节（项目名 + 做法或数字）作为推理依据，**严禁泛泛而谈**
-- 点名最大优势和最需改进的 1-2 个方向时，每条结论都要能回指上面的项目或数字
-- 对"简历声称但无项目可对应的技能"要先判断：该技能是否已经**隐式用在学生现有项目里**？
-  • 如果是（例如做 C++ 网络库必然用到 STL+Linux socket），**不要**列为面试风险
-  • 只有确实找不到任何项目能证明的技能，才能提风险
-- 如果项目缺少量化数字，要把"缺少 impact-first 叙事"当作一个独立的简历观察点提出来
-- 严禁输出"建议聚焦实战项目填补技能缺口"、"保持当前成长势头"、"持续积累实战项目经验"、"相信你一定行"这类万能套话
-- 结尾一句鼓励，要具体（例如"把下一个 demo 的 QPS 数据写进档案就能封堵这个缺口"这种），并传递职业路径可以是非线性的、小步尝试同样有价值的温和态度
-- 直接输出段落，不要标题"""
-
-        # 带重试：首次 60s 超时，失败再试一次 90s；max_tokens 收敛到 400 降低耗时
-        client = get_llm_client(timeout=60)
-        last_err: Exception | None = None
-        for attempt in range(2):
-            try:
-                resp = client.chat.completions.create(
-                    model=get_model("fast"),
-                    messages=[
-                        {"role": "system", "content": _NARRATIVE_SYSTEM},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.5,
-                    max_tokens=400,
-                )
-                return resp.choices[0].message.content.strip()
-            except Exception as inner:
-                last_err = inner
-                logger.warning("Narrative attempt %d failed: %s", attempt + 1, inner)
-                if attempt == 0:
-                    # 第二次用更长超时 + 更短 max_tokens
-                    client = get_llm_client(timeout=90)
-        if last_err:
-            raise last_err
-
+        text = invoke_skill(
+            "narrative",
+            target_label=target_label,
+            claimed_skills=", ".join(s for s in (claimed_skills or []) if s),
+            projects_list="\n".join(_format_projects_for_prompt(projects or [])),
+            education_line=_format_education(education),
+            delta_line=_format_delta_line(delta),
+            market_line=_format_market(market_info),
+        )
+        return text.strip()
     except Exception as e:
-        # 重试两次都失败——诚实告知，不伪装 AI 输出
         logger.error("Narrative generation FAILED after retries: %s", e, exc_info=True)
         err_type = type(e).__name__
         err_msg = str(e)[:180] if str(e) else err_type
@@ -272,43 +149,32 @@ def _diagnose_profile(
     # Step 2: LLM generates specific suggestions for items with issues
     suggestions: dict[str, dict] = {}  # name -> {highlight, suggestion}
     if needs_fix:
+        projects_for_llm = []
+        for it in needs_fix:
+            projects_for_llm.append({
+                "name": it["name"],
+                "text": it["text"],
+                "source_type": it["source_type"],
+                "source_id": it["source_id"],
+                "issues": it["issues"],
+            })
+
         try:
-            from backend.llm import get_llm_client, get_model
-
-            items_text = "\n".join(
-                f"- 项目「{it['name']}」: {it['text'][:100]}\n  问题: {', '.join(it['issues'])}"
-                for it in needs_fix
+            from backend.skills import invoke_skill
+            parsed = invoke_skill(
+                "diagnosis",
+                target_label=node_label,
+                projects_json=json.dumps(projects_for_llm, ensure_ascii=False),
             )
-
-            prompt = f"""你是简历优化专家。学生目标岗位是「{node_label}」。
-
-以下项目/经历存在描述问题，请为每个项目输出：
-1. highlight: 一句话总结亮点（肯定学生做了什么）
-2. suggestion: 具体建议补充的文字（包含具体数字占位符如 XX，让学生填入真实数据）
-
-{items_text}
-
-输出 JSON 数组，每项包含 name、highlight、suggestion。只输出 JSON。"""
-
-            resp = get_llm_client(timeout=20).chat.completions.create(
-                model=get_model("fast"),
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=800,
-            )
-            raw = resp.choices[0].message.content.strip()
-            if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            parsed = json.loads(raw.strip())
             if isinstance(parsed, list):
                 for item in parsed:
-                    if isinstance(item, dict) and item.get("name"):
-                        suggestions[item["name"]] = {
-                            "highlight": item.get("highlight", ""),
-                            "suggestion": item.get("suggestion", ""),
-                        }
+                    if isinstance(item, dict):
+                        key = item.get("source") or item.get("name")
+                        if key:
+                            suggestions[key] = {
+                                "highlight": item.get("highlight", ""),
+                                "suggestion": item.get("suggestion", ""),
+                            }
         except Exception as e:
             logger.warning("Profile diagnosis LLM failed: %s", e)
 
@@ -341,3 +207,68 @@ def _diagnose_profile(
         })
 
     return results
+
+
+def _format_projects_for_prompt(projects: list) -> list[str]:
+    lines = []
+    for p in projects[:4]:
+        name = getattr(p, "name", "") or "未命名"
+        desc = getattr(p, "description", "") or getattr(p, "_desc", "") or ""
+        status = getattr(p, "status", "")
+        status_tag = "[已完成]" if status == "completed" else "[进行中]" if status == "in_progress" else ""
+        if desc:
+            lines.append(f"- {status_tag}{name}：{desc[:180]}")
+        else:
+            lines.append(f"- {status_tag}{name}")
+    return lines
+
+
+def _format_education(education: dict | None) -> str:
+    if not education or not isinstance(education, dict):
+        return ""
+    school = education.get("school", "")
+    major = education.get("major", "")
+    if school or major:
+        return f"{school + ' ' if school else ''}{major + '专业' if major else ''}"
+    return ""
+
+
+def _format_delta_line(delta: dict | None) -> str:
+    if not delta:
+        return ""
+    from datetime import datetime, timezone
+    prev_date = delta.get("prev_date", "")
+    gained = delta.get("gained_skills", [])
+    days = 0
+    if prev_date:
+        try:
+            prev_dt = datetime.fromisoformat(prev_date)
+            days = (datetime.now(timezone.utc) - prev_dt).days
+        except Exception:
+            pass
+    parts = []
+    if days > 0:
+        parts.append(f"距上次报告 {days} 天")
+    if gained:
+        parts.append(f"期间多掌握了 {', '.join(gained)}")
+    if parts:
+        return "，".join(parts) + "。"
+    return ""
+
+
+def _format_market(market_info: dict | None) -> str:
+    if not market_info:
+        return ""
+    parts = []
+    salary = market_info.get("salary_p50")
+    if salary:
+        parts.append(f"薪资 p50 ¥{salary}k")
+    timing = market_info.get("timing_label", "")
+    if timing:
+        parts.append(f"入场时机{timing}")
+    demand = market_info.get("demand_change_pct")
+    if demand is not None:
+        parts.append(f"需求变化 {demand:+.0f}%")
+    if parts:
+        return "；".join(parts) + "。"
+    return ""
