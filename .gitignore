@@ -66,6 +66,10 @@ _bmad/_memory/
 # === �����ļ������ļ������ύ Git��===
 data/
 data/mem0_qdrant/
-artifacts/edge-debug/
+artifacts/
+frontend-v2/artifacts/
 *.db-wal
 *.db-shm
+
+# 顶层 ad-hoc 测试截图
+/*.png
