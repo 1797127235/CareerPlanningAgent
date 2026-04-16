@@ -16,6 +16,7 @@ import {
   generateReportV2,
   fetchReportList,
   fetchReportDetail,
+  fetchReportStatus,
   editReport,
   deleteReport,
   exportReportPdf,
@@ -114,6 +115,15 @@ export default function ReportPage() {
     prevList: ReportListItem[]
   } | null>(null)
 
+  const pollIntervalRef = useRef<number | null>(null)
+
+  const stopPoll = () => {
+    if (pollIntervalRef.current != null) {
+      window.clearInterval(pollIntervalRef.current)
+      pollIntervalRef.current = null
+    }
+  }
+
   const loadInitial = async () => {
     setLoading(true)
     setError(null)
@@ -152,6 +162,36 @@ export default function ReportPage() {
     } finally {
       setSwitchingTo(null)
     }
+  }
+
+  // Poll backend /report/status until it reports generating=false, then
+  // refetch list + detail so the new report appears. Used on mount to recover
+  // from the case where the user navigated away mid-generation.
+  const startStatusPoll = () => {
+    if (pollIntervalRef.current != null) return
+    pollIntervalRef.current = window.setInterval(async () => {
+      try {
+        const { generating: stillGenerating } = await fetchReportStatus()
+        if (!stillGenerating) {
+          stopPoll()
+          setGenerating(false)
+          try {
+            const list = await fetchReportList()
+            setReportList(list)
+            if (list[0]) {
+              setCurrentId(list[0].id)
+              const detail = await fetchReportDetail(list[0].id)
+              const rd = detail.data as unknown as ReportV2Data
+              if (rd && rd.target) setData(rd)
+            }
+          } catch {
+            /* non-fatal：下一次 mount 会重试 */
+          }
+        }
+      } catch {
+        /* 网络抖动：忽略本次 tick，下一次继续 */
+      }
+    }, 3000)
   }
 
   const generate = async () => {
@@ -304,6 +344,19 @@ export default function ReportPage() {
 
   useEffect(() => {
     loadInitial()
+    fetchReportStatus()
+      .then(({ generating: isGen }) => {
+        if (isGen) {
+          setGenerating(true)
+          startStatusPoll()
+        }
+      })
+      .catch(() => {
+        /* 失败就当没在生成，用户可以手动再点一次 */
+      })
+    return () => {
+      stopPoll()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

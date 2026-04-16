@@ -9,6 +9,7 @@ import openai
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
@@ -205,30 +206,11 @@ def generate_report(user_id: int, db) -> dict:
 
     logger.info("Rule-based desc scan: found practiced skills %s", _desc_practiced)
 
-    # Optional LLM enrichment for skills NOT in user's resume (e.g. Reactor, epoll)
-    _inferred_skills_from_text: list[str] = list(_desc_practiced)
-    _texts_to_infer = profile_projects_raw[:4] + [p.name for p in projects if not p.skills_used and p.name]
-    if _texts_to_infer:
-        try:
-            from backend.skills import invoke_skill
-            _extra = invoke_skill(
-                "skill-inference",
-                projects_text="\n".join(f"- {t[:100]}" for t in _texts_to_infer),
-            )
-            if isinstance(_extra, list):
-                _inferred_skills_from_text.extend(s for s in _extra if isinstance(s, str))
-            elif isinstance(_extra, dict):
-                for v in _extra.values():
-                    if isinstance(v, list):
-                        _inferred_skills_from_text.extend(s for s in v if isinstance(s, str))
-        except Exception as _e:
-            logger.debug("LLM skill enrichment skipped: %s", _e)
-
-    # 6. Extract proficiency sets: rule-based desc scan + LLM enrichment + ProjectRecord
+    # 6. Extract proficiency sets: rule-based desc scan + explicit skills_used
     practiced: set[str] = set()
     completed_practiced: set[str] = set()
 
-    for s in _inferred_skills_from_text:
+    for s in _desc_practiced:
         practiced.add(s.lower().strip())
 
     for p in projects:
@@ -239,14 +221,45 @@ def generate_report(user_id: int, db) -> dict:
             for s in explicit:
                 completed_practiced.add(s.lower().strip())
 
-    # 6b. Embedding pre-pass: infer implicit skills not caught by rule-based scan.
-    #     E.g. "Linux" and "STL" are implicit in any C++ network project even if
-    #     not mentioned verbatim.  Run embeddings now so _build_skill_gap sees them
-    #     as "practiced" rather than "claimed".
+    # 6b. 合并的技能推断 + embedding 预筛：并发跑
+    # - merged skill-inference：同时做开放提取 + 已声明技能校验（双任务单次调用）
+    # - embedding pre-pass：语义相似度匹配 uncovered claimed 技能到项目
+    # 两者互不依赖，结果取并集加入 practiced 集合。
     _user_skills_all = list(shared._user_skill_set(profile_data))
+    _texts_to_infer = profile_projects_raw[:4] + [p.name for p in projects if not p.skills_used and p.name]
     _uncovered = [s for s in _user_skills_all if not shared._skill_in_set(s, practiced)]
-    if _uncovered and profile_proj_descs:
-        # Build lightweight proxy objects for profile descriptions
+
+    def _run_merged_skill_inference() -> tuple[list[str], list[str]]:
+        """Returns (extracted_skills, validated_claimed)."""
+        if not _texts_to_infer:
+            return [], []
+        try:
+            from backend.skills import invoke_skill
+            claimed_line = "、".join(_uncovered) if _uncovered else "（无）"
+            resp = invoke_skill(
+                "skill-inference",
+                projects_text="\n".join(f"- {t[:200]}" for t in _texts_to_infer),
+                claimed_skills_list=claimed_line,
+            )
+            if isinstance(resp, dict):
+                skills = [s for s in (resp.get("skills") or []) if isinstance(s, str)]
+                validated = [s for s in (resp.get("validated_claimed") or []) if isinstance(s, str)]
+                # 把 LLM 可能自造的新技能过滤掉（validated_claimed 必须在 _uncovered 里）
+                uncovered_set = {s.lower().strip() for s in _uncovered}
+                validated = [s for s in validated if s.lower().strip() in uncovered_set]
+                return skills, validated
+            # 兼容老输出结构：裸数组 / 只含 skills 的 dict
+            if isinstance(resp, list):
+                return [s for s in resp if isinstance(s, str)], []
+            return [], []
+        except Exception as e:
+            logger.debug("merged skill-inference skipped: %s", e)
+            return [], []
+
+    def _run_embedding_prepass() -> list[str]:
+        """Returns list of skills to add to practiced (semantically matched to some project)."""
+        if not _uncovered or not profile_proj_descs:
+            return []
         class _EarlyProj:
             def __init__(self, name: str, desc: str):
                 self.name = name
@@ -254,29 +267,32 @@ def generate_report(user_id: int, db) -> dict:
                 self._desc = desc
         _early_proj_objs = [_EarlyProj(pp["name"], pp["desc"]) for pp in profile_proj_descs]
         _early_proj_objs += [p for p in projects if getattr(p, "skills_used", None)]
-        _embed_pre = skill_gap._embed_classify_skills(_uncovered, _early_proj_objs)
-        for _sk, _pj in _embed_pre.items():
-            if _pj is not None:
-                practiced.add(_sk.lower().strip())
-        logger.info("Embedding pre-pass practiced additions: %s",
-                    [k for k, v in _embed_pre.items() if v])
+        try:
+            _embed_pre = skill_gap._embed_classify_skills(_uncovered, _early_proj_objs)
+            return [sk for sk, pj in _embed_pre.items() if pj is not None]
+        except Exception as e:
+            logger.debug("embedding pre-pass skipped: %s", e)
+            return []
 
-        # 6c. LLM 隐式技能推断 pre-pass：
-        #     embedding 只能捕捉语义相似度，无法推理"C++ 网络库必然用 STL+Linux"
-        #     这种技术栈依赖关系。让 LLM 读项目描述，显式推断隐式用到的技术。
-        _still_uncovered = [
-            s for s in _user_skills_all
-            if not shared._skill_in_set(s, practiced)
-        ]
-        if _still_uncovered and profile_proj_descs:
-            _llm_implicit = skill_gap._infer_implicit_skills_llm(
-                _still_uncovered,
-                profile_proj_descs,
-            )
-            for _sk in _llm_implicit:
-                practiced.add(_sk.lower().strip())
-            if _llm_implicit:
-                logger.info("LLM implicit-skill inference added: %s", _llm_implicit)
+    with ThreadPoolExecutor(max_workers=2) as _early_exec:
+        _f_merged = _early_exec.submit(_run_merged_skill_inference)
+        _f_embed = _early_exec.submit(_run_embedding_prepass)
+        _extracted, _validated_claimed = _f_merged.result()
+        _embed_matches = _f_embed.result()
+
+    for s in _extracted:
+        practiced.add(s.lower().strip())
+    for s in _validated_claimed:
+        practiced.add(s.lower().strip())
+    for s in _embed_matches:
+        practiced.add(s.lower().strip())
+
+    if _extracted:
+        logger.info("[skill-inference] extracted from text: %s", _extracted)
+    if _validated_claimed:
+        logger.info("[skill-inference] validated claimed: %s", _validated_claimed)
+    if _embed_matches:
+        logger.info("Embedding pre-pass practiced additions: %s", _embed_matches)
 
     # 6d. Reverse skill gap check: scan project texts for keywords that imply
     #     coverage of required skills, even if the user didn't list them in skills.
@@ -384,33 +400,130 @@ def generate_report(user_id: int, db) -> dict:
         skill_gap_current=_skill_gap,
     )
 
-    # ── Action plan ───────────────────────────────────────────────────────────
-    try:
-        action_plan_data = _invoke_action_plan_with_retry(
+    # ── 准备 enriched_missing / report_skill_gap（纯 Python，毫秒级）──
+    # 提前算好，differentiation worker 要用，同时 report_skill_gap 最后组装 payload 要用。
+    project_recs_raw = node.get("project_recommendations", [])[:3]
+    top_missing_raw = _skill_gap.get("top_missing", []) if _skill_gap else []
+    enriched_projects, enriched_missing, project_mismatch = skill_gap._build_skill_fill_path_map(
+        project_recs_raw, top_missing_raw
+    )
+    report_skill_gap = copy.deepcopy(_skill_gap) if _skill_gap else None
+    if report_skill_gap is not None:
+        report_skill_gap["top_missing"] = enriched_missing
+
+    # ── 后段 6 个独立 LLM 调用：并发执行 ──
+    # 它们都只依赖 summary / _skill_gap / profile / node / market_info（前面都已算好），
+    # 互不依赖。串行耗时约 230s，并发后瓶颈 ≈ 最慢那个。
+
+    def _worker_action_plan():
+        try:
+            raw = _invoke_action_plan_with_retry(
+                target_label=goal.target_label,
+                node_requirements_line=_format_node_requirements(node),
+                market_line=narrative._format_market(market_info),
+                summary_json=json.dumps(summary, ensure_ascii=False),
+                prev_recommendations_block=_format_prev_recs(summary["prev_report_recommendations"]),
+                completed_block=_format_completed(summary["completed_since_last_report"]),
+            )
+            return _coerce_action_plan(raw)
+        except Exception as e:
+            logger.warning("action-plan skill failed after retry, fallback to rule-based: %s", e)
+            return action_plan._build_action_plan(
+                gap_skills=goal.gap_skills or [],
+                top_missing=_skill_gap.get("top_missing", []) if _skill_gap else [],
+                node_id=node_id,
+                node_label=goal.target_label,
+                profile_data=profile_data,
+                current_readiness=current_readiness,
+                claimed_skills=claimed_skills,
+                projects=merged_projects,
+                applications=applications,
+                profile_proj_descs=profile_proj_descs,
+            )
+
+    def _worker_narrative():
+        return narrative._generate_narrative(
             target_label=goal.target_label,
-            node_requirements_line=_format_node_requirements(node),
+            summary=summary,
+            education_line=narrative._format_education(profile_data.get("education")),
             market_line=narrative._format_market(market_info),
-            summary_json=json.dumps(summary, ensure_ascii=False),
-            prev_recommendations_block=_format_prev_recs(summary["prev_report_recommendations"]),
-            completed_block=_format_completed(summary["completed_since_last_report"]),
-        )
-        action_plan_data = _coerce_action_plan(action_plan_data)
-    except Exception as e:
-        logger.warning("action-plan skill failed after retry, fallback to rule-based: %s", e)
-        action_plan_data = action_plan._build_action_plan(
-            gap_skills=goal.gap_skills or [],
-            top_missing=_skill_gap.get("top_missing", []) if _skill_gap else [],
-            node_id=node_id,
-            node_label=goal.target_label,
-            profile_data=profile_data,
-            current_readiness=current_readiness,
-            claimed_skills=claimed_skills,
-            projects=merged_projects,
-            applications=applications,
-            profile_proj_descs=profile_proj_descs,
         )
 
-    # 10. Delta vs previous report
+    def _worker_diagnosis():
+        # SQLAlchemy session 非线程安全，线程内独立开一条
+        from backend.db import SessionLocal
+        _db = SessionLocal()
+        try:
+            return narrative._diagnose_profile(
+                profile_data=profile_data,
+                projects=projects,
+                node_label=goal.target_label,
+                db=_db,
+            )
+        finally:
+            _db.close()
+
+    def _worker_career_alignment():
+        try:
+            return career_alignment._build_career_alignment(
+                profile_data=profile_data,
+                projects=projects,
+                graph_nodes=loaders._load_graph_nodes(),
+                target_node_id=node_id,
+                summary=summary,
+            )
+        except Exception as e:
+            logger.warning("Career alignment build failed: %s", e)
+            # 硬兜底：绝不返回 None，避免前端显示「数据不足」的硬编码 UI
+            return {
+                "observations": "基于当前档案标签，可初步观察与目标岗位的技能重叠情况。",
+                "alignments": [{
+                    "node_id": node_id,
+                    "label": goal.target_label,
+                    "score": 0.5,
+                    "evidence": "用户已标定该方向为目标岗位",
+                    "gap": "建议补充可量化的项目成果和技术文档以提升对齐度。",
+                }],
+                "cannot_judge": ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
+            }
+
+    def _worker_differentiation():
+        return _build_differentiation_advice(
+            target_label=goal.target_label,
+            baseline=node.get("differentiation_advice", ""),
+            summary=summary,
+            top_missing=enriched_missing,
+        )
+
+    def _worker_market_narrative():
+        return _build_market_narrative(
+            target_label=goal.target_label,
+            market_info=market_info,
+            node=node,
+            summary=summary,
+        )
+
+    _parallel_start = time.time()
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        f_action = executor.submit(_worker_action_plan)
+        f_narrative = executor.submit(_worker_narrative)
+        f_diagnosis = executor.submit(_worker_diagnosis)
+        f_alignment = executor.submit(_worker_career_alignment)
+        f_diff = executor.submit(_worker_differentiation)
+        f_market = executor.submit(_worker_market_narrative)
+
+        action_plan_data = f_action.result()
+        narrative_text = f_narrative.result()
+        diagnosis = f_diagnosis.result()
+        career_alignment_data = f_alignment.result()
+        differentiation_advice = f_diff.result()
+        market_narrative = f_market.result()
+    logger.info(
+        "[pipeline] 6 parallel LLM tasks finished in %.1fs",
+        time.time() - _parallel_start,
+    )
+
+    # 10. Delta vs previous report (依赖 action_plan_data，必须在并发之后)
     delta = None
     if prev_report:
         prev_data = _parse_data(prev_report.data_json)
@@ -495,79 +608,6 @@ def generate_report(user_id: int, db) -> dict:
             "plan_progress": plan_progress,
             "next_action": next_action,
         }
-
-    # 10b. LLM narrative
-    narrative_text = narrative._generate_narrative(
-        target_label=goal.target_label,
-        summary=summary,
-        education_line=narrative._format_education(profile_data.get("education")),
-        market_line=narrative._format_market(market_info),
-    )
-
-    # 10c. Profile diagnosis (档案体检 — content completeness check)
-    diagnosis = narrative._diagnose_profile(
-        profile_data=profile_data,
-        projects=projects,
-        node_label=goal.target_label,
-        db=db,
-    )
-
-    # ── 方向对齐分析（LLM 分析 + graph 绑定）──
-    try:
-        career_alignment_data = career_alignment._build_career_alignment(
-            profile_data=profile_data,
-            projects=projects,
-            graph_nodes=loaders._load_graph_nodes(),
-            target_node_id=node_id,
-            summary=summary,
-        )
-    except Exception as e:
-        logger.warning("Career alignment build failed: %s", e)
-        # 硬兜底：绝不返回 None，避免前端显示「数据不足」的硬编码 UI
-        career_alignment_data = {
-            "observations": "基于当前档案标签，可初步观察与目标岗位的技能重叠情况。",
-            "alignments": [{
-                "node_id": node_id,
-                "label": goal.target_label,
-                "score": 0.5,
-                "evidence": "用户已标定该方向为目标岗位",
-                "gap": "建议补充可量化的项目成果和技术文档以提升对齐度。",
-            }],
-            "cannot_judge": ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
-        }
-
-    # 12. Build enriched project recommendations + skill fill path map
-    import copy
-    project_recs_raw = node.get("project_recommendations", [])[:3]
-    top_missing_raw = _skill_gap.get("top_missing", []) if _skill_gap else []
-
-    enriched_projects, enriched_missing, project_mismatch = skill_gap._build_skill_fill_path_map(
-        project_recs_raw, top_missing_raw
-    )
-
-    report_skill_gap = copy.deepcopy(_skill_gap) if _skill_gap else None
-    if report_skill_gap is not None:
-        report_skill_gap["top_missing"] = enriched_missing
-
-    # 12b. Chapter III: personalized differentiation narrative via LLM.
-    # Replaces the static graph.json node.differentiation_advice with a
-    # per-user narrative grounded in summary + skill_gap. Falls back to the
-    # graph.json text if the skill call fails.
-    differentiation_advice = _build_differentiation_advice(
-        target_label=goal.target_label,
-        baseline=node.get("differentiation_advice", ""),
-        summary=summary,
-        top_missing=enriched_missing,
-    )
-
-    # 12c. Market narrative — replaces the hardcoded salary/demand/timing line
-    # with a per-user LLM paragraph that hides year numbers.
-    market_narrative = _build_market_narrative(
-        target_label=goal.target_label,
-        market_info=market_info,
-        node=node,
-        summary=summary,
-    )
 
     # 13. Assemble report payload
     report_data = {

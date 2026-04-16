@@ -22,6 +22,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.config import CORS_ORIGINS
 from backend.db import init_db
 
+# 把 skill 层的 logger.info('[skill:xxx] OK in X.Xs') 等也显示出来，
+# 否则 uvicorn 默认 WARNING 级别会吞掉。
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
+
 logger = logging.getLogger(__name__)
 
 

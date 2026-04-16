@@ -9,8 +9,8 @@ interface PrintChapterIProps {
 }
 
 const BODY_FONT = '14px "Source Han Serif SC", serif'
-const BODY_LINE_HEIGHT = 24
-const PARA_GAP = 10
+const BODY_LINE_HEIGHT = 30
+const PARA_GAP = 16
 
 export function PrintChapterI({ data, onLayoutDone }: PrintChapterIProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -19,7 +19,10 @@ export function PrintChapterI({ data, onLayoutDone }: PrintChapterIProps) {
   const [headlineSize, setHeadlineSize] = useState(32)
 
   const narrative = data.narrative || ''
-  const paragraphs = narrative.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0)
+  const paragraphs = narrative
+    .split(/\n{2,}/)
+    .map((p) => p.trim().replace(/\s+/g, ' '))  // 把段落内的 \n / tab / 连续空格都折叠成单个空格
+    .filter((p) => p.length > 0)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -85,11 +88,11 @@ export function PrintChapterI({ data, onLayoutDone }: PrintChapterIProps) {
                 position: 'absolute',
                 left: ln.x,
                 top: ln.y,
-                width: ln.width,
                 fontSize: 14,
                 lineHeight: `${BODY_LINE_HEIGHT}px`,
                 fontFamily: '"Source Han Serif SC", serif',
                 color: '#0f172a',
+                whiteSpace: 'pre',  // 禁止浏览器二次 wrap + 保留 pretext 输出里的空格（和官方 editorial-engine demo 对齐）
               }}
             >
               {ln.text}

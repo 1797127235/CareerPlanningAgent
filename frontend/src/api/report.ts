@@ -231,3 +231,7 @@ export async function exportReportPdf(reportId: number): Promise<Blob> {
   }
   return res.blob()
 }
+
+export async function fetchReportStatus(): Promise<{ generating: boolean }> {
+  return rawFetch<{ generating: boolean }>('/report/status')
+}

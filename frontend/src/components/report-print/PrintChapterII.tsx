@@ -9,8 +9,8 @@ interface PrintChapterIIProps {
 }
 
 const BODY_FONT = '14px "Source Han Serif SC", serif'
-const BODY_LINE_HEIGHT = 24
-const PARA_GAP = 10
+const BODY_LINE_HEIGHT = 30
+const PARA_GAP = 16
 
 export function PrintChapterII({ data, onLayoutDone }: PrintChapterIIProps) {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -21,7 +21,10 @@ export function PrintChapterII({ data, onLayoutDone }: PrintChapterIIProps) {
   const override = data.chapter_narratives?.['chapter-2']
   const baseObs = data.career_alignment?.observations ?? ''
   const proseText = (override ?? baseObs).trim()
-  const paragraphs = proseText.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 0)
+  const paragraphs = proseText
+    .split(/\n{2,}/)
+    .map((p) => p.trim().replace(/\s+/g, ' '))  // 把段落内的 \n / tab / 连续空格都折叠成单个空格
+    .filter((p) => p.length > 0)
 
   const alignments = (data.career_alignment?.alignments ?? []).slice(0, 3)
 
@@ -92,11 +95,11 @@ export function PrintChapterII({ data, onLayoutDone }: PrintChapterIIProps) {
                   position: 'absolute',
                   left: ln.x,
                   top: ln.y,
-                  width: ln.width,
                   fontSize: 14,
                   lineHeight: `${BODY_LINE_HEIGHT}px`,
                   fontFamily: '"Source Han Serif SC", serif',
                   color: '#0f172a',
+                  whiteSpace: 'pre',  // 禁止浏览器二次 wrap + 保留 pretext 输出里的空格（和官方 editorial-engine demo 对齐）
                 }}
               >
                 {ln.text}

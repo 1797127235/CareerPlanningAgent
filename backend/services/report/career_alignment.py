@@ -131,7 +131,14 @@ def _build_alignment_ctx(skills, projects, soft_skills, candidates, target_node_
     if target_node_id:
         target_hint = f"学生目前标定的目标岗位 node_id: {target_node_id}（若此岗位在候选列表中，请给出对齐评估；若不在，请观察其他对齐方向）"
 
-    skills_list = ", ".join(str(s) for s in (skills or [])[:30])
+    # 只取技能名，丢掉 level / 其他字段——防 LLM 把 intermediate/beginner/familiar
+    # 这些内部枚举值搬进正文（用户看到会觉得像数据导出而不是自然叙事）
+    def _skill_name_only(s: Any) -> str:
+        if isinstance(s, dict):
+            return str(s.get("name", "")).strip()
+        return str(s).strip()
+    skill_names = [n for n in (_skill_name_only(s) for s in (skills or [])[:30]) if n]
+    skills_list = "、".join(skill_names)
 
     # 行为信号格式化
     summary = summary or {}

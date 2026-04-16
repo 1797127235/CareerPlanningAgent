@@ -21,6 +21,13 @@ from backend.db_models import ActionPlanV2, ActionProgress, Profile, Report, Use
 
 router = APIRouter()
 
+import threading
+
+# In-memory tracker of user_ids with an in-flight /generate request.
+# Single-process uvicorn only; if we go multi-worker later, swap for Redis.
+_generating_users: set[int] = set()
+_generating_lock = threading.Lock()
+
 
 # ── Schemas ────────────────────────────────────────────────────────────────────
 
@@ -97,58 +104,79 @@ def generate_report(
     """Generate and persist a new career development report for the current user."""
     from backend.services.report import generate_report as _generate
 
+    with _generating_lock:
+        _generating_users.add(user.id)
+
     try:
-        data = _generate(user_id=user.id, db=db)
-    except ValueError as e:
-        msg = str(e)
-        if "no_profile" in msg:
-            raise HTTPException(400, "请先上传简历完成能力画像")
-        if "no_goal" in msg:
-            raise HTTPException(400, "请先在岗位图谱中设定职业目标")
-        print(f"[report/generate] ValueError for user {user.id}: {msg}")
-        traceback.print_exc()
-        raise HTTPException(400, f"报告生成失败：{msg}")
-    except Exception as e:
-        print(f"[report/generate] Exception for user {user.id}: {type(e).__name__}: {e}")
-        traceback.print_exc()
-        raise HTTPException(500, f"报告生成异常：{e}")
+        try:
+            data = _generate(user_id=user.id, db=db)
+        except ValueError as e:
+            msg = str(e)
+            if "no_profile" in msg:
+                raise HTTPException(400, "请先上传简历完成能力画像")
+            if "no_goal" in msg:
+                raise HTTPException(400, "请先在岗位图谱中设定职业目标")
+            print(f"[report/generate] ValueError for user {user.id}: {msg}")
+            traceback.print_exc()
+            raise HTTPException(400, f"报告生成失败：{msg}")
+        except Exception as e:
+            print(f"[report/generate] Exception for user {user.id}: {type(e).__name__}: {e}")
+            traceback.print_exc()
+            raise HTTPException(500, f"报告生成异常：{e}")
 
-    target_label = data.get("target", {}).get("label", "职业发展报告")
-    match_score = data.get("match_score", 0)
-    narrative = data.get("narrative", "")
-    summary_text = narrative[:80] + "…" if len(narrative) > 80 else narrative
+        target_label = data.get("target", {}).get("label", "职业发展报告")
+        match_score = data.get("match_score", 0)
+        narrative = data.get("narrative", "")
+        summary_text = narrative[:80] + "…" if len(narrative) > 80 else narrative
 
-    report_key_str = str(uuid.uuid4())
+        report_key_str = str(uuid.uuid4())
 
-    report = Report(
-        report_key=report_key_str,
-        user_id=user.id,
-        title=f"{target_label} — 职业发展报告",
-        summary=summary_text,
-        data_json=json.dumps(data, ensure_ascii=False),
-    )
-    db.add(report)
+        report = Report(
+            report_key=report_key_str,
+            user_id=user.id,
+            title=f"{target_label} — 职业发展报告",
+            summary=summary_text,
+            data_json=json.dumps(data, ensure_ascii=False),
+        )
+        db.add(report)
 
-    # Write staged action plan to ActionPlanV2
-    action_plan = data.get("action_plan", {})
-    profile_id = data.get("student", {}).get("profile_id")
-    if profile_id:
-        for stage_data in action_plan.get("stages", []):
-            plan_row = ActionPlanV2(
-                profile_id=profile_id,
-                report_key=report_key_str,
-                stage=stage_data["stage"],
-                status="ready",
-                content=stage_data,
-                time_budget={"duration": stage_data["duration"]},
-                generated_at=datetime.now(timezone.utc),
-            )
-            db.add(plan_row)
+        # Write staged action plan to ActionPlanV2
+        action_plan = data.get("action_plan", {})
+        profile_id = data.get("student", {}).get("profile_id")
+        if profile_id:
+            for stage_data in action_plan.get("stages", []):
+                plan_row = ActionPlanV2(
+                    profile_id=profile_id,
+                    report_key=report_key_str,
+                    stage=stage_data["stage"],
+                    status="ready",
+                    content=stage_data,
+                    time_budget={"duration": stage_data["duration"]},
+                    generated_at=datetime.now(timezone.utc),
+                )
+                db.add(plan_row)
 
-    db.commit()
-    db.refresh(report)
+        db.commit()
+        db.refresh(report)
 
-    return _to_detail(report)
+        return _to_detail(report)
+    finally:
+        with _generating_lock:
+            _generating_users.discard(user.id)
+
+
+@router.get("/status")
+def report_generation_status(
+    user: User = Depends(get_current_user),
+):
+    """Is there an in-flight /generate for this user?
+
+    Used by the frontend to recover the 'generating' UI after a page navigation.
+    In-memory only; restarts clear it.
+    """
+    with _generating_lock:
+        is_generating = user.id in _generating_users
+    return {"generating": is_generating}
 
 
 @router.get("/")
