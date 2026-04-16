@@ -100,6 +100,7 @@ export default function ProfilePage() {
 
   const [recs, setRecs] = useState<Recommendation[]>([])
   const [recsLoading, setRecsLoading] = useState(true)
+  const [recsFetchFailed, setRecsFetchFailed] = useState(false)
   const [editing, setEditing] = useState(false)
   const [showSjtInline, setShowSjtInline] = useState(false)
   const [showChangeGoalConfirm, setShowChangeGoalConfirm] = useState(false)
@@ -148,17 +149,50 @@ export default function ProfilePage() {
   const hasGoal = !!goal && !!goal.target_node_id
   const profileUpdatedAt = profile?.updated_at
 
+  // 防止并发 fetch：profile 每 6s 轮询一次，上次 LLM 还没回又起一次会导致请求堆积
+  const recsFetchInFlight = useRef(false)
+
   useEffect(() => {
     if (hasProfile && !editing && !hasGoal) {
+      if (recsFetchInFlight.current) return  // 已有请求在飞，等它回
+      recsFetchInFlight.current = true
       setRecsLoading(true)
+      setRecsFetchFailed(false)
       fetchRecommendations(6)
-        .then(res => setRecs(res.recommendations || []))
-        .catch(console.error)
-        .finally(() => setRecsLoading(false))
+        .then(res => {
+          const list = res.recommendations || []
+          setRecs(list)
+          if (list.length === 0) setRecsFetchFailed(true)
+        })
+        .catch((err) => {
+          console.error(err)
+          setRecsFetchFailed(true)
+        })
+        .finally(() => {
+          setRecsLoading(false)
+          recsFetchInFlight.current = false
+        })
     } else if (hasGoal) {
       setRecsLoading(false)
+      setRecsFetchFailed(false)
     }
   }, [hasProfile, editing, hasGoal, profileUpdatedAt])
+
+  const retryFetchRecs = () => {
+    setRecsLoading(true)
+    setRecsFetchFailed(false)
+    fetchRecommendations(6)
+      .then(res => {
+        const list = res.recommendations || []
+        setRecs(list)
+        if (list.length === 0) setRecsFetchFailed(true)
+      })
+      .catch((err) => {
+        console.error(err)
+        setRecsFetchFailed(true)
+      })
+      .finally(() => setRecsLoading(false))
+  }
 
   // Reset name prompt guard when profile is deleted/cleared
   useEffect(() => {
@@ -523,9 +557,9 @@ export default function ProfilePage() {
                   )}
                 </div>
               </div>
-            ) : (recsLoading || (isLocating && recs.length === 0)) ? (
+            ) : (recsLoading || (hasProfile && !hasGoal && recs.length === 0 && !recsFetchFailed)) ? (
               <div className="space-y-3">
-                {isLocating && (
+                {(isLocating || (hasProfile && !hasGoal && recs.length === 0)) && (
                   <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-blue-50/60 border border-blue-100">
                     <svg className="w-4 h-4 text-blue-400 animate-spin shrink-0" viewBox="0 0 24 24" fill="none">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3"/>
@@ -533,7 +567,7 @@ export default function ProfilePage() {
                     </svg>
                     <div>
                       <p className="text-[13px] font-semibold text-blue-700">AI 正在分析你的技术方向</p>
-                      <p className="text-[11px] text-blue-400 mt-0.5">根据简历技能匹配最适合的职业路径，通常需要 5-10 秒</p>
+                      <p className="text-[11px] text-blue-400 mt-0.5">根据简历技能匹配最适合的职业路径，通常需要 1-3 分钟</p>
                     </div>
                   </div>
                 )}
@@ -545,6 +579,24 @@ export default function ProfilePage() {
                     <div className="h-32 bg-slate-200 rounded-xl"></div>
                     <div className="h-32 bg-slate-200 rounded-xl"></div>
                   </div>
+                </div>
+              </div>
+            ) : (hasProfile && !hasGoal && recs.length === 0 && recsFetchFailed) ? (
+              <div className="flex items-start gap-3 px-4 py-4 rounded-xl bg-amber-50 border border-amber-100">
+                <svg className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-semibold text-amber-800">暂时没拿到推荐</p>
+                  <p className="text-[11px] text-amber-600 mt-0.5">AI 服务可能繁忙，过一会儿再试。</p>
+                  <button
+                    onClick={retryFetchRecs}
+                    className="mt-2 text-[12px] font-semibold text-amber-700 border-b border-amber-700 pb-0.5 hover:text-amber-900 hover:border-amber-900 cursor-pointer"
+                  >
+                    重试 →
+                  </button>
                 </div>
               </div>
             ) : (

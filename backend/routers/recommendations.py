@@ -75,6 +75,26 @@ _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背
 【强制规则】
 如果用户求职意向（job_target）不为空，则与求职意向最匹配的岗位必须出现在推荐中，且作为 entry 通道的第一个推荐，affinity_pct 不低于 85。这是用户的主观意愿，优先级高于任何技能分析。
 
+【经验级别硬约束（必须严格执行，违反视为严重错误）】
+- experience_years == 0 的用户（应届/在校学生）：
+  * 禁止推荐 career_level == 4 的架构师岗位（software-architect、data-architect、ml-architect、security-architect、qa-lead、cloud-architect、engineering-manager），这些岗位招的是 5+ 年经验的资深工程师
+  * 禁止推荐 career_level == 5 的总监/CTO 岗位（cto）
+  * 即便应届生技能栈似乎沾边，架构师岗位永远不会招应届生
+- experience_years <= 1 的用户：career_level >= 4 岗位 affinity_pct 必须 ≤ 35
+
+【岗位画像对齐（命中 not_this_role_if 则不推）】
+每个岗位的"不适合"条目是主动排除信号。用户情况命中即表明该岗位不合适：
+- "初中级工程师" / "个人贡献者阶段" → 应届生和 experience_years < 3 的用户命中
+- "主要做业务CRUD" / "无C++多线程/网络项目" → 看用户项目是否命中
+- "主要用Java/Python" → 看用户核心语言
+如果命中岗位的 not_this_role_if 中任一条，affinity_pct 必须 ≤ 30，不得进入 entry/growth 通道。
+
+【技能家族亲和性】
+推荐岗位的核心技能栈必须和用户核心技能栈同一家族。零交集跨家族推荐不得进入 entry/growth：
+- C/C++ 系统背景（Linux 网络/多线程/epoll/TCP/Reactor）用户：优先 cpp、systems-cpp、storage-database-kernel、search-engine-engineer、server-side-game-developer。不得推 data-analyst、data-engineer、bi-analyst（技能栈零交集）除非用户 job_target 里明确写了数据方向
+- 数据分析背景（SQL/Python/统计）用户：不得推 cpp、systems-cpp、rust（技能栈零交集）
+- 前端背景（JS/React/CSS）用户：不得推 ai-engineer、algorithm-engineer（硬核信号不够）
+
 【熟练度折算（严格执行）】
 每个技能后面括号里是熟练度，affinity_pct 计算时必须按折算系数考虑：
   - expert / proficient / advanced → 1.0 完整技能点
@@ -164,7 +184,7 @@ def _find_role_id_for_job_target(job_target: str) -> str | None:
 def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     """Call LLM to generate recommendations. Returns response dict or None on failure."""
     from backend.llm import llm_chat, parse_json_response, get_model
-    from backend.routers.profiles import _get_role_list_text
+    from backend.routers._profiles_graph import _get_role_list_text
 
     # Preserve level: pass full skill objects to downstream formatting
     skill_objs = [s for s in profile_data.get("skills", []) if isinstance(s, dict) and s.get("name")]
@@ -254,6 +274,70 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
                 "human_ai_leverage": node.get("human_ai_leverage", 50),
             })
         logger.info("job_target override: moved %s to rank #1 (job_target=%s)", target_role_id, job_target)
+
+    # ── Hard filter: seniority guardrails ──────────────────────────────────
+    # LLM prompt 已经强调经验级别硬约束，但不能完全信任；程序兜底再过一遍。
+    # experience_years == 0（应届/在校）绝对禁止推荐 L4+ 的架构师/经理/总监岗位。
+    exp_years = profile_data.get("experience_years", 0) or 0
+    before_filter = len(enriched)
+    if exp_years == 0:
+        enriched = [r for r in enriched if (r.get("career_level") or 0) <= 3]
+    elif exp_years <= 1:
+        enriched = [r for r in enriched if (r.get("career_level") or 0) <= 4]
+    dropped = before_filter - len(enriched)
+    if dropped:
+        logger.info("Seniority filter: dropped %d senior recs for user (exp=%d)", dropped, exp_years)
+
+    # 补齐至 top_k：如果过滤后不足，从 graph 里按技能重合度 + 职级合适回填
+    if len(enriched) < top_k:
+        user_skill_set = {
+            (s.get("name") or "").lower().strip()
+            for s in profile_data.get("skills", [])
+            if isinstance(s, dict) and s.get("name")
+        }
+        existing_ids = {r["role_id"] for r in enriched}
+
+        candidates = []
+        for nid, node in graph_nodes.items():
+            if nid in existing_ids:
+                continue
+            cl = node.get("career_level", 0) or 0
+            if exp_years == 0 and cl > 3:
+                continue
+            if exp_years <= 1 and cl > 4:
+                continue
+            node_skills = {
+                (s if isinstance(s, str) else s.get("name", "")).lower().strip()
+                for s in (node.get("must_skills") or [])
+            }
+            overlap = len(user_skill_set & node_skills)
+            if overlap == 0:
+                continue
+            candidates.append((overlap, nid, node))
+        candidates.sort(key=lambda x: -x[0])
+
+        backfilled = 0
+        for overlap, nid, node in candidates:
+            if len(enriched) >= top_k:
+                break
+            enriched.append({
+                "role_id": nid,
+                "label": node.get("label", nid),
+                "affinity_pct": min(60 + overlap * 5, 78),
+                "matched_skills": [],
+                "gap_skills": (node.get("must_skills") or [])[:4],
+                "gap_hours": 0,
+                "zone": node.get("zone", "safe"),
+                "salary_p50": node.get("salary_p50", 0),
+                "reason": f"技能画像与该方向有 {overlap} 项重合",
+                "channel": "growth",
+                "career_level": node.get("career_level", 0),
+                "replacement_pressure": node.get("replacement_pressure", 50),
+                "human_ai_leverage": node.get("human_ai_leverage", 50),
+            })
+            backfilled += 1
+        if backfilled:
+            logger.info("Seniority backfill: added %d candidates by skill overlap", backfilled)
 
     return {"recommendations": enriched[:top_k], "user_skill_count": len(skill_objs)}
 
