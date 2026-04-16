@@ -610,7 +610,7 @@ def _build_greeting(user: User, db: Session) -> dict:
                             {"label": "有没有竞争更少的方向", "prompt": "有没有需求不错但竞争相对没那么大的方向？"},
                         ]
                     else:
-                        # Safe/thrive + medium/high barrier: positive recommendation
+                        # Safe/leverage + medium/high barrier: positive recommendation
                         signal = f"你怎么看这个方向？可以告诉我你的想法，我们来聊聊。"
                         chips = [
                             {"label": f"告诉我为什么推荐「{top_label}」", "prompt": f"为什么「{top_label}」最匹配我？详细分析一下"},

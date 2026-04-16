@@ -180,7 +180,7 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
         goal = state["career_goal"]
         parts.append(f"- 目标岗位: {goal.get('label', '未知')}")
         if goal.get("zone"):
-            zone_names = {"safe": "安全区", "thrive": "成长区", "transition": "转型区", "danger": "风险区"}
+            zone_names = {"safe": "安全区", "leverage": "杠杆区", "transition": "过渡区", "danger": "危险区"}
             parts.append(f"- 目标区域: {zone_names.get(goal['zone'], goal['zone'])}")
         # Inject real market signal for target direction
         if not for_triage:

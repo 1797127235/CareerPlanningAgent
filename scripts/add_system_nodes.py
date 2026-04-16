@@ -27,7 +27,7 @@ NEW_NODES = [
         "node_id": "search-engine-engineer",
         "label": "搜索引擎工程师",
         "role_family": "系统软件",
-        "zone": "thrive",
+        "zone": "leverage",
         "career_level": 3,
         "replacement_pressure": 25.0,
         "human_ai_leverage": 78.0,
@@ -89,7 +89,7 @@ NEW_NODES = [
         "node_id": "storage-database-kernel",
         "label": "存储与数据库内核工程师",
         "role_family": "系统软件",
-        "zone": "thrive",
+        "zone": "leverage",
         "career_level": 3,
         "replacement_pressure": 27.0,
         "human_ai_leverage": 76.0,
@@ -151,7 +151,7 @@ NEW_NODES = [
         "node_id": "infrastructure-engineer",
         "label": "基础架构工程师",
         "role_family": "系统软件",
-        "zone": "thrive",
+        "zone": "leverage",
         "career_level": 3,
         "replacement_pressure": 29.0,
         "human_ai_leverage": 74.0,
@@ -335,7 +335,7 @@ def run():
         ("storage-database-kernel", 27.0, 40000),
         ("infrastructure-engineer", 29.0, 32000)
     ]:
-        print(f"{nid}: O*NET calibrated | rp={rp} | salary_p50={sal} | zone=thrive")
+        print(f"{nid}: O*NET calibrated | rp={rp} | salary_p50={sal} | zone=leverage")
     print("game nodes: distinguishing_features + not_this_role_if updated")
 
 

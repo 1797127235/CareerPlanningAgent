@@ -17,7 +17,7 @@ NEW_NODE = {
     "node_id": "algorithm-engineer",
     "label": "算法工程师",
     "role_family": "AI/ML",
-    "zone": "thrive",
+    "zone": "leverage",
     "career_level": 3,
     "replacement_pressure": 29.0,
     "human_ai_leverage": 76.5,
@@ -197,7 +197,7 @@ if __name__ == "__main__":
     print("=== 节点关键字段 ===")
     print(f"node_id:              algorithm-engineer")
     print(f"label:                算法工程师")
-    print(f"zone:                 thrive")
+    print(f"zone:                 leverage")
     print(f"replacement_pressure: 29.0  (O*NET 15-2051.00 + AEI校准，低于ML工程师34.0)")
     print(f"salary_p50:           40000 (智联招聘算法方向中位数)")
     print(f"onet_codes:           15-2051.00 (onet_cn_index.json确认)")

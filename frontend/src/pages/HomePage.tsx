@@ -19,7 +19,7 @@ const ease = [0.23, 1, 0.32, 1] as const
 /* ── Zone label map ── */
 const zoneLabel: Record<string, { text: string; color: string }> = {
   safe:       { text: '安全区', color: 'text-emerald-600 bg-emerald-50' },
-  thrive:     { text: '成长区', color: 'text-blue-600 bg-blue-50' },
+  leverage:   { text: '杠杆区', color: 'text-blue-600 bg-blue-50' },
   transition: { text: '转型区', color: 'text-amber-600 bg-amber-50' },
   danger:     { text: '风险区', color: 'text-red-500 bg-red-50' },
 }

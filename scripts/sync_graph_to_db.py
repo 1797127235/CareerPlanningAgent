@@ -138,7 +138,18 @@ def main():
         session.commit()
         print(f"Synced: {n_nodes} nodes, {n_edges} edges, {n_scores} scores")
 
-        # Clear stale node intros (new node IDs won't match old intros)
+        # Clear stale job_scores and node intros (new node IDs won't match old rows)
+        current_node_ids = {n["node_id"] for n in nodes}
+        stale_scores = session.query(JobScore).filter(
+            JobScore.node_id.notin_(current_node_ids)
+        ).count()
+        if stale_scores:
+            session.query(JobScore).filter(
+                JobScore.node_id.notin_(current_node_ids)
+            ).delete(synchronize_session=False)
+            session.commit()
+            print(f"Cleared {stale_scores} stale job_scores")
+
         from backend.db_models import JobNodeIntro
         stale = session.query(JobNodeIntro).count()
         if stale:

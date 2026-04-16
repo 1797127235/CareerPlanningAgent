@@ -14,7 +14,7 @@ for n in g['nodes']:
         n['must_skills'] = ['C++', '嵌入式Linux', 'RTOS', '驱动开发', '单片机', '操作系统']
         n['core_tasks'] = ['驱动开发', '嵌入式系统', '硬件接口', '实时操作系统', '固件开发']
         n['salary_p50'] = 22000
-        n['zone'] = 'thrive'
+        n['zone'] = 'leverage'
         n['description'] = (
             '岗位中文名：嵌入式工程师。\n\n'
             '嵌入式工程师专注于硬件与软件的交叉领域，负责在资源受限的设备上开发软件。'

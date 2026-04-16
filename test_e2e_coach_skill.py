@@ -39,7 +39,7 @@ PROFILE = {
 GOAL = {
     "label": "后端开发",
     "node_id": "cs_system_cpp",
-    "zone": "thrive",
+    "zone": "leverage",
 }
 
 

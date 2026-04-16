@@ -639,9 +639,9 @@ class GraphService:
                     zone = node.get("zone", "")
                     if vp == "stability" and zone == "safe":
                         pref_hits += 1
-                    elif vp == "growth" and zone == "thrive":
+                    elif vp == "growth" and zone == "leverage":
                         pref_hits += 1
-                    elif vp == "innovation" and zone in ("thrive", "transition"):
+                    elif vp == "innovation" and zone in ("leverage", "transition"):
                         pref_hits += 0.7
                     elif vp == "balance":
                         pref_hits += 0.5  # Neutral

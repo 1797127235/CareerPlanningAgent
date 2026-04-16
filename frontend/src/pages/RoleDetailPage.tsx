@@ -174,12 +174,12 @@ interface RoleDetail {
 
 const ZONE_STYLE: Record<string, string> = {
   safe:       'bg-emerald-50 text-emerald-700 border-emerald-200',
-  thrive:     'bg-blue-50 text-blue-700 border-blue-200',
+  leverage:   'bg-blue-50 text-blue-700 border-blue-200',
   transition: 'bg-amber-50 text-amber-700 border-amber-200',
   danger:     'bg-red-50 text-red-700 border-red-200',
 }
 const ZONE_TEXT: Record<string, string> = {
-  safe: '安全区', thrive: '成长区', transition: '过渡区', danger: '风险区',
+  safe: '安全区', leverage: '杠杆区', transition: '过渡区', danger: '危险区',
 }
 
 /* ── Page ──────────────────────────────────────────────────────────────── */
