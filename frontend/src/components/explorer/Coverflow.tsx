@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Search, X, ChevronLeft, ChevronRight, ArrowUp, Repeat2, ArrowRight, CheckCircle2, MapPin, Target } from 'lucide-react'
 import { searchGraphNodes, fetchEscapeRoutes, setCareerGoal, addCareerGoal, fetchNodeIntro } from '@/api/graph'
 import type { GraphNode, GraphEdge, EscapeRoute, SearchResult } from '@/types/graph'
@@ -698,6 +698,15 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
                       <span key={s} className="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">{s}</span>
                     ))}
                   </div>
+                )}
+
+                {isCenter && node.contextual_narrative && (
+                  <Link
+                    to={`/explore?left=${node.node_id}`}
+                    className="text-[11px] text-slate-500 hover:text-blue-600 mb-2 inline-block"
+                  >
+                    跟别的方向对比看看 →
+                  </Link>
                 )}
 
                 {isCenter ? (

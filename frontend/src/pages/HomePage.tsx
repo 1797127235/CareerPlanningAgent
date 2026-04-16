@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import { motion } from 'framer-motion'
 import { ArrowRight, Upload, PenLine, MapPin, Target, User, Flame, BookOpen, FileSearch, Zap } from 'lucide-react'
@@ -10,6 +10,7 @@ import { useProfileData } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { useDashboardStats } from '@/hooks/useDashboard'
 import { useActivityHeatmap } from '@/hooks/useActivityHeatmap'
+import { useCurrentStage } from '@/hooks/useCareerStage'
 import { SignatureHero } from '@/components/SignatureHero'
 import { ActivityHeatmap } from '@/components/ActivityHeatmap'
 import { rawFetch } from '@/api/client'
@@ -38,6 +39,7 @@ export default function HomePage() {
   const { data: heatmapData } = useActivityHeatmap(52)
   const { fileInputRef, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
 
+  const stage = useCurrentStage()
   const hasProfile = (profile?.profile?.skills?.length ?? 0) > 0
     || (profile?.profile?.knowledge_areas?.length ?? 0) > 0
     || (profile?.profile?.projects?.length ?? 0) > 0
@@ -345,10 +347,10 @@ export default function HomePage() {
                     if (!hasGoal) {
                       step = {
                         icon: <Target className="w-4 h-4 text-[var(--blue)]" />,
-                        title: '设定目标岗位',
-                        desc: '去图谱页浏览岗位方向，选一个作为成长目标',
-                        action: '探索图谱',
-                        onClick: () => navigate('/graph'),
+                        title: '选定目标岗位',
+                        desc: '对比几个方向的真实样貌，再决定往哪走',
+                        action: '去对比探索',
+                        onClick: () => navigate('/explore'),
                       }
                     } else if (jdCount === 0) {
                       step = {

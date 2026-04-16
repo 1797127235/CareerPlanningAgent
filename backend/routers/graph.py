@@ -109,6 +109,7 @@ def get_map(
                 "zone": node.get("zone", "transition"),
                 "replacement_pressure": node.get("replacement_pressure", 50),
                 "human_ai_leverage": node.get("human_ai_leverage", 50),
+                "contextual_narrative": node.get("contextual_narrative"),
                 "salary_p50": node.get("salary_p50"),
                 "career_level": node.get("career_level", 2),
                 "must_skills": must_skills,

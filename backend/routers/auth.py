@@ -48,3 +48,18 @@ def login(req: AuthRequest, db: Session = Depends(get_db)):
 @router.get("/me")
 def me(user: User = Depends(get_current_user)):
     return ok({"id": user.id, "username": user.username})
+
+
+from backend.services.career_stage import determine_stage
+
+@router.get("/me/stage")
+def get_career_stage(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the user's current career-planning stage.
+
+    Used by the frontend to conditionally render homepage CTA and gate
+    access to the /explore flow.
+    """
+    return {"stage": determine_stage(user.id, db)}

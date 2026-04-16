@@ -1,5 +1,14 @@
 export type Zone = 'safe' | 'transition' | 'danger' | 'leverage'
 
+export interface ContextualNarrative {
+  what_you_actually_do: string
+  what_drains_you: string
+  three_year_outlook: string
+  who_fits: string
+  ai_impact_today: string
+  common_entry_path: string
+}
+
 export interface GraphNode {
   node_id: string
   label: string
@@ -14,6 +23,7 @@ export interface GraphNode {
   degree?: number
   soft_skills?: Record<string, number>
   promotion_path?: Array<{ level: number; title: string }>
+  contextual_narrative?: ContextualNarrative
 }
 
 export interface GraphEdge {

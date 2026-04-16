@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ChevronLeft, Check, AlertTriangle, ArrowRight, Shield, Zap, X, Briefcase, BarChart2, ClipboardList } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
@@ -655,6 +655,19 @@ export default function RoleDetailPage() {
             </>
           )}
 
+          {data.contextual_narrative && (
+            <>
+              <div className="border-t border-slate-100" />
+              <div className="text-center py-2">
+                <Link
+                  to={`/explore?left=${data.node_id}`}
+                  className="text-[13px] font-semibold text-slate-900 border-b-2 border-slate-900 pb-0.5 hover:text-blue-700 hover:border-blue-700 transition-colors"
+                >
+                  对比相似方向 →
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
