@@ -14,13 +14,13 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from sqlalchemy.orm import Session
 
+from backend.config import JWT_SECRET_KEY as SECRET_KEY
 from backend.db import get_db
 from backend.db_models import User
 
-# ── Config ────────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────────-
 
 _DEFAULT_KEY = "career-planning-agent-dev-secret-change-in-prod"
-SECRET_KEY = os.getenv("JWT_SECRET_KEY") or _DEFAULT_KEY
 if SECRET_KEY == _DEFAULT_KEY:
     import sys
     # Dev mode: auto-generate a random key per-process (sessions reset on restart, acceptable for dev)

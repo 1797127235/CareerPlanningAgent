@@ -6,13 +6,20 @@ Entry point: ``uvicorn backend.app:app``
 from __future__ import annotations
 
 import logging
-import os
 import threading
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)
+except ImportError:
+    pass
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.config import CORS_ORIGINS
 from backend.db import init_db
 
 logger = logging.getLogger(__name__)
@@ -64,10 +71,9 @@ def create_app() -> FastAPI:
         app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
         app.add_middleware(SlowAPIMiddleware)
 
-    _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[o.strip() for o in _cors_origins],
+        allow_origins=[o.strip() for o in CORS_ORIGINS],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

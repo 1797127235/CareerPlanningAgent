@@ -14,6 +14,14 @@ from typing import Optional
 from dotenv import load_dotenv
 from mem0 import Memory
 
+from backend.config import (
+    DASHSCOPE_API_KEY,
+    LLM_BASE_URL,
+    MEM0_EMBEDDING_MODEL,
+    MEM0_LLM_MODEL,
+    MEM0_LLM_TEMPERATURE,
+)
+
 # 防御性加载 .env，避免 import 顺序导致读不到环境变量
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env"), override=False)
 
@@ -24,14 +32,11 @@ _memory: Optional[Memory] = None
 
 def _build_config() -> dict:
     """构造 Mem0 配置。DashScope 作为 LLM + Embedding provider。"""
-    api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY", "")
-    base_url = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-    llm_model = os.getenv("MEM0_LLM_MODEL", "qwen-plus")
-    embedding_model = os.getenv("MEM0_EMBEDDING_MODEL", "text-embedding-v3")
-    try:
-        temperature = float(os.getenv("MEM0_LLM_TEMPERATURE", "0.1"))
-    except ValueError:
-        temperature = 0.1
+    api_key = DASHSCOPE_API_KEY
+    base_url = LLM_BASE_URL
+    llm_model = MEM0_LLM_MODEL
+    embedding_model = MEM0_EMBEDDING_MODEL
+    temperature = MEM0_LLM_TEMPERATURE
 
     return {
         "llm": {

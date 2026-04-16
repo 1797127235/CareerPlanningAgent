@@ -56,13 +56,12 @@ class _SkillEmbedder:
 
     def _get_client(self):
         if self._client is None:
-            import os
             from openai import OpenAI
-            api_key = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY")
+            from backend.config import DASHSCOPE_API_KEY, LLM_BASE_URL
+            api_key = DASHSCOPE_API_KEY
             if not api_key or api_key == "sk-placeholder":
                 return None
-            base_url = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-            self._client = OpenAI(base_url=base_url, api_key=api_key, timeout=10, max_retries=1)
+            self._client = OpenAI(base_url=LLM_BASE_URL, api_key=api_key, timeout=10, max_retries=1)
         return self._client
 
     def load_cache(self):

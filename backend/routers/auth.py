@@ -17,14 +17,7 @@ from backend.db_models import User
 router = APIRouter()
 
 
-def ok(data=None, message=None):
-    """Wrap a successful response in the standard envelope."""
-    result: dict = {"success": True}
-    if data is not None:
-        result["data"] = data
-    if message:
-        result["message"] = message
-    return result
+from backend.utils import ok
 
 
 class AuthRequest(BaseModel):
