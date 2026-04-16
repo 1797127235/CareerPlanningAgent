@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, ChevronRight, Sparkles } from 'lucide-react'
+import { Check, Sparkles } from 'lucide-react'
 import { rawFetch } from '@/api/client'
 
 /* ── Types ── */

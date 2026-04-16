@@ -4,8 +4,19 @@
  */
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Handle, Position } from '@xyflow/react'
-import type { NodeStatus } from '@/pages/ProjectGraphPage'
-import { STATUS_COLOR, STATUS_LABEL } from '@/pages/ProjectGraphPage'
+type NodeStatus = 'todo' | 'in_progress' | 'done'
+
+const STATUS_COLOR: Record<NodeStatus, string> = {
+  todo: '#94A3B8',
+  in_progress: '#2563EB',
+  done: '#16A34A',
+}
+
+const STATUS_LABEL: Record<NodeStatus, string> = {
+  todo: '待办',
+  in_progress: '进行中',
+  done: '已完成',
+}
 
 interface ProjectNodeData {
   label: string

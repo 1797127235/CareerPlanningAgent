@@ -105,7 +105,7 @@ def _generate_skill_actions_llm(
 
 输出 JSON 对象，key 为技能名，value 为建议文本。只输出 JSON，不要解释。"""
 
-        resp = get_llm_client(timeout=15).chat.completions.create(
+        resp = get_llm_client(timeout=90).chat.completions.create(
             model=get_model("fast"),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.3,
@@ -297,9 +297,11 @@ def _infer_implicit_skills_llm(
 
 只输出 JSON。"""
 
+    import time as _time
+    t0 = _time.time()
     try:
         from backend.llm import get_llm_client, get_model
-        resp = get_llm_client(timeout=20).chat.completions.create(
+        resp = get_llm_client(timeout=90).chat.completions.create(
             model=get_model("fast"),
             messages=[{"role": "user", "content": prompt}],
             temperature=0.1,
@@ -315,10 +317,78 @@ def _infer_implicit_skills_llm(
         # 只保留原列表里存在的技能，防 LLM 自造新技能名
         uncovered_set = {s.lower().strip() for s in uncovered_skills}
         result = [s for s in implicit if s.lower().strip() in uncovered_set]
+        logger.info("[skill-inference] OK in %.1fs, inferred=%s", _time.time() - t0, result)
         return result
     except Exception as e:
-        logger.warning("Implicit skill inference failed: %s", e)
+        logger.warning(
+            "[skill-inference] failed after %.1fs: %s: %s",
+            _time.time() - t0, type(e).__name__, e,
+        )
         return []
+
+
+def _extract_practiced_from_profile_text(
+    profile_data: dict, node_skills: list[str]
+) -> set[str]:
+    """扫描简历项目文本（profile.projects + profile.raw_text + profile.internships），
+    看 node.skill_tiers 的技能名是否出现在文本中，若出现视为有实战证据。
+
+    规则：
+    - 大小写不敏感
+    - 中文直接 substring；英文用 word boundary（避免 "Go" 匹配到 "Google"）
+    - 匹配到的 skill 加入返回集合
+
+    Args:
+        profile_data: profile.profile_json 反序列化结果
+        node_skills: 节点 skill_tiers 里所有技能名（core + important + bonus）
+
+    Returns:
+        set of skill names (原大小写) that appear in profile text
+    """
+    import re
+    # 拼接所有简历文本
+    texts: list[str] = []
+    projs = profile_data.get("projects") or []
+    for p in projs:
+        if isinstance(p, str):
+            texts.append(p)
+        elif isinstance(p, dict):
+            for k in ("summary", "description", "detail", "name"):
+                v = p.get(k)
+                if isinstance(v, str):
+                    texts.append(v)
+    interns = profile_data.get("internships") or []
+    for it in interns:
+        if isinstance(it, dict):
+            for k in ("summary", "description"):
+                v = it.get(k)
+                if isinstance(v, str):
+                    texts.append(v)
+        elif isinstance(it, str):
+            texts.append(it)
+    raw = profile_data.get("raw_text") or ""
+    if isinstance(raw, str):
+        texts.append(raw)
+
+    blob = "\n".join(texts)
+    blob_lower = blob.lower()
+
+    found: set[str] = set()
+    for skill in node_skills:
+        if not skill:
+            continue
+        # 判断 skill 是 CJK 还是 英文字母数字
+        has_cjk = any("\u4e00" <= ch <= "\u9fff" for ch in skill)
+        if has_cjk:
+            # 中文直接 substring
+            if skill in blob:
+                found.add(skill)
+        else:
+            # 英文用 word boundary（防止 "Go" 匹配 "Google"）
+            pattern = r"\b" + re.escape(skill.lower()) + r"\b"
+            if re.search(pattern, blob_lower):
+                found.add(skill)
+    return found
 
 
 def _build_skill_gap(
@@ -326,6 +396,7 @@ def _build_skill_gap(
     node: dict,
     practiced: set[str] | None = None,
     completed_practiced: set[str] | None = None,
+    extra_practiced: set[str] | None = None,
 ) -> dict:
     """
     Build market-oriented skill gap analysis using JD frequency data from skill_tiers.
@@ -337,7 +408,7 @@ def _build_skill_gap(
       has_project_data          — whether any project evidence exists (affects badge display)
     """
     user_skills = _user_skill_set(profile_data)
-    practiced = practiced or set()
+    practiced = (practiced or set()) | (extra_practiced or set())
     completed_practiced = completed_practiced or set()
     has_project_data = bool(practiced or completed_practiced)
 
@@ -402,3 +473,186 @@ def _build_skill_gap(
         "matched_skills":    all_matched[:12],
         "has_project_data":  has_project_data,
     }
+
+
+def _refine_gap_with_llm(
+    skill_gap_result: dict,
+    profile_data: dict,
+    target_label: str,
+) -> dict:
+    """Post-process skill_gap via LLM to drop pseudo-gaps / move to matched.
+
+    Args:
+        skill_gap_result: 原始 _build_skill_gap 返回的 dict
+        profile_data: parsed profile.profile_json
+        target_label: 目标岗位 label（用于 prompt）
+
+    Returns:
+        修正后的 dict（同 schema）。失败时原样返回 skill_gap_result。
+
+    副作用：在返回的 dict 里加一个字段 `_refine_meta`，内容如下
+    用于日志/调试观察：
+        {
+            "enabled": True,
+            "moved_to_matched": [{"name": "高并发", "evidence": "..."}],
+            "dropped": [{"name": "GDB", "reason": "..."}],
+            "kept_missing_count": 3,
+        }
+    如果 refine 失败或跳过，`_refine_meta = {"enabled": False, "reason": "..."}`
+    """
+    import copy
+    import logging
+    logger = logging.getLogger(__name__)
+
+    top_missing = skill_gap_result.get("top_missing", []) or []
+    if len(top_missing) < 2:
+        # 少于 2 条不值得调用 LLM
+        out = dict(skill_gap_result)
+        out["_refine_meta"] = {"enabled": False, "reason": "top_missing too small"}
+        return out
+
+    # 构造 prompt 上下文
+    missing_lines = []
+    for m in top_missing:
+        name = m.get("name", "") if isinstance(m, dict) else str(m)
+        tier = m.get("tier", "") if isinstance(m, dict) else ""
+        freq = m.get("freq", 0) if isinstance(m, dict) else 0
+        missing_lines.append(f"- {name}（{tier}，JD频率 {freq:.2f}）")
+    missing_block = "\n".join(missing_lines)
+
+    claimed = []
+    for s in (profile_data.get("skills") or []):
+        if isinstance(s, dict):
+            claimed.append(str(s.get("name", "")))
+        elif isinstance(s, str):
+            claimed.append(s)
+    claimed_skills_line = ", ".join([c for c in claimed if c]) or "（空）"
+
+    knowledge = profile_data.get("knowledge_areas") or []
+    knowledge_areas_line = ", ".join([str(k) for k in knowledge if k]) or "（空）"
+
+    projs = profile_data.get("projects") or []
+    proj_lines = []
+    for p in projs[:4]:
+        if isinstance(p, str) and p.strip():
+            proj_lines.append(f"- {p[:200]}")
+        elif isinstance(p, dict):
+            text = p.get("summary") or p.get("description") or p.get("name") or ""
+            if text:
+                proj_lines.append(f"- {str(text)[:200]}")
+    projects_block = "\n".join(proj_lines) or "（无项目描述）"
+
+    edu = profile_data.get("education") or {}
+    if isinstance(edu, dict):
+        education_line = " · ".join(
+            filter(None, [edu.get(k, "") for k in ("degree", "major", "school")])
+        ) or "（空）"
+    else:
+        education_line = "（空）"
+
+    # 调 LLM
+    try:
+        from backend.skills import invoke_skill
+        parsed = invoke_skill(
+            "gap-refine",
+            target_label=target_label,
+            missing_block=missing_block,
+            claimed_skills_line=claimed_skills_line,
+            knowledge_areas_line=knowledge_areas_line,
+            projects_block=projects_block,
+            education_line=education_line,
+        )
+    except Exception as e:
+        logger.warning("[gap-refine] LLM failed: %s: %s; fallback to original gap",
+                       type(e).__name__, e)
+        out = dict(skill_gap_result)
+        out["_refine_meta"] = {"enabled": False, "reason": f"llm_fail:{type(e).__name__}"}
+        return out
+
+    if not isinstance(parsed, dict):
+        out = dict(skill_gap_result)
+        out["_refine_meta"] = {"enabled": False, "reason": "bad_output_shape"}
+        return out
+
+    keep_set = {str(s).strip() for s in (parsed.get("keep_missing") or []) if s}
+    moves = [x for x in (parsed.get("move_to_matched") or []) if isinstance(x, dict)]
+    drops = [x for x in (parsed.get("drop") or []) if isinstance(x, dict)]
+
+    # 输入完整性校验：每个 top_missing 必须出现在三类之一
+    original_names = [m.get("name", "") if isinstance(m, dict) else str(m) for m in top_missing]
+    all_classified = keep_set | {m.get("name", "") for m in moves} | {d.get("name", "") for d in drops}
+    unclassified = [n for n in original_names if n and n not in all_classified]
+    if unclassified:
+        logger.warning("[gap-refine] LLM missed skills %s; treating as keep_missing", unclassified)
+        keep_set.update(unclassified)
+
+    # 构造新 top_missing：只保留 keep_set 中的项
+    new_top_missing = [
+        m for m in top_missing
+        if (m.get("name", "") if isinstance(m, dict) else str(m)) in keep_set
+    ]
+
+    # 构造新 matched_skills：在原基础上追加 moves
+    new_matched = list(skill_gap_result.get("matched_skills", []) or [])
+    original_matched_names_lower = {
+        (m.get("name", "") if isinstance(m, dict) else str(m)).lower().strip()
+        for m in new_matched
+    }
+    for mv in moves:
+        name = str(mv.get("name", "")).strip()
+        if not name or name.lower() in original_matched_names_lower:
+            continue
+        # 找到原 top_missing 里同名项的 tier/freq 信息
+        src = next(
+            (m for m in top_missing
+             if (m.get("name", "") if isinstance(m, dict) else str(m)) == name),
+            None,
+        )
+        tier = src.get("tier", "important") if isinstance(src, dict) else "important"
+        freq = src.get("freq", 0) if isinstance(src, dict) else 0
+        new_matched.append({
+            "name": name,
+            "tier": tier,
+            "status": "practiced_from_resume",
+            "freq": freq,
+            "_evidence": str(mv.get("evidence", ""))[:60],
+        })
+
+    # 更新 tier stats：移动导致 matched ↑、missing ↓
+    out = dict(skill_gap_result)
+    out["top_missing"] = new_top_missing
+    out["matched_skills"] = new_matched
+
+    # 重算 core / important / bonus 的 matched / pct
+    for tier in ("core", "important", "bonus"):
+        tier_stats = out.get(tier, {}) or {}
+        total = tier_stats.get("total", 0)
+        if total <= 0:
+            continue
+        matched_in_tier = sum(1 for m in new_matched if m.get("tier") == tier)
+        tier_stats["matched"] = matched_in_tier
+        tier_stats["pct"] = int(matched_in_tier / total * 100) if total else 0
+        # practiced_count ≈ status 以 practiced/completed/practiced_from_resume 开头
+        tier_stats["practiced_count"] = sum(
+            1 for m in new_matched
+            if m.get("tier") == tier
+            and str(m.get("status", "")).startswith(("practiced", "completed"))
+        )
+        tier_stats["claimed_count"] = sum(
+            1 for m in new_matched
+            if m.get("tier") == tier and m.get("status") == "claimed"
+        )
+        out[tier] = tier_stats
+
+    out["_refine_meta"] = {
+        "enabled": True,
+        "moved_to_matched": [{"name": m.get("name"), "evidence": m.get("evidence")} for m in moves],
+        "dropped": [{"name": d.get("name"), "reason": d.get("reason")} for d in drops],
+        "kept_missing_count": len(new_top_missing),
+    }
+
+    logger.info(
+        "[gap-refine] moved %d to matched, dropped %d, kept %d missing",
+        len(moves), len(drops), len(new_top_missing),
+    )
+    return out

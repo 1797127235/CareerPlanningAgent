@@ -748,3 +748,35 @@ class CoachResult(Base):
     detail_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class GrowthEntry(Base):
+    """统一成长档案记录 — 学习笔记 / 面试复盘 / 项目记录 / 计划"""
+    __tablename__ = "growth_entries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)  # project|interview|learning|null
+    tags: Mapped[list] = mapped_column(JSON, default=list)
+
+    # 面试/项目的结构化数据；学习笔记为 None
+    structured_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    # 计划
+    is_plan: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(16), default="done")  # done|pending|dropped
+    due_type: Mapped[str | None] = mapped_column(String(16), nullable=True)  # daily|weekly|monthly|custom
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # AI 建议
+    ai_suggestions: Mapped[list | None] = mapped_column(JSON, nullable=True)
+
+    # 关联（可选）
+    linked_project_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("project_records.id"), nullable=True)
+    linked_application_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("job_applications.id"), nullable=True)
+
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)

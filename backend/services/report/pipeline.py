@@ -5,7 +5,10 @@ from __future__ import annotations
 import copy
 import json
 import logging
+import openai
 import os
+import re
+import time
 from datetime import datetime, timezone
 from typing import Any
 
@@ -17,6 +20,7 @@ from backend.services.report import action_plan
 from backend.services.report import career_alignment
 from backend.services.report import narrative
 from backend.services.report import summarize
+from backend.skills._loader import SkillOutputParseError
 
 logger = logging.getLogger(__name__)
 
@@ -64,13 +68,15 @@ def generate_report(user_id: int, db) -> dict:
 
     profile_data = _parse_profile(profile.profile_json)
 
-    # 2. Load active career goal
+    # 2. Load active career goal (skip empty/placeholder goals — user hasn't picked a target yet)
     goal = (
         db.query(CareerGoal)
         .filter(
             CareerGoal.user_id == user_id,
             CareerGoal.profile_id == profile.id,
             CareerGoal.is_active == True,
+            CareerGoal.target_node_id != "",
+            CareerGoal.target_node_id.isnot(None),
         )
         .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
         .first()
@@ -319,7 +325,31 @@ def generate_report(user_id: int, db) -> dict:
     market_info: dict | None = loaders.get_market().get(family_name) if family_name else None
 
     # 8. Skill gap analysis
-    _skill_gap = skill_gap._build_skill_gap(profile_data, node, practiced, completed_practiced)
+    all_node_skills = []
+    for tier in ("core", "important", "bonus"):
+        for s in (node.get("skill_tiers", {}).get(tier) or []):
+            if isinstance(s, dict) and s.get("name"):
+                all_node_skills.append(s["name"])
+            elif isinstance(s, str) and s:
+                all_node_skills.append(s)
+    text_practiced = skill_gap._extract_practiced_from_profile_text(
+        profile_data, all_node_skills
+    )
+    if text_practiced:
+        logger.info("[skill_gap] extracted %d skills from profile text: %s",
+                    len(text_practiced), sorted(text_practiced))
+
+    _skill_gap = skill_gap._build_skill_gap(
+        profile_data, node, practiced, completed_practiced,
+        extra_practiced=text_practiced,
+    )
+
+    # Runtime gap refine: LLM-based pseudo-gap filtering
+    _skill_gap = skill_gap._refine_gap_with_llm(
+        _skill_gap,
+        profile_data=profile_data,
+        target_label=goal.target_label,
+    )
 
     # 8b. Load job applications for personalization
     from backend.db_models import JobApplication as _JobApplication
@@ -356,9 +386,7 @@ def generate_report(user_id: int, db) -> dict:
 
     # ── Action plan ───────────────────────────────────────────────────────────
     try:
-        from backend.skills import invoke_skill
-        action_plan_data = invoke_skill(
-            "action-plan",
+        action_plan_data = _invoke_action_plan_with_retry(
             target_label=goal.target_label,
             node_requirements_line=_format_node_requirements(node),
             market_line=narrative._format_market(market_info),
@@ -368,7 +396,7 @@ def generate_report(user_id: int, db) -> dict:
         )
         action_plan_data = _coerce_action_plan(action_plan_data)
     except Exception as e:
-        logger.warning("action-plan skill failed, fallback to rule-based: %s", e)
+        logger.warning("action-plan skill failed after retry, fallback to rule-based: %s", e)
         action_plan_data = action_plan._build_action_plan(
             gap_skills=goal.gap_skills or [],
             top_missing=_skill_gap.get("top_missing", []) if _skill_gap else [],
@@ -691,6 +719,26 @@ def _build_differentiation_advice(
         return baseline
 
 
+def _invoke_action_plan_with_retry(max_retries=1, **kwargs):
+    import time
+    from backend.skills import invoke_skill
+
+    last_exc = None
+    for attempt in range(max_retries + 1):
+        try:
+            return invoke_skill("action-plan", **kwargs)
+        except (openai.APITimeoutError, SkillOutputParseError) as e:
+            last_exc = e
+            logger.warning("action-plan attempt %d/%d failed: %s: %s",
+                          attempt + 1, max_retries + 1, type(e).__name__, e)
+            if attempt < max_retries:
+                time.sleep(2)
+                continue
+        except Exception as e:
+            raise
+    raise last_exc
+
+
 def _format_node_requirements(node: dict) -> str:
     tiers = node.get("skill_tiers", {})
     core = [s.get("name") if isinstance(s, dict) else s for s in tiers.get("core", [])][:5]
@@ -709,39 +757,82 @@ def _format_completed(items: list[str]) -> str:
     return "\n".join(f"- {it}" for it in items)
 
 
-_IMPERATIVE_PREFIXES = (
-    "完成", "搭建", "实现", "编写", "学习", "掌握", "阅读",
-    "深入", "用", "通过", "进行", "梳理", "配置", "部署",
-    "建议你", "你应该", "你需要", "你必须", "最好", "先",
-)
+_FIELD_NAME_LEAK_PATTERNS: list[tuple[str, str]] = [
+    # 反引号包着的字段名：`profile.projects[0]` → 你简历上的项目
+    (r"`profile\.projects?\[\d+\]`", "你简历上的项目"),
+    (r"`profile_core\.projects?`", "你简历上的项目"),
+    (r"`profile\.work_experience(?:\[\d+\])?`", "你的工作经历"),
+    (r"`profile_core\.work_experience`", "你的工作经历"),
+    (r"`profile\.education`", "你的学历背景"),
+    (r"`profile_core\.education`", "你的学历背景"),
+    (r"`profile_core\.personal_statement`", "你的个人陈述"),
+    (r"`growth_entries?`", "你的成长档案"),
+    (r"`growth_entry:[A-Z0-9\-]+`", "某条成长档案记录"),
+    (r"`skill_deltas?`", "技能档案"),
+    (r"`skill_delta:still_claimed_only:[^`]+`", "这个还没证据的声明技能"),
+    (r"`milestones?`", "你的里程碑"),
+    (r"`milestone:[A-Z0-9\-]+`", "某个里程碑"),
+    (r"`claimed_only`", "仅凭简历声明"),
+    (r"`still_claimed_only`", "仍停留在简历声明"),
+    (r"`completed_practiced`", "已完成项目里出现过"),
+    (r"`evidence_ref`", "证据出处"),
+    # 无反引号的裸字段名：profile.projects[0] → 你简历上的项目
+    (r"\bprofile\.projects?\[\d+\]", "你简历上的项目"),
+    (r"\bprofile_core\.projects?\b", "你简历上的项目"),
+    (r"\bprofile\.work_experience(?:\[\d+\])?", "你的工作经历"),
+    (r"\bprofile_core\.work_experience\b", "你的工作经历"),
+    (r"\bprofile\.education\b", "你的学历背景"),
+    (r"\bprofile_core\.education\b", "你的学历背景"),
+    (r"\bprofile_core\.personal_statement\b", "你的个人陈述"),
+    (r"\bgrowth_entries?\b", "你的成长档案"),
+    (r"\bskill_deltas?\b", "技能档案"),
+    (r"\bmilestones?\b", "你的里程碑"),
+    (r"\bclaimed_only\b", "仅凭简历声明"),
+    (r"\bstill_claimed_only\b", "仍停留在简历声明"),
+]
 
 
-def _sanitize_action_text(text: str) -> str:
-    t = text.strip()
-    if any(t.startswith(p) for p in _IMPERATIVE_PREFIXES):
-        return "结合当前方向的特点，探索适合自己的学习或实践路径。"
-    return text
+def _sanitize_field_leaks(text: str) -> str:
+    """把漏进正文的代码风格字段名换成自然中文。LLM 兜底，防止 observation 出现 `profile.projects[0]`。"""
+    import re
+    if not text:
+        return text
+    out = text
+    for pat, repl in _FIELD_NAME_LEAK_PATTERNS:
+        out = re.sub(pat, repl, out)
+    # 清理替换后可能产生的多余空格 / 标点
+    out = re.sub(r"\s+", " ", out).strip()
+    out = re.sub(r"\s*([，。、；：！？])", r"\1", out)
+    return out
 
 
 def _coerce_action_plan(raw: dict) -> dict:
-    """确保 raw 至少有 stages[3]，每个 stage 有 items。缺的补空。"""
-    stages = raw.get("stages", [])
-    while len(stages) < 3:
-        stages.append({
-            "stage": len(stages) + 1,
-            "label": ["立即整理", "技能补强", "项目冲刺与求职"][len(stages)],
-            "duration": ["0-2周", "2-6周", "6-12周"][len(stages)],
-            "milestone": "",
-            "items": [],
-        })
-    # sanitize item texts and ensure evidence_ref exists
-    for stg in stages[:3]:
+    """兜底 observation / action 字段，保证老数据和新数据结构一致。
+
+    不再强制补齐 3 个 stages——SKILL 允许信号稀疏时只返回 1-2 个阶段，
+    前端 ChapterIV.tsx 按 items 非空过滤。
+    """
+    stages = raw.get("stages", []) or []
+    for stg in stages:
+        # 阶段级文本也做一次清洗（label / milestone 有时会漏字段名）
+        if stg.get("label"):
+            stg["label"] = _sanitize_field_leaks(stg["label"])
+        if stg.get("milestone"):
+            stg["milestone"] = _sanitize_field_leaks(stg["milestone"])
         for it in stg.get("items", []):
-            it["text"] = _sanitize_action_text(it.get("text", ""))
+            # 新字段兜底：老模型可能只给 text，没给 observation/action
+            obs = it.get("observation") or it.get("text", "")
+            act = it.get("action") or ""
+            it["observation"] = _sanitize_field_leaks((obs or "").strip())
+            it["action"] = _sanitize_field_leaks((act or "").strip())
+            if it.get("tag"):
+                it["tag"] = _sanitize_field_leaks(it["tag"])
+            # 兼容字段：保留 text = observation
+            it["text"] = it["observation"]
             if "evidence_ref" not in it:
                 it["evidence_ref"] = ""
     return {
-        "stages": stages[:3],
+        "stages": stages,
         # 兼容字段：skills/project/job_prep 从 stages 里展平
         "skills": [it for s in stages for it in s.get("items", []) if it.get("type") == "skill"],
         "project": [it for s in stages for it in s.get("items", []) if it.get("type") == "project"],

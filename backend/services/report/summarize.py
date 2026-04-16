@@ -14,6 +14,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.db_models import (
+    GrowthEntry,
     GrowthSnapshot,
     InterviewDebrief,
     InterviewRecord,
@@ -88,6 +89,12 @@ def build_report_summary(
         prev_report, milestones, skill_deltas
     )
 
+    # ── 5. profile core (工作经历 / 项目 / 教育 / 软技能 / 个人陈述) ──
+    profile_core = _build_profile_core(profile)
+
+    # ── 6. growth entries 全量最近 30 天（含未完成计划 / 学习笔记 / 面试反思）──
+    growth_entries_detail = _build_growth_entries_detail(user_id, db, now)
+
     return {
         "version": "2.0",
         "window": {
@@ -95,6 +102,8 @@ def build_report_summary(
             "now_iso": now.isoformat(),
             "days": _WINDOW_DAYS,
         },
+        "profile_core": profile_core,
+        "growth_entries": growth_entries_detail,
         "milestones": milestones,
         "skill_deltas": skill_deltas,
         "signals": signals,
@@ -120,6 +129,9 @@ def _latest_user_activity_time(user_id: int, db: Session) -> datetime | None:
         ),
         db.query(func.max(SkillUpdate.created_at)).join(Profile).filter(
             Profile.user_id == user_id
+        ),
+        db.query(func.max(GrowthEntry.updated_at)).filter(
+            GrowthEntry.user_id == user_id
         ),
     ]
     times: list[datetime] = []
@@ -305,9 +317,240 @@ def _build_milestones(
     except Exception as e:
         logger.warning("_build_milestones SkillUpdate failed: %s", e)
 
+    # ── GrowthEntry (unified log) ──
+    try:
+        entries = (
+            db.query(GrowthEntry)
+            .filter(
+                GrowthEntry.user_id == user_id,
+                GrowthEntry.status == "done",
+                GrowthEntry.created_at >= since,
+            )
+            .order_by(GrowthEntry.created_at.desc())
+            .limit(20)
+            .all()
+        )
+        cat_map = {
+            "project": "project_progress",
+            "interview": "interview",
+            "learning": "learning_note",
+        }
+        for entry in entries:
+            counter += 1
+            sd = entry.structured_data or {}
+            if entry.category == "interview":
+                title = f"{sd.get('company','')} {sd.get('round','面试')}".strip() or entry.content[:60]
+                detail = entry.content[:200]
+                skills = []
+            elif entry.category == "project":
+                title = sd.get("name", entry.content[:40])
+                detail = sd.get("description", entry.content)[:200]
+                skills = sd.get("skills_used", [])
+            else:
+                title = entry.content[:60]
+                detail = entry.content[:200]
+                skills = []
+
+            items.append({
+                "id": f"M-{counter:03d}",
+                "date_iso": _iso(entry.completed_at or entry.created_at),
+                "source": f"growth_entry:{entry.id}",
+                "category": cat_map.get(entry.category, "note"),
+                "title": title,
+                "detail": detail,
+                "skills_touched": skills,
+            })
+    except Exception as e:
+        logger.warning("_build_milestones GrowthEntry failed: %s", e)
+
     # sort by date desc, keep top 20
     items.sort(key=lambda x: x["date_iso"], reverse=True)
     return items[:20]
+
+
+def _build_profile_core(profile: Profile) -> dict:
+    """抽画像核心字段给 LLM。匹配当前 profile_json 实际 schema：
+
+      - primary_domain, experience_years, job_target: 身份定位
+      - education: {degree, major, school}
+      - projects: list[str]（简历解析出的项目描述，每条截 180 字）
+      - knowledge_areas: list[str]
+      - internships: list[dict or str]（学生常为空）
+      - soft_skills: dict {name: level|None}
+      - awards / certificates: 简短列表
+    """
+    try:
+        data = json.loads(profile.profile_json or "{}")
+    except Exception:
+        return {}
+
+    def _trim(s: str, n: int) -> str:
+        if not isinstance(s, str):
+            return ""
+        s = s.strip()
+        return s if len(s) <= n else s[: n - 1] + "…"
+
+    core: dict = {}
+
+    # 身份定位
+    for key in ("name", "primary_domain", "job_target"):
+        v = data.get(key)
+        if isinstance(v, str) and v.strip():
+            core[key] = _trim(v, 60)
+    ey = data.get("experience_years")
+    if isinstance(ey, (int, float)):
+        core["experience_years"] = ey
+
+    # education (dict schema)
+    edu = data.get("education")
+    if isinstance(edu, dict):
+        core["education"] = {
+            k: _trim(str(edu.get(k) or ""), 40)
+            for k in ("degree", "major", "school")
+            if edu.get(k)
+        } or None
+        if core["education"] is None:
+            core.pop("education")
+
+    # projects: list[str]（简历解析出的文本）
+    projs = data.get("projects")
+    if isinstance(projs, list) and projs:
+        proj_out: list[str] = []
+        for p in projs[:5]:
+            if isinstance(p, str) and p.strip():
+                proj_out.append(_trim(p, 180))
+            elif isinstance(p, dict):
+                # 兜底：未来若改为结构化
+                text = (
+                    p.get("summary") or p.get("description")
+                    or p.get("detail") or p.get("name") or ""
+                )
+                if text:
+                    proj_out.append(_trim(str(text), 180))
+        if proj_out:
+            core["projects"] = proj_out
+
+    # knowledge_areas: list[str]
+    ka = data.get("knowledge_areas")
+    if isinstance(ka, list) and ka:
+        core["knowledge_areas"] = [_trim(str(x), 40) for x in ka[:10] if x]
+
+    # internships: 多数学生为空，但有就喂
+    intern = data.get("internships")
+    if isinstance(intern, list) and intern:
+        out = []
+        for it in intern[:3]:
+            if isinstance(it, dict):
+                out.append({
+                    "company": _trim(str(it.get("company") or ""), 40),
+                    "role": _trim(str(it.get("role") or it.get("title") or ""), 40),
+                    "period": _trim(str(it.get("period") or it.get("duration") or ""), 30),
+                    "summary": _trim(
+                        str(it.get("summary") or it.get("description") or ""), 160
+                    ),
+                })
+            elif isinstance(it, str) and it.strip():
+                out.append({"summary": _trim(it, 160)})
+        if out:
+            core["internships"] = out
+
+    # soft_skills: dict {name: level|None}
+    soft = data.get("soft_skills")
+    if isinstance(soft, dict):
+        rated = [
+            (k, v) for k, v in soft.items()
+            if not str(k).startswith("_") and v is not None and str(v).strip()
+        ]
+        if rated:
+            core["soft_skills_rated"] = [
+                {"name": _trim(str(k), 30), "level": _trim(str(v), 20)}
+                for k, v in rated[:5]
+            ]
+    elif isinstance(soft, list) and soft:
+        rated_list = []
+        for s in soft[:5]:
+            if isinstance(s, dict) and s.get("level"):
+                rated_list.append({
+                    "name": _trim(str(s.get("name") or ""), 30),
+                    "level": _trim(str(s.get("level") or ""), 20),
+                })
+            elif isinstance(s, str):
+                rated_list.append({"name": _trim(s, 30), "level": ""})
+        if rated_list:
+            core["soft_skills_rated"] = rated_list
+
+    # awards / certificates
+    for key in ("awards", "certificates"):
+        v = data.get(key)
+        if isinstance(v, list) and v:
+            items = []
+            for x in v[:5]:
+                if isinstance(x, dict):
+                    label = x.get("name") or x.get("title") or ""
+                    if label:
+                        items.append(_trim(str(label), 60))
+                elif isinstance(x, str) and x.strip():
+                    items.append(_trim(x, 60))
+            if items:
+                core[key] = items
+
+    return core
+
+
+def _build_growth_entries_detail(
+    user_id: int, db: Session, now: datetime
+) -> list[dict]:
+    """近 30 天所有 GrowthEntry（不限 status），让 LLM 看到学习笔记 / 未完成计划 / 面试反思原文。
+
+    与 milestones 的差别：milestones 只要 done 的、且要合并多个来源、字段有限。
+    这里是原生条目、所有 status、保留 category + 结构化数据关键字段。
+    """
+    out: list[dict] = []
+    try:
+        since30 = now - timedelta(days=30)
+        rows = (
+            db.query(GrowthEntry)
+            .filter(
+                GrowthEntry.user_id == user_id,
+                GrowthEntry.created_at >= since30,
+            )
+            .order_by(GrowthEntry.created_at.desc())
+            .limit(30)
+            .all()
+        )
+        for e in rows:
+            sd = e.structured_data or {}
+            entry: dict = {
+                "id": f"GE-{e.id}",
+                "category": e.category or "note",
+                "status": e.status or "open",
+                "date_iso": _iso(e.created_at),
+                "content": (e.content or "")[:300],
+                "tags": list(e.tags or []) if isinstance(e.tags, list) else [],
+            }
+            if e.is_plan:
+                entry["is_plan"] = True
+                if e.due_at:
+                    entry["due_iso"] = _iso(e.due_at)
+            if e.category == "interview" and isinstance(sd, dict):
+                entry["interview"] = {
+                    "company": str(sd.get("company", ""))[:40],
+                    "round": str(sd.get("round", ""))[:40],
+                    "result": str(sd.get("result", ""))[:40],
+                    "reflection": str(sd.get("reflection", ""))[:200],
+                }
+            elif e.category == "project" and isinstance(sd, dict):
+                entry["project"] = {
+                    "name": str(sd.get("name", ""))[:40],
+                    "skills_used": [
+                        str(s)[:30] for s in (sd.get("skills_used") or [])
+                    ][:6],
+                    "status": str(sd.get("status", ""))[:30],
+                }
+            out.append(entry)
+    except Exception as ex:
+        logger.warning("_build_growth_entries_detail failed: %s", ex)
+    return out
 
 
 def _build_skill_deltas(
@@ -533,7 +776,7 @@ def _build_interview_signal(user_id: int, db: Session, since: datetime) -> dict:
                 "extract-interview-signals",
                 interviews_json=json.dumps(interviews_json, ensure_ascii=False),
             )
-            resp = get_llm_client(timeout=15).chat.completions.create(
+            resp = get_llm_client(timeout=90).chat.completions.create(
                 model=get_model("fast"),
                 messages=[
                     {"role": "system", "content": system},

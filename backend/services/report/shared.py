@@ -122,20 +122,26 @@ def _batch_embed(texts: list[str]) -> list[list[float]] | None:
     """
     Batch-embed a list of texts via DashScope text-embedding-v3.
     Returns list of embedding vectors, or None on failure.
-    One API call for the whole batch — no per-text overhead.
+
+    DashScope 限制单次 batch ≤ 10 条，超出会 400 InvalidParameter。
+    这里按 10 个一组切片并顺序调用，结果按原顺序拼接。
     """
     if not texts:
         return []
     try:
         from backend.llm import get_llm_client
-        client = get_llm_client(timeout=15)
-        resp = client.embeddings.create(
-            model="text-embedding-v3",
-            input=texts,
-        )
-        # Preserve input order (API may reorder by index)
-        ordered = sorted(resp.data, key=lambda d: d.index)
-        return [d.embedding for d in ordered]
+        client = get_llm_client(timeout=60)
+        _CHUNK = 10
+        out: list[list[float]] = []
+        for i in range(0, len(texts), _CHUNK):
+            chunk = texts[i : i + _CHUNK]
+            resp = client.embeddings.create(
+                model="text-embedding-v3",
+                input=chunk,
+            )
+            ordered = sorted(resp.data, key=lambda d: d.index)
+            out.extend(d.embedding for d in ordered)
+        return out
     except Exception as e:
         logger.warning("_batch_embed failed: %s", e)
         return None

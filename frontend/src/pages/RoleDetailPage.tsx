@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ChevronLeft, Check, AlertTriangle, ArrowRight, BookOpen, Shield, Zap, X, Briefcase, BarChart2, ClipboardList } from 'lucide-react'
+import { ChevronLeft, Check, AlertTriangle, ArrowRight, Shield, Zap, X, Briefcase, BarChart2, ClipboardList } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { rawFetch } from '@/api/client'
@@ -277,9 +277,7 @@ export default function RoleDetailPage() {
   const rpBadge = rp < 30 ? 'bg-emerald-50 text-emerald-700' : rp < 55 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
   const rpLabel = rp < 30 ? 'AI安全' : rp < 55 ? 'AI中等' : 'AI风险'
 
-  const matchedCount = data.user_matched_skills.length
-  const totalSkills = data.must_skills.length
-  const hasMatch = matchedCount > 0 || data.user_gap_skills.length > 0
+
 
   return (
     <div className="max-w-[680px] mx-auto px-4 py-6 pb-12">
@@ -812,7 +810,7 @@ function NavLink({ label, onClick }: { label: string; onClick: () => void }) {
   )
 }
 
-function MatchBar({ label, score, detail, weight }: {
+function MatchBar({ label, score, detail: _detail, weight }: {
   label: string; score: number; detail: string; weight: number
 }) {
   const color = score >= 80 ? 'bg-emerald-400' : score >= 60 ? 'bg-blue-400' : score >= 40 ? 'bg-amber-400' : 'bg-red-400'

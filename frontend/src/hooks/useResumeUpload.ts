@@ -81,8 +81,8 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
         try {
           const existing = await fetchProfile()
           const hasExistingContent =
-            (existing?.skills?.length ?? 0) > 0 ||
-            (existing?.projects?.length ?? 0) > 0
+            (existing?.profile?.skills?.length ?? 0) > 0 ||
+            (existing?.profile?.projects?.length ?? 0) > 0
           if (hasExistingContent) {
             shouldMerge = window.confirm(
               '已有简历内容。\n\n确定 = 把新简历追加（合并进现有档案，旧项目保留）\n取消 = 用新简历替换（删除现有档案内容）',

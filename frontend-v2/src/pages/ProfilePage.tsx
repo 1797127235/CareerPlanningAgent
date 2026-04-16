@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Upload, PenLine } from 'lucide-react'
 import { useProfileData, type ManualProfilePayload } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
@@ -48,6 +49,16 @@ function useRecommendations(hasProfile: boolean) {
 }
 
 const sjtDims = ['communication', 'learning', 'collaboration', 'innovation', 'resilience'] as const
+
+const EASE_OUT = [0.22, 1, 0.36, 1] as const
+const PAGE_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.15, ease: EASE_OUT } }
+const MODAL_BACKDROP = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.15 } }
+const MODAL_CARD = {
+  initial: { opacity: 0, scale: 0.96, y: 8 },
+  animate: { opacity: 1, scale: 1, y: 0 },
+  exit: { opacity: 0, scale: 0.96, y: 8 },
+  transition: { duration: 0.2, ease: EASE_OUT },
+}
 
 export default function ProfilePage() {
   const [searchParams] = useSearchParams()
@@ -217,7 +228,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
+    <motion.main {...PAGE_FADE} className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
       <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={onFileSelected} />
 
       <div className="max-w-[860px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] py-[var(--space-6)]">
@@ -257,13 +268,13 @@ export default function ProfilePage() {
               <div className="mt-4 flex flex-wrap items-center gap-3">
                 <button
                   onClick={triggerFileDialog}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] border border-[var(--line)] hover:bg-[var(--line)]/10 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] border border-[var(--line)] hover:bg-[var(--line)]/10 transition-[color,background-color] duration-200 active:scale-[0.98]"
                 >
                   <Upload className="w-4 h-4" /> 重新上传简历
                 </button>
                 <button
                   onClick={() => setShowManual(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
                 >
                   <PenLine className="w-4 h-4" /> 手动补一笔
                 </button>
@@ -360,7 +371,7 @@ export default function ProfilePage() {
                           )}
                           <button
                             onClick={() => setEditingInternships(true)}
-                            className="inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)]"
+                            className="inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
                           >
                             <Plus className="w-4 h-4" /> {internships.length > 0 ? '再加一段实习' : '加一段实习'}
                           </button>
@@ -389,7 +400,7 @@ export default function ProfilePage() {
                           )}
                           <button
                             onClick={() => setEditingProjects(true)}
-                            className="inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)]"
+                            className="inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
                           >
                             <Plus className="w-4 h-4" /> {projects.length > 0 ? '再加一个项目' : '加一个项目'}
                           </button>
@@ -412,7 +423,7 @@ export default function ProfilePage() {
                       ) : (
                         <button
                           onClick={() => setAddingSkill(true)}
-                          className="mt-3 inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)]"
+                          className="mt-3 inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
                         >
                           <Plus className="w-4 h-4" /> 加一个技能
                         </button>
@@ -428,7 +439,7 @@ export default function ProfilePage() {
                           const next = [...new Set([...areas, ...val.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean)])]
                           savePatch({ knowledge_areas: next })
                         }}
-                        className="mt-3 inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)]"
+                        className="mt-3 inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
                       >
                         <Plus className="w-4 h-4" /> 加一个领域
                       </button>
@@ -485,10 +496,10 @@ export default function ProfilePage() {
                         <div className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--bg-card)] p-4">
                           <p className="text-[var(--text-base)] text-[var(--ink-1)]">还没有明确的目标</p>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <button className="px-3 py-1.5 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-xs)] font-medium hover:opacity-90">
+                            <button className="px-3 py-1.5 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-xs)] font-medium hover:opacity-90 transition-opacity duration-200 active:scale-[0.98]">
                               让 AI 帮我推荐
                             </button>
-                            <button className="px-3 py-1.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] text-[var(--text-xs)] font-medium hover:bg-[var(--line)]/10">
+                            <button className="px-3 py-1.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] text-[var(--text-xs)] font-medium hover:bg-[var(--line)]/10 transition-colors duration-200 active:scale-[0.98]">
                               我去图谱探索
                             </button>
                           </div>
@@ -501,18 +512,27 @@ export default function ProfilePage() {
                       {recommendations.length > 0 ? (
                         <>
                           <div className="space-y-3">
-                            {visibleRecs.map((rec) => (
-                              <RecommendationCard
-                                key={rec.role_id}
-                                rec={{ role_id: rec.role_id, label: rec.label, reason: rec.reason }}
-                                onExplore={() => { /* navigate to role */ }}
-                              />
-                            ))}
+                            <AnimatePresence initial={false}>
+                              {visibleRecs.map((rec) => (
+                                <motion.div
+                                  key={rec.role_id}
+                                  initial={{ opacity: 0, height: 0 }}
+                                  animate={{ opacity: 1, height: 'auto' }}
+                                  exit={{ opacity: 0, height: 0 }}
+                                  transition={{ duration: 0.2, ease: EASE_OUT }}
+                                >
+                                  <RecommendationCard
+                                    rec={{ role_id: rec.role_id, label: rec.label, reason: rec.reason }}
+                                    onExplore={() => { /* navigate to role */ }}
+                                  />
+                                </motion.div>
+                              ))}
+                            </AnimatePresence>
                           </div>
                           {recommendations.length > 3 && (
                             <button
                               onClick={() => setShowAllRecs((v) => !v)}
-                              className="mt-3 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)]"
+                              className="mt-3 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
                             >
                               {showAllRecs ? '收起' : `展开更多（还有 ${recommendations.length - 3} 个）`}
                             </button>
@@ -573,46 +593,52 @@ export default function ProfilePage() {
       </div>
 
       {/* Name prompt modal */}
-      {showNamePrompt && (
-        <div
-          className="fixed inset-0 bg-[var(--ink-1)]/20 backdrop-blur-sm z-[999] flex items-center justify-center p-6"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault()
-              setShowNamePrompt(false)
-            }
-          }}
-        >
-          <div className="bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-[var(--shadow-float)] p-6 max-w-sm w-full border border-[var(--line)]">
-            <h3 className="text-[var(--text-xl)] font-semibold text-[var(--ink-1)] mb-2">为你的档案命名</h3>
-            <p className="text-[var(--text-base)] text-[var(--ink-2)] mb-4">档案已建立，请确认或修改你的姓名</p>
-            <input
-              type="text"
-              value={pendingName}
-              onChange={(e) => setPendingName(e.target.value)}
-              className="w-full px-3 py-2 rounded-[var(--radius-md)] bg-[var(--bg-paper)] border border-[var(--line)] text-[var(--ink-1)] focus:outline-none focus:border-[var(--chestnut)]/50 mb-4"
-              placeholder="请输入姓名"
-              autoFocus
-              onKeyDown={(e) => e.key === 'Enter' && handleNameConfirm()}
-            />
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowNamePrompt(false)}
-                className="px-4 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors"
-              >
-                稍后再说
-              </button>
-              <button
-                onClick={handleNameConfirm}
-                disabled={!pendingName.trim()}
-                className="px-5 py-2 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-sm)] font-medium hover:opacity-90 disabled:opacity-50"
-              >
-                确认
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </main>
+      <AnimatePresence>
+        {showNamePrompt && (
+          <motion.div
+            {...MODAL_BACKDROP}
+            className="fixed inset-0 bg-[var(--ink-1)]/20 backdrop-blur-sm z-[999] flex items-center justify-center p-6"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                setShowNamePrompt(false)
+              }
+            }}
+          >
+            <motion.div
+              {...MODAL_CARD}
+              className="bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-[var(--shadow-float)] p-6 max-w-sm w-full border border-[var(--line)]"
+            >
+              <h3 className="text-[var(--text-xl)] font-semibold text-[var(--ink-1)] mb-2">为你的档案命名</h3>
+              <p className="text-[var(--text-base)] text-[var(--ink-2)] mb-4">档案已建立，请确认或修改你的姓名</p>
+              <input
+                type="text"
+                value={pendingName}
+                onChange={(e) => setPendingName(e.target.value)}
+                className="w-full px-3 py-2 rounded-[var(--radius-md)] bg-[var(--bg-paper)] border border-[var(--line)] text-[var(--ink-1)] focus:outline-none focus:border-[var(--chestnut)]/50 transition-[border-color] duration-200 mb-4"
+                placeholder="请输入姓名"
+                autoFocus
+                onKeyDown={(e) => e.key === 'Enter' && handleNameConfirm()}
+              />
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setShowNamePrompt(false)}
+                  className="px-4 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
+                >
+                  稍后再说
+                </button>
+                <button
+                  onClick={handleNameConfirm}
+                  disabled={!pendingName.trim()}
+                  className="px-5 py-2 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-sm)] font-medium hover:opacity-90 disabled:opacity-50 transition-opacity duration-200 active:scale-[0.98]"
+                >
+                  确认
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.main>
   )
 }

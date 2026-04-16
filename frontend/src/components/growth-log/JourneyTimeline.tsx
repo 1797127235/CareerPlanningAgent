@@ -1,5 +1,11 @@
 import { PaperCard } from '@/components/growth-log/PaperCard'
-import type { StageEvent } from '@/api/growthLog'
+
+interface StageEvent {
+  id: number
+  trigger: string
+  stage_completed?: number
+  created_at: string
+}
 
 interface JourneyTimelineProps {
   targetLabel: string

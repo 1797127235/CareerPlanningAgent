@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Search, X, ChevronLeft, ChevronRight, ArrowUp, Repeat2, ArrowRight, CheckCircle2, MapPin, Target, BookOpen, ExternalLink, Video, FileText, GraduationCap } from 'lucide-react'
+import { Search, X, ChevronLeft, ChevronRight, ArrowUp, Repeat2, ArrowRight, CheckCircle2, MapPin, Target } from 'lucide-react'
 import { searchGraphNodes, fetchEscapeRoutes, setCareerGoal, addCareerGoal, fetchNodeIntro } from '@/api/graph'
 import type { GraphNode, GraphEdge, EscapeRoute, SearchResult } from '@/types/graph'
 import { dispatchCoachTrigger } from '@/hooks/useCoachTrigger'
@@ -73,6 +73,7 @@ function drawRadar(canvas: HTMLCanvasElement, abilities: Record<string, number>,
   const keys = Object.keys(abilities), vals = Object.values(abilities), n = keys.length, r = size
 
   function render(progress: number) {
+    if (!ctx) return
     ctx.clearRect(0, 0, canvas.width, canvas.height)
     // Grid
     for (let ring = 1; ring <= 4; ring++) {
@@ -171,7 +172,7 @@ const ZONE_FILTERS = [
   { key: 'danger',     label: '危险区' },
 ] as const
 
-export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, targetNodeId, careerGoals, profiles, activeProfileId, onProfileChange, onGoalSet }: CoverflowProps) {
+export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, fromNodeId, targetNodeId, careerGoals, profiles, activeProfileId, onProfileChange, onGoalSet }: CoverflowProps) {
   // Zone filter
   const [zoneFilter, setZoneFilter] = useState<string | null>(null)
 
@@ -222,7 +223,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
 
   // Node intro cache — use a ref to track fetched nodes (avoids introCache as dep)
   const [introCache, setIntroCache] = useState<Map<string, string>>(new Map())
-  const [introLoading, setIntroLoading] = useState(false)
   const introFetchedRef = useRef<Set<string>>(new Set())
 
   // Detail modal state
@@ -232,7 +232,7 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
-  const searchTimer = useRef<ReturnType<typeof setTimeout>>()
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isComposing = useRef(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
@@ -257,11 +257,9 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
     const id = currentNode.node_id
     if (introFetchedRef.current.has(id)) return
     introFetchedRef.current.add(id)
-    setIntroLoading(true)
     fetchNodeIntro(id)
       .then(data => setIntroCache(prev => new Map(prev).set(id, data.intro)))
       .catch(() => setIntroCache(prev => new Map(prev).set(id, '')))
-      .finally(() => setIntroLoading(false))
   }, [currentNode])
 
   const currentRoutes = currentNode ? (routesCache.get(currentNode.node_id) ?? []) : []
@@ -626,8 +624,6 @@ export function Coverflow({ nodes, edges, initialNodeId, profileId, fromNodeId, 
           const zIndex = 100 - abs * 10
           const isFlipped = isCenter && flipped
           const isLocateTarget = isCenter && focusPhase === 'reveal' && node.node_id === initialNodeId
-
-          const abilities = computeAbilities(node)
 
           return (
             <div

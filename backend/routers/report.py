@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import json
+import logging
+import traceback
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
@@ -101,8 +105,12 @@ def generate_report(
             raise HTTPException(400, "请先上传简历完成能力画像")
         if "no_goal" in msg:
             raise HTTPException(400, "请先在岗位图谱中设定职业目标")
+        print(f"[report/generate] ValueError for user {user.id}: {msg}")
+        traceback.print_exc()
         raise HTTPException(400, f"报告生成失败：{msg}")
     except Exception as e:
+        print(f"[report/generate] Exception for user {user.id}: {type(e).__name__}: {e}")
+        traceback.print_exc()
         raise HTTPException(500, f"报告生成异常：{e}")
 
     target_label = data.get("target", {}).get("label", "职业发展报告")
@@ -235,6 +243,53 @@ def polish_report(
     db.commit()
 
     return {"ok": True, "polished": {"narrative": polished}}
+
+
+@router.post("/{report_id}/export")
+async def export_report_pdf(
+    report_id: int,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export a report as PDF via Playwright headless rendering."""
+    report = db.query(Report).filter(Report.id == report_id).first()
+    if not report:
+        raise HTTPException(404, "Report not found")
+    if report.user_id != user.id:
+        raise HTTPException(403, "Not authorized")
+
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise HTTPException(401, "Missing token")
+    token = auth[len("Bearer "):]
+
+    user_json = {
+        "id": user.id,
+        "username": user.username,
+    }
+
+    from backend.services.report.pdf_export import render_report_pdf
+    try:
+        pdf_bytes = await render_report_pdf(report_id, token, user_json)
+    except Exception as e:
+        logger.exception("PDF export failed")
+        raise HTTPException(500, f"PDF 生成失败：{e}")
+
+    report_data = _parse_data(report.data_json)
+    target = report_data.get("target", {}).get("label", "报告") if isinstance(report_data, dict) else "报告"
+    date_str = report.created_at.strftime("%Y-%m-%d") if report.created_at else "unknown"
+    filename = f"{target}_职业报告_{date_str}.pdf"
+    from urllib.parse import quote
+    encoded = quote(filename)
+
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded}",
+        },
+    )
 
 
 @router.delete("/{report_id}")

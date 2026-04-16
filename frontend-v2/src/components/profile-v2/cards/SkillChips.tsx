@@ -1,4 +1,5 @@
 import { X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 import type { Skill } from '@/types/profile'
 
 const LEVEL_ORDER: Record<string, number> = {
@@ -20,6 +21,13 @@ const LEVEL_COLOR: Record<string, string> = {
   proficient: 'bg-emerald-700 text-white border-emerald-700',
   familiar: 'bg-[var(--ink-2)] text-white border-[var(--ink-2)]',
   beginner: 'bg-[var(--ink-3)] text-white border-[var(--ink-3)]',
+}
+
+const CHIP = {
+  initial: { opacity: 0, scale: 0.85 },
+  animate: { opacity: 1, scale: 1 },
+  exit: { opacity: 0, scale: 0.85 },
+  transition: { duration: 0.15, ease: [0.22, 1, 0.36, 1] as const },
 }
 
 export function SkillChips({
@@ -55,29 +63,33 @@ export function SkillChips({
               {LEVEL_LABEL[lvl]}（{list.length}）
             </p>
             <div className="flex flex-wrap gap-2">
-              {list.map((s) => (
-                <button
-                  key={s.name}
-                  onClick={() => onEdit?.(s)}
-                  className={[
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border transition-transform active:scale-95',
-                    LEVEL_COLOR[lvl],
-                  ].join(' ')}
-                >
-                  {s.name}
-                  {onDelete && (
-                    <span
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        onDelete(s)
-                      }}
-                      className="ml-0.5 p-0.5 hover:bg-white/20 rounded-full"
-                    >
-                      <X className="w-3 h-3" />
-                    </span>
-                  )}
-                </button>
-              ))}
+              <AnimatePresence>
+                {list.map((s) => (
+                  <motion.button
+                    key={s.name}
+                    layout
+                    {...CHIP}
+                    onClick={() => onEdit?.(s)}
+                    className={[
+                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium border active:scale-95 transition-transform',
+                      LEVEL_COLOR[lvl],
+                    ].join(' ')}
+                  >
+                    {s.name}
+                    {onDelete && (
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onDelete(s)
+                        }}
+                        className="ml-0.5 p-0.5 hover:bg-white/20 rounded-full transition-colors duration-150"
+                      >
+                        <X className="w-3 h-3" />
+                      </span>
+                    )}
+                  </motion.button>
+                ))}
+              </AnimatePresence>
             </div>
           </div>
         )

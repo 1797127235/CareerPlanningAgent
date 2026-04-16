@@ -27,6 +27,8 @@ export function PaperCard({ children, className = '', onClick, onKeyDown, ...res
       className={[
         'bg-[var(--bg-card)] rounded-lg p-5 md:p-7',
         'shadow-[0_1px_2px_var(--warm-shadow-1),0_4px_12px_var(--warm-shadow-2)]',
+        'transition-[box-shadow,background-color] duration-200',
+        isInteractive ? 'hover:shadow-[var(--shadow-float)] hover:bg-[var(--bg-card-hover)] active:scale-[0.99]' : '',
         className,
       ].join(' ')}
     >

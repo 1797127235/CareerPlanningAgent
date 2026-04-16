@@ -15,7 +15,9 @@ Usage:
 """
 from __future__ import annotations
 
+import logging
 import re
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -109,27 +111,50 @@ def invoke_skill(name: str, **ctx) -> str | dict:
     from backend.llm import get_llm_client, get_model
     system, user, skill = render_skill(name, **ctx)
 
-    resp = get_llm_client(timeout=120).chat.completions.create(
-        model=get_model(skill.model),
-        messages=[
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
-        temperature=skill.temperature,
-        max_tokens=skill.max_tokens,
-    )
+    t0 = time.time()
+    try:
+        resp = get_llm_client(timeout=240).chat.completions.create(
+            model=get_model(skill.model),
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            temperature=skill.temperature,
+            max_tokens=skill.max_tokens,
+        )
+    except Exception as e:
+        elapsed = time.time() - t0
+        logging.getLogger(__name__).warning(
+            "[skill:%s] LLM call failed after %.1fs (model=%s, max_tokens=%d, "
+            "system_len=%d, user_len=%d): %s: %s",
+            name, elapsed, get_model(skill.model), skill.max_tokens,
+            len(system), len(user), type(e).__name__, e,
+        )
+        raise
+
+    elapsed = time.time() - t0
     raw = resp.choices[0].message.content.strip()
 
     if skill.output == "json":
         import json
-        # 容错剥壳 ```json ... ```
         if raw.startswith("```"):
             raw = raw.split("```")[1]
             if raw.startswith("json"):
                 raw = raw[4:]
         try:
-            return json.loads(raw.strip())
+            result = json.loads(raw.strip())
+            logging.getLogger(__name__).info(
+                "[skill:%s] OK in %.1fs, tokens_est=%d", name, elapsed, len(raw)
+            )
+            return result
         except json.JSONDecodeError as e:
+            logging.getLogger(__name__).warning(
+                "[skill:%s] JSON parse failed after %.1fs; first 300 chars of raw:\n%s",
+                name, elapsed, raw[:300],
+            )
             raise SkillOutputParseError(f"{name}: {e}") from e
 
+    logging.getLogger(__name__).info(
+        "[skill:%s] OK in %.1fs", name, elapsed
+    )
     return raw

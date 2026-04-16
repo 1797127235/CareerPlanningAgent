@@ -5,7 +5,8 @@ import ProfilePage from '@/pages/ProfilePage'
 import MatchDetailPage from '@/pages/MatchDetailPage'
 import GraphPage from '@/pages/GraphPage'
 import ReportPage from '@/pages/ReportPage'
-import GrowthLogPage from '@/pages/GrowthLogPage'
+import ReportPrintPage from '@/pages/ReportPrintPage'
+import GrowthLogV2Page from '@/pages/GrowthLogV2Page'
 import ProjectGraphPage from '@/pages/ProjectGraphPage'
 import PursuitDetailPage from '@/pages/PursuitDetailPage'
 import CoachResultPage from '@/pages/CoachResultPage'
@@ -27,6 +28,7 @@ export default function App() {
         <div className="bg-canvas" />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/report/print/:id" element={<ReportPrintPage />} />
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route index element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
@@ -40,7 +42,8 @@ export default function App() {
             <Route path="/growth" element={<Navigate to="/growth-log" replace />} />
             <Route path="/applications" element={<Navigate to="/growth-log" replace />} />
             <Route path="/report" element={<ReportPage />} />
-            <Route path="/growth-log" element={<GrowthLogPage />} />
+            <Route path="/growth-log" element={<GrowthLogV2Page />} />
+            <Route path="/growth-log-v2" element={<Navigate to="/growth-log" replace />} />
             <Route path="/growth-log/projects/:id" element={<ProjectGraphPage />} />
             <Route path="/growth-log/pursuits/:id" element={<PursuitDetailPage />} />
             <Route path="/coach/result/:id" element={<CoachResultPage />} />

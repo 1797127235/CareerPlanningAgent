@@ -18,6 +18,7 @@ import {
   fetchReportDetail,
   editReport,
   deleteReport,
+  exportReportPdf,
   type ReportV2Data,
   type ReportListItem,
 } from '@/api/report'
@@ -102,6 +103,8 @@ export default function ReportPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   // Deferred delete: optimistically hide from list, commit to server after 4.5s
   // unless the user hits undo.
@@ -172,6 +175,29 @@ export default function ReportPage() {
       setError(e instanceof Error ? e.message : '请求失败')
     } finally {
       setGenerating(false)
+    }
+  }
+
+  const handleExport = async () => {
+    if (exporting || currentId == null) return
+    setExporting(true)
+    setExportError(null)
+    try {
+      const blob = await exportReportPdf(currentId)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const target = data.target?.label || '报告'
+      const date = new Date().toISOString().slice(0, 10)
+      a.download = `${target}_职业报告_${date}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -378,6 +404,9 @@ export default function ReportPage() {
             generatedAt={data.generated_at}
             onRegenerate={generate}
             regenerating={generating}
+            onExport={handleExport}
+            exporting={exporting}
+            exportError={exportError}
           />
           <HistoryStrip
             items={reportList}
@@ -406,7 +435,6 @@ export default function ReportPage() {
             generatedAt={data.generated_at}
             onRegenerate={generate}
             regenerating={generating}
-            onExport={() => window.print()}
           />
         </div>
         <aside className="hidden @[1080px]:block pt-32 print:hidden">

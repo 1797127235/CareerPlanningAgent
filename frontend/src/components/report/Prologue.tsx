@@ -3,6 +3,9 @@ interface PrologueProps {
   generatedAt: string
   onRegenerate?: () => void
   regenerating?: boolean
+  onExport?: () => void
+  exporting?: boolean
+  exportError?: string | null
 }
 
 function fmtDate(iso: string): string {
@@ -11,7 +14,7 @@ function fmtDate(iso: string): string {
   return d.toISOString().slice(0, 10)
 }
 
-export function Prologue({ target, generatedAt, onRegenerate, regenerating }: PrologueProps) {
+export function Prologue({ target, generatedAt, onRegenerate, regenerating, onExport, exporting, exportError }: PrologueProps) {
   const date = fmtDate(generatedAt)
   return (
     <header className="pt-6 md:pt-8 pb-4">
@@ -22,7 +25,7 @@ export function Prologue({ target, generatedAt, onRegenerate, regenerating }: Pr
       <h1 className="text-[40px] md:text-[52px] lg:text-[60px] font-extrabold leading-[0.95] tracking-[-0.02em] text-slate-900">
         {target.label}
       </h1>
-      <div className="mt-6 flex items-center gap-5 text-[12px] text-slate-500">
+      <div className="mt-6 flex items-center gap-5 text-[12px] text-slate-500 flex-wrap">
         <span className="tabular-nums">生成于 {date}</span>
         {onRegenerate && (
           <button
@@ -32,6 +35,18 @@ export function Prologue({ target, generatedAt, onRegenerate, regenerating }: Pr
           >
             {regenerating ? '正在重新生成…' : '再生成 →'}
           </button>
+        )}
+        {onExport && (
+          <button
+            onClick={onExport}
+            disabled={exporting}
+            className="font-semibold text-slate-900 border-b-2 border-slate-900 pb-0.5 hover:text-blue-700 hover:border-blue-700 disabled:opacity-60 cursor-pointer transition-colors print:hidden"
+          >
+            {exporting ? '正在生成 PDF…' : '导出 PDF'}
+          </button>
+        )}
+        {exportError && (
+          <p className="text-[12px] text-red-700">{exportError}</p>
         )}
       </div>
     </header>

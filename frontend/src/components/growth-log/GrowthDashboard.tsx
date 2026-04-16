@@ -97,7 +97,7 @@ function ReadinessCurve({ data }: { data: { date: string; score: number }[] }) {
               fontSize: 11,
               padding: '6px 10px',
             }}
-            formatter={(value: number) => [`${value.toFixed(1)}%`, '覆盖率']}
+            formatter={(value) => [`${Number(value).toFixed(1)}%`, '覆盖率']}
             labelStyle={{ color: '#475569', fontWeight: 600 }}
           />
           <Area

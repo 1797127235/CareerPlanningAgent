@@ -500,7 +500,7 @@ function ReflectionSection({ appId, initial, rounds }: {
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current) }, [])
 
   const handleAI = () => {
-    const roundSummary = rounds.slice(0, 3).map((r, i) => {
+    const roundSummary = rounds.slice(0, 3).map((r, _i) => {
       const pairs = parseQA(r.content_summary)
       const qa = pairs.filter(p => p.q).map((p, j) =>
         `  Q${j + 1}: ${p.q}${p.a && p.a !== '(未填写)' ? `\n  A${j + 1}: ${p.a}` : ''}`

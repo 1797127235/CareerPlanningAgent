@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import { motion } from 'framer-motion'
@@ -37,7 +36,7 @@ export default function HomePage() {
   const { profile, loading: profileLoading, loadProfile, handleDelete, deleteConfirm, setDeleteConfirm } = useProfileData(token)
   const { data: stats } = useDashboardStats(profile?.id ?? null)
   const { data: heatmapData } = useActivityHeatmap(52)
-  const { fileInputRef, triggerFileDialog, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
+  const { fileInputRef, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
 
   const hasProfile = (profile?.profile?.skills?.length ?? 0) > 0
     || (profile?.profile?.knowledge_areas?.length ?? 0) > 0
@@ -48,8 +47,7 @@ export default function HomePage() {
     || !!profile?.name
     || !!profile?.profile?.raw_text
   const graphPos = profile?.graph_position
-  const careerGoals = profile?.career_goals ?? []
-  const extraGoalCount = careerGoals.length > 1 ? careerGoals.length - 1 : 0
+
   // 有手动设目标时 target_node_id != from_node_id
   const hasGoal = !!(graphPos && graphPos.target_node_id && graphPos.target_node_id !== graphPos.from_node_id)
   const zone = graphPos?.target_zone ? zoneLabel[graphPos.target_zone] : null

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { fetchDashboardStats } from '@/api/dashboard'
-import type { DashboardStats, MetricCardData, TrendDirection } from '@/types/dashboard'
+import type { DashboardStats, MetricCardData } from '@/types/dashboard'
 
 export function useDashboardStats(profileId: number | null) {
   return useQuery<DashboardStats>({

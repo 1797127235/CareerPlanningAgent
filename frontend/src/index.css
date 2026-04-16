@@ -460,6 +460,45 @@ main::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
   &:nth-child(3) { animation-delay: 0.3s; }
 }
 
+@page {
+  size: A4;
+  margin: 0;
+}
+
+.report-print-root {
+  background: #f7f2e8;
+  color: #141414;
+  font-family: 'Source Han Serif SC', 'Noto Serif CJK SC', 'Songti SC', serif;
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  padding: 0 16mm;
+  box-sizing: border-box;
+}
+
+/* 让 Playwright 打印时保留背景色。 */
+.report-print-root,
+.report-print-root * {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* 让每章从新页开始（除第一章外） */
+.print-chapter {
+  break-before: page;
+  break-inside: auto;
+  padding: 18mm 0;
+}
+.print-chapter:first-of-type {
+  break-before: auto;
+}
+
+/* 不可被拆分的单元 */
+.print-avoid-break {
+  break-inside: avoid;
+}
+
 /* ── Print / PDF export ── */
 @media print {
   /* Hide chrome */

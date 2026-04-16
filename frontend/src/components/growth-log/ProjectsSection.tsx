@@ -6,7 +6,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Plus, Check, Trash2, FolderGit2, ExternalLink, FileText, Sparkles, BookOpen } from 'lucide-react'
+import { X, Plus, ExternalLink, FileText, Sparkles, BookOpen } from 'lucide-react'
 import type { ProjectRecord, ProjectLogEntry } from '@/api/growthLog'
 import {
   listProjects, createProject, updateProject, deleteProject,
@@ -21,11 +21,7 @@ const STATUS = {
   completed:   { label: '已完成', color: '#16A34A', bg: 'rgba(22,163,74,0.10)'   },
 }
 
-const SKILL_SUGGESTIONS = [
-  'C++', 'Python', 'Java', 'Go', 'Rust', 'React', 'Vue.js', 'TypeScript',
-  'Node.js', 'FastAPI', 'Spring Boot', 'Docker', 'Kubernetes', 'MySQL',
-  'Redis', 'PostgreSQL', 'Linux', '网络编程', '多线程', '机器学习', 'LangChain',
-]
+
 
 function timeAgo(iso: string) {
   const d = new Date(iso), now = new Date()
@@ -186,7 +182,7 @@ function LogInput({ projectId, logType, placeholder, onAdded }: {
   async function submit() {
     if (!val.trim() || saving) return
     setSaving(true)
-    try { await createProjectLog(projectId, val.trim(), logType); setVal(''); onAdded() }
+    try { await createProjectLog(projectId, { content: val.trim(), log_type: logType }); setVal(''); onAdded() }
     finally { setSaving(false) }
   }
 
@@ -218,7 +214,6 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
   onDeleted: () => void
   onRefresh: () => void
 }) {
-  const qc = useQueryClient()
   const [status, setStatus] = useState(project.status)
   const [savingStatus, setSavingStatus] = useState(false)
   const [activeTab, setActiveTab] = useState<ModalTab>('progress')
@@ -233,7 +228,7 @@ export function ProjectDetailModal({ project, onClose, onDeleted, onRefresh }: {
   const noteLogs = allLogs.filter(l => l.log_type === 'note')
 
   const handleStatusChange = async (s: string) => {
-    setSavingStatus(true); setStatus(s)
+    setSavingStatus(true); setStatus(s as any)
     try { await updateProject(project.id, { status: s }); onRefresh() }
     finally { setSavingStatus(false) }
   }

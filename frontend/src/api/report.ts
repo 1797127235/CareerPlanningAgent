@@ -1,4 +1,4 @@
-import { rawFetch } from '@/api/client'
+import { rawFetch, API_BASE } from '@/api/client'
 
 export interface ReportListItem {
   id: number
@@ -178,20 +178,23 @@ export interface PlanActionItem {
   id: string
   type: 'skill' | 'project' | 'job_prep'
   sub_type?: 'validate' | 'learn'
-  text: string
+  text: string              // 兼容保留 = observation
+  observation: string       // 新增：观察句
+  action: string            // 新增：行动项
   tag: string
   skill_name?: string
-  priority: 'high' | 'medium'
+  priority: 'high' | 'medium' | 'low'
   done: boolean
   phase?: number
   deliverable?: string
+  evidence_ref?: string
 }
 
 export interface PlanStage {
-  stage: number
-  label: string
-  duration: string
-  milestone: string
+  stage: number             // 1 | 2 | 3
+  label: string             // "立即整理"
+  duration: string          // "0-2周"
+  milestone: string         // 一句话里程碑
   items: PlanActionItem[]
 }
 
@@ -214,4 +217,17 @@ export async function updatePlanCheck(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ item_id: itemId, done }),
   })
+}
+
+export async function exportReportPdf(reportId: number): Promise<Blob> {
+  const token = localStorage.getItem('token') ?? ''
+  const res = await fetch(`${API_BASE}/report/${reportId}/export`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail || `导出失败 (${res.status})`)
+  }
+  return res.blob()
 }

@@ -7,7 +7,7 @@ import {
 
 import { useAuth } from '@/hooks/useAuth'
 import { useProfileData } from '@/hooks/useProfileData'
-import { useResumeUpload, useJustUploaded } from '@/hooks/useResumeUpload'
+import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { dispatchCoachTrigger } from '@/hooks/useCoachTrigger'
 import { fetchRecommendations, type Recommendation } from '@/api/recommendations'
 import { setCareerGoal } from '@/api/graph'
@@ -280,7 +280,7 @@ export default function ProfilePage() {
     )
   }
 
-  const { name, updated_at, profile: prof, quality } = profile!
+  const { name, updated_at, profile: prof } = profile!
 
   // Left Panel Data
   const skills = prof.skills ?? []
@@ -305,9 +305,7 @@ export default function ProfilePage() {
   const hasSjtResults = !!(softSkills && (softSkills as Record<string, unknown>)?._version === 2
     && sjtDims.some(d => (softSkills as Record<string, unknown>)?.[d] != null))
 
-  // Split recommendations: directions vs promotions
-  const directionRecs = recs.filter(r => r.channel !== 'promotion').sort((a, b) => b.affinity_pct - a.affinity_pct)
-  const promotionRecs = recs.filter(r => r.channel === 'promotion')
+  const directionRecs = recs.sort((a, b) => b.affinity_pct - a.affinity_pct)
 
   return (
     <div className="max-w-[1000px] mx-auto px-4 py-6 flex gap-6 items-start">
@@ -575,25 +573,13 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 )}
-                {promotionRecs.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <ArrowUpRight className="w-3.5 h-3.5 text-slate-400" />
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">晋升路径</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      {promotionRecs.map(rec => (
-                        <RecommendationCard key={rec.role_id} rec={rec} onExplore={(r) => navigate(`/roles/${r.role_id}`)} />
-                      ))}
-                    </div>
-                  </div>
-                )}
+
               </div>
             )}
 
             {/* 区块 1.5：就业意愿 */}
             <PreferencesCard
-              initialPreferences={profile?.profile?.preferences ?? null}
+              initialPreferences={(profile?.profile?.preferences as any) ?? null}
               onSaved={() => loadProfile()}
             />
 

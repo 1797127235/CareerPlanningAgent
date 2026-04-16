@@ -18,7 +18,7 @@ export function Block({
   return (
     <div
       className={[
-        'bg-[var(--bg-card)] border border-[var(--line)] rounded-[var(--radius-md)] p-[var(--space-4)]',
+        'bg-[var(--bg-card)] border border-[var(--line)] rounded-[var(--radius-md)] p-[var(--space-4)] transition-shadow duration-200',
         accent ? 'bg-[var(--bg-paper-2)]' : '',
         className,
       ].join(' ')}

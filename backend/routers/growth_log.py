@@ -16,6 +16,7 @@ from backend.db import get_db
 from backend.db_models import (
     ActionPlanV2,
     ActionProgress,
+    GrowthEntry,
     InterviewRecord,
     Profile,
     ProjectLog,
@@ -753,4 +754,178 @@ def _serialize_interview(i: InterviewRecord) -> dict:
     }
 
 
+# ── GrowthEntry v2: 统一记录 ────────────────────────────────────────
+
+class GrowthEntryCreate(BaseModel):
+    content: str
+    category: str | None = None
+    tags: list[str] = []
+    structured_data: dict | None = None
+    is_plan: bool = False
+    due_type: str | None = None
+    due_at: datetime | None = None
+    linked_project_id: int | None = None
+    linked_application_id: int | None = None
+    model_config = {"extra": "ignore"}
+
+
+class GrowthEntryUpdate(BaseModel):
+    content: str | None = None
+    category: str | None = None
+    tags: list[str] | None = None
+    structured_data: dict | None = None
+    status: str | None = None         # done|pending|dropped
+    due_type: str | None = None
+    due_at: datetime | None = None
+    model_config = {"extra": "ignore"}
+
+
+@router.get("/entries")
+def list_entries(
+    status: str | None = None,
+    category: str | None = None,
+    tag: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """列表。默认倒序按 created_at。"""
+    q = db.query(GrowthEntry).filter(GrowthEntry.user_id == user.id)
+    if status:
+        q = q.filter(GrowthEntry.status == status)
+    if category:
+        q = q.filter(GrowthEntry.category == category)
+    if tag:
+        # tags 是 JSON，SQLite 里用 LIKE（不做严格匹配，demo 级够用）
+        q = q.filter(GrowthEntry.tags.like(f'%"{tag}"%'))
+    entries = q.order_by(GrowthEntry.created_at.desc()).limit(200).all()
+    return {"entries": [_entry_to_dict(e) for e in entries]}
+
+
+@router.post("/entries", status_code=201)
+def create_entry(
+    req: GrowthEntryCreate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    now = datetime.now(timezone.utc)
+    entry = GrowthEntry(
+        user_id=user.id,
+        content=req.content,
+        category=req.category,
+        tags=req.tags,
+        structured_data=req.structured_data,
+        is_plan=req.is_plan,
+        status="pending" if req.is_plan else "done",
+        due_type=req.due_type,
+        due_at=req.due_at,
+        linked_project_id=req.linked_project_id,
+        linked_application_id=req.linked_application_id,
+        completed_at=None if req.is_plan else now,
+    )
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return _entry_to_dict(entry)
+
+
+@router.patch("/entries/{entry_id}")
+def update_entry(
+    entry_id: int,
+    req: GrowthEntryUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    entry = db.query(GrowthEntry).filter(
+        GrowthEntry.id == entry_id, GrowthEntry.user_id == user.id
+    ).first()
+    if not entry:
+        raise HTTPException(404, "记录不存在")
+
+    data = req.model_dump(exclude_none=True)
+    # 状态改成 done 时自动设 completed_at
+    if data.get("status") == "done" and entry.status != "done":
+        entry.completed_at = datetime.now(timezone.utc)
+    for k, v in data.items():
+        setattr(entry, k, v)
+    db.commit()
+    db.refresh(entry)
+    return _entry_to_dict(entry)
+
+
+@router.delete("/entries/{entry_id}", status_code=204)
+def delete_entry(
+    entry_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    entry = db.query(GrowthEntry).filter(
+        GrowthEntry.id == entry_id, GrowthEntry.user_id == user.id
+    ).first()
+    if not entry:
+        raise HTTPException(404, "记录不存在")
+    db.delete(entry)
+    db.commit()
+
+
+@router.post("/entries/{entry_id}/ai-suggest")
+def ai_suggest(
+    entry_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from backend.skills import invoke_skill
+    from backend.db_models import CareerGoal
+
+    entry = db.query(GrowthEntry).filter(
+        GrowthEntry.id == entry_id, GrowthEntry.user_id == user.id
+    ).first()
+    if not entry:
+        raise HTTPException(404, "记录不存在")
+
+    # 取画像 + 目标
+    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    goal = db.query(CareerGoal).filter(
+        CareerGoal.user_id == user.id, CareerGoal.is_active == True
+    ).first()
+
+    profile_data = json.loads(profile.profile_json or "{}") if profile else {}
+    user_skills = [s.get("name", "") for s in profile_data.get("skills", []) if s.get("name")]
+
+    try:
+        result = invoke_skill(
+            "growth-suggest",
+            target_label=goal.target_label if goal else "未选方向",
+            user_skills=", ".join(user_skills[:20]) or "无",
+            entry_category=entry.category or "note",
+            entry_content=entry.content,
+            structured_data=json.dumps(entry.structured_data or {}, ensure_ascii=False),
+        )
+        suggestions = result.get("suggestions", []) if isinstance(result, dict) else []
+    except Exception as e:
+        logger.warning("ai-suggest failed: %s", e)
+        suggestions = []
+
+    # 写回 entry
+    entry.ai_suggestions = suggestions
+    db.commit()
+    return {"suggestions": suggestions}
+
+
+def _entry_to_dict(e: GrowthEntry) -> dict:
+    return {
+        "id": e.id,
+        "content": e.content,
+        "category": e.category,
+        "tags": e.tags or [],
+        "structured_data": e.structured_data,
+        "is_plan": e.is_plan,
+        "status": e.status,
+        "due_type": e.due_type,
+        "due_at": e.due_at.isoformat() if e.due_at else None,
+        "ai_suggestions": e.ai_suggestions,
+        "linked_project_id": e.linked_project_id,
+        "linked_application_id": e.linked_application_id,
+        "completed_at": e.completed_at.isoformat() if e.completed_at else None,
+        "created_at": e.created_at.isoformat() if e.created_at else None,
+    }
 

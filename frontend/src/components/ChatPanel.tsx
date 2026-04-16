@@ -1,11 +1,11 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Paperclip, ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, Mic, MicOff, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useChat } from '@/hooks/useChat'
-import type { ChatMessage, CardData, JdCardData, MarketCardData, PageContext } from '@/hooks/useChat'
+import type { ChatMessage, CardData, JdCardData, MarketCardData } from '@/hooks/useChat'
 import { API_BASE } from '@/api/client'
 import { useSessions } from '@/hooks/useSessions'
 import { useBrowserTTS } from '@/hooks/useBrowserTTS'
@@ -687,7 +687,7 @@ function MarketCards({ cards }: { cards: MarketCardData[] }) {
 
 /* ── JD Search Result Cards ── */
 function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose: (jd: JdCardData) => void }) {
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+  const [expandedIdx, setExpandedIdx] = useState<string | null>(null)
 
   return (
     <div className="mt-2 space-y-2">
