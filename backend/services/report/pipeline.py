@@ -521,6 +521,17 @@ def generate_report(user_id: int, db) -> dict:
     if report_skill_gap is not None:
         report_skill_gap["top_missing"] = enriched_missing
 
+    # 12b. Chapter III: personalized differentiation narrative via LLM.
+    # Replaces the static graph.json node.differentiation_advice with a
+    # per-user narrative grounded in summary + skill_gap. Falls back to the
+    # graph.json text if the skill call fails.
+    differentiation_advice = _build_differentiation_advice(
+        target_label=goal.target_label,
+        baseline=node.get("differentiation_advice", ""),
+        summary=summary,
+        top_missing=enriched_missing,
+    )
+
     # 13. Assemble report payload
     report_data = {
         "version": "1.0",
@@ -551,7 +562,7 @@ def generate_report(user_id: int, db) -> dict:
         "delta": delta,
         "soft_skills": node.get("soft_skills", {}),
         "career_alignment": career_alignment_data,
-        "differentiation_advice": node.get("differentiation_advice", ""),
+        "differentiation_advice": differentiation_advice,
         "ai_impact_narrative": node.get("ai_impact_narrative", ""),
         "project_recommendations": enriched_projects,
         "project_mismatch": project_mismatch,
@@ -560,6 +571,54 @@ def generate_report(user_id: int, db) -> dict:
     }
 
     return report_data
+
+
+def _build_differentiation_advice(
+    target_label: str,
+    baseline: str,
+    summary: dict,
+    top_missing: list[dict],
+) -> str:
+    """Generate per-user Chapter III narrative via the differentiation skill.
+    Falls back to the graph.json baseline text on any failure."""
+    try:
+        from backend.skills import invoke_skill
+
+        top_missing_lines = []
+        for m in (top_missing or [])[:5]:
+            name = m.get("name", "") if isinstance(m, dict) else str(m)
+            tier = m.get("tier", "") if isinstance(m, dict) else ""
+            if name:
+                top_missing_lines.append(
+                    f"- {name}" + (f"（{tier}）" if tier else "")
+                )
+        top_missing_block = "\n".join(top_missing_lines) or "（暂无明确缺口）"
+
+        still_claimed = summary.get("skill_deltas", {}).get("still_claimed_only", []) or []
+        still_claimed_line = ", ".join(still_claimed[:8]) or "（无）"
+
+        pain_points = (
+            summary.get("signals", {}).get("interview", {}).get("pain_points", []) or []
+        )
+        pain_points_line = "；".join(pain_points[:5]) or "（本期无面试记录）"
+
+        text = invoke_skill(
+            "differentiation",
+            target_label=target_label,
+            baseline_differentiation=(baseline or "（岗位侧暂无通用差异化建议）")[:600],
+            summary_json=json.dumps(summary, ensure_ascii=False)[:3000],
+            top_missing_block=top_missing_block,
+            still_claimed_only_line=still_claimed_line,
+            pain_points_line=pain_points_line,
+        )
+        result = text.strip() if isinstance(text, str) else ""
+        if len(result) < 100:
+            logger.warning("differentiation skill returned suspiciously short text (%d chars), falling back", len(result))
+            return baseline
+        return result
+    except Exception as e:
+        logger.warning("differentiation skill failed, falling back to graph baseline: %s", e)
+        return baseline
 
 
 def _format_node_requirements(node: dict) -> str:

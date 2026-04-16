@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { apiFetch, apiUpload } from '@/api/client'
+import { fetchProfile } from '@/api/profiles'
 
 interface UseResumeUploadReturn {
   uploading: boolean
@@ -74,14 +75,31 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
           return
         }
 
-        // Step 2: merge into single profile (no naming needed)
+        // Step 2: ask user whether to replace or append, if the profile already
+        // has meaningful content. First upload → straight replace (skip dialog).
+        let shouldMerge = false
+        try {
+          const existing = await fetchProfile()
+          const hasExistingContent =
+            (existing?.skills?.length ?? 0) > 0 ||
+            (existing?.projects?.length ?? 0) > 0
+          if (hasExistingContent) {
+            shouldMerge = window.confirm(
+              '已有简历内容。\n\n确定 = 把新简历追加（合并进现有档案，旧项目保留）\n取消 = 用新简历替换（删除现有档案内容）',
+            )
+          }
+        } catch {
+          // if we can't read existing profile, default to replace (safe option)
+          shouldMerge = false
+        }
+
         _set(true, 3, null)
         const saveRes = await apiFetch('/profiles', {
           method: 'PUT',
           body: JSON.stringify({
             profile: { ...parseRes.data.profile, source: 'resume' },
             quality: parseRes.data.quality,
-            merge: true,
+            merge: shouldMerge,
           }),
         })
         if (!saveRes.success) {

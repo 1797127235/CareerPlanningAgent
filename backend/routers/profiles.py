@@ -1569,7 +1569,12 @@ async def parse_resume(
 class UpdateProfileRequest(BaseModel):
     profile: dict | None = None
     quality: dict | None = None
-    merge: bool = True  # True = merge incoming into existing; False = overwrite
+    # False (default) = replace existing profile_json with incoming.
+    # True = union with existing (skills/projects/awards/certificates/internships).
+    # Resume uploads must pass True explicitly and only after the user picked
+    # "补充" in the frontend confirm dialog; default is replace so re-uploading
+    # a different resume doesn't silently stack two careers' projects together.
+    merge: bool = False
 
     model_config = {"extra": "ignore"}
 

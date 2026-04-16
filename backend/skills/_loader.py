@@ -61,9 +61,12 @@ def load_skill(name: str) -> Skill:
     meta = yaml.safe_load(m.group(1)) or {}
     body = m.group(2)
 
-    # 拆 ## System / ## User
-    system_match = re.search(r"##\s*System\s*\n(.*?)(?=\n##\s|\Z)", body, re.DOTALL)
-    user_match = re.search(r"##\s*User\s*\n(.*?)(?=\n##\s|\Z)", body, re.DOTALL)
+    # 拆 ## System / ## User. Convention: `## System` always precedes `## User`,
+    # and `## User` is the last top-level section. The user block runs to EOF so
+    # that `##` sub-headings inside the template aren't mistaken for section
+    # boundaries (earlier versions truncated user_template at the first sub-heading).
+    system_match = re.search(r"##\s*System\s*\n(.*?)\n##\s*User\s*\n", body, re.DOTALL)
+    user_match = re.search(r"##\s*User\s*\n(.*)\Z", body, re.DOTALL)
     if not system_match or not user_match:
         raise SkillFormatError(f"{skill_path}: missing ## System or ## User section")
 
