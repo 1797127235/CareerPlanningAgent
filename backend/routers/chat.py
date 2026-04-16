@@ -222,7 +222,7 @@ class ChatRequest(BaseModel):
 
 def _hydrate_state(user: User, db: Session) -> dict:
     """Build a rich initial CareerState from the user's DB data."""
-    from backend.services.stage import compute_stage
+    from backend.services.career_stage import determine_stage
 
     state: dict = {
         "user_id": user.id,
@@ -285,16 +285,8 @@ def _hydrate_state(user: User, db: Session) -> dict:
         except (json.JSONDecodeError, TypeError):
             pass
 
-    # 4. Compute journey stage
-    profile_count = db.query(func.count(Profile.id)).filter_by(user_id=user.id).scalar() or 0
-    jd_count = db.query(func.count(JDDiagnosis.id)).filter_by(user_id=user.id).scalar() or 0
-    project_count = db.query(func.count(ProjectRecord.id)).filter_by(user_id=user.id).scalar() or 0
-    app_count = db.query(func.count(JobApplication.id)).filter_by(user_id=user.id).scalar() or 0
-    interview_count = db.query(func.count(InterviewRecord.id)).filter_by(user_id=user.id).scalar() or 0
-    activity_count = project_count + app_count + interview_count
-    report_count = db.query(func.count(Report.id)).filter_by(user_id=user.id).scalar() or 0
-
-    state["user_stage"] = compute_stage(profile_count, jd_count, activity_count, report_count)
+    # 4. Compute journey stage (新 4 阶段)
+    state["user_stage"] = determine_stage(user.id, db)
 
     # 5. Growth coach state
     state["coach_memo"] = ""

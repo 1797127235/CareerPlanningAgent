@@ -26,6 +26,22 @@ from agent.state import CareerState
 
 logger = logging.getLogger(__name__)
 
+_OLD_TO_NEW_STAGE = {
+    "no_profile": "exploring",
+    "has_profile": "exploring",
+    "first_diagnosis": "job_hunting",
+    "training": "job_hunting",
+    "growing": "sprinting",
+    "report_ready": "sprinting",
+}
+
+_STAGE_LABELS = {
+    "exploring": "探索方向（未选目标或未生成报告）",
+    "focusing": "已选目标，技能补齐中",
+    "job_hunting": "求职中（面试 1-2 次）",
+    "sprinting": "冲刺期（面试 ≥3 次 或 有 offer）",
+}
+
 
 def _get_global_market_summary() -> str:
     """Return a compact market summary for all role families (always injected into context).
@@ -92,8 +108,9 @@ def build_context_summary(
         )
 
     if human_count <= 4:
-        stage = state.get("user_stage", "unknown")
-        lines = [f"- 当前阶段：{stage}"]
+        raw_stage = state.get("user_stage", "unknown")
+        stage = _OLD_TO_NEW_STAGE.get(raw_stage, raw_stage)
+        lines = [f"- 当前阶段：{_STAGE_LABELS.get(stage, stage)}"]
         goal = state.get("career_goal")
         if goal:
             lines.append(f"- 目标岗位：{goal.get('label', '')}")
@@ -211,16 +228,9 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
     else:
         parts.append("- 目标岗位: 未设定（建议去画像页查看推荐方向）")
 
-    stage = state.get("user_stage", "unknown")
-    stage_labels = {
-        "no_profile": "未建画像",
-        "has_profile": "已有画像，未做JD诊断",
-        "first_diagnosis": "已做首次JD诊断",
-        "training": "面试训练中",
-        "growing": "持续成长中",
-        "report_ready": "可生成报告",
-    }
-    parts.append(f"- 当前阶段: {stage_labels.get(stage, stage)}")
+    raw_stage = state.get("user_stage", "unknown")
+    stage = _OLD_TO_NEW_STAGE.get(raw_stage, raw_stage)
+    parts.append(f"- 当前阶段: {_STAGE_LABELS.get(stage, stage)}")
 
     if state.get("current_node_id"):
         parts.append(f"- 图谱定位: {state['current_node_id']}")
