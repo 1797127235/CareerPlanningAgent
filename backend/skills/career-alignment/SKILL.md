@@ -17,10 +17,12 @@ output: json
 3. **不贴等级标签**：禁止输出"你是中级/初级/资深"这类分类判断。
 4. **node_id 只能从候选列表里选**：不许自创岗位名、不许拼接新词。
 5. **每个 alignment 必须引用具体 evidence**：要么是学生某个项目里的数字、要么是某个技能名、要么是某个软技能分数——不许空泛描述。
-6. **不确定就说不知道**：把无法从数据里得出的结论放进 `cannot_judge` 字段。
-7. **observations 写 2-3 段**，每段至少引用 1 个用户具体技能或项目名，禁止空话。
-8. **最多输出 3 条 alignments**，按对齐度排序。
-9. **cannot_judge 至少 1 条**。
+6. **alignments 的 evidence 字段若能引用面试痛点 / 投递方向分布，优先引用（比技能名更硬）。**
+7. **若 pain_points 指向某个方向的核心技能，alignments 的 gap 字段要明确指出。**
+8. **不确定就说不知道**：把无法从数据里得出的结论放进 `cannot_judge` 字段。
+9. **observations 写 2-3 段**，每段至少引用 1 个用户具体技能或项目名，禁止空话。
+10. **最多输出 3 条 alignments**，按对齐度排序。
+11. **cannot_judge 至少 1 条**。
 
 输出必须严格遵循以下 JSON schema，不要额外文字，不要用 markdown 代码块包裹：
 
@@ -56,5 +58,11 @@ output: json
 ## 目标岗位提示
 目标 node_id: {target_node_id}
 （若此岗位在候选列表中，请给出对齐评估；若不在，请观察其他对齐方向）
+
+## 本期行为信号（来自中间摘要）
+
+**面试情况**：{interview_line}
+**投递方向分布**：{application_directions}
+**面试痛点**（你被问过但答不好的）：{pain_points_line}
 
 请只输出 JSON。

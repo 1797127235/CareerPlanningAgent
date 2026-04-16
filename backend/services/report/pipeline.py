@@ -16,10 +16,9 @@ from backend.services.report import skill_gap
 from backend.services.report import action_plan
 from backend.services.report import career_alignment
 from backend.services.report import narrative
+from backend.services.report import summarize
 
 logger = logging.getLogger(__name__)
-
-_USE_LLM_ACTION_PLAN = os.getenv("USE_LLM_ACTION_PLAN", "true").lower() == "true"
 
 
 def _parse_data(data_json: str) -> dict:
@@ -339,43 +338,37 @@ def generate_report(user_id: int, db) -> dict:
             if m.get("status") == "claimed" and m.get("tier") in ("core", "important"):
                 claimed_skills.append(m["name"])
 
+    # ── 新增：构造中间 JSON ─────────────────────────────────────────
+    from backend.db_models import Report
+    prev_report = (
+        db.query(Report)
+        .filter(Report.user_id == user_id)
+        .order_by(Report.created_at.desc())
+        .first()
+    )
+    summary = summarize.build_report_summary(
+        user_id=user_id,
+        profile=profile,
+        db=db,
+        prev_report=prev_report,
+        skill_gap_current=_skill_gap,
+    )
+
     # ── Action plan ───────────────────────────────────────────────────────────
-    if _USE_LLM_ACTION_PLAN:
-        try:
-            from backend.services.action_plan_llm import build_action_plan_with_llm
-            _plan_context = {
-                "node_label": goal.target_label,
-                "ai_impact_narrative": node.get("ai_impact_narrative", ""),
-                "differentiation_advice": node.get("differentiation_advice", ""),
-                "skills": list(_user_skills_all),
-                "projects": [
-                    {"name": pp.get("name", ""), "desc": pp.get("desc", "")}
-                    for pp in profile_proj_descs
-                ],
-                "app_count": len(applications or []),
-                "top_missing": _skill_gap.get("top_missing", []) if _skill_gap else [],
-                "market": {
-                    "demand_change_pct": market_info.get("demand_change_pct") if market_info else None,
-                    "salary_cagr": market_info.get("salary_cagr") if market_info else None,
-                    "salary_p50": node.get("salary_p50", 0),
-                },
-            }
-            action_plan_data = build_action_plan_with_llm(_plan_context)
-        except Exception as e:
-            logger.warning("LLM action plan failed, falling back to template: %s", e)
-            action_plan_data = action_plan._build_action_plan(
-                gap_skills=goal.gap_skills or [],
-                top_missing=_skill_gap.get("top_missing", []) if _skill_gap else [],
-                node_id=node_id,
-                node_label=goal.target_label,
-                profile_data=profile_data,
-                current_readiness=current_readiness,
-                claimed_skills=claimed_skills,
-                projects=merged_projects,
-                applications=applications,
-                profile_proj_descs=profile_proj_descs,
-            )
-    else:
+    try:
+        from backend.skills import invoke_skill
+        action_plan_data = invoke_skill(
+            "action-plan",
+            target_label=goal.target_label,
+            node_requirements_line=_format_node_requirements(node),
+            market_line=narrative._format_market(market_info),
+            summary_json=json.dumps(summary, ensure_ascii=False),
+            prev_recommendations_block=_format_prev_recs(summary["prev_report_recommendations"]),
+            completed_block=_format_completed(summary["completed_since_last_report"]),
+        )
+        action_plan_data = _coerce_action_plan(action_plan_data)
+    except Exception as e:
+        logger.warning("action-plan skill failed, fallback to rule-based: %s", e)
         action_plan_data = action_plan._build_action_plan(
             gap_skills=goal.gap_skills or [],
             top_missing=_skill_gap.get("top_missing", []) if _skill_gap else [],
@@ -389,15 +382,8 @@ def generate_report(user_id: int, db) -> dict:
             profile_proj_descs=profile_proj_descs,
         )
 
-    # 10. Delta vs previous report（提前计算，供 narrative 使用）
+    # 10. Delta vs previous report
     delta = None
-    from backend.db_models import Report
-    prev_report = (
-        db.query(Report)
-        .filter(Report.user_id == user_id)
-        .order_by(Report.created_at.desc())
-        .first()
-    )
     if prev_report:
         prev_data = _parse_data(prev_report.data_json)
         prev_score = prev_data.get("match_score", 0)
@@ -482,20 +468,12 @@ def generate_report(user_id: int, db) -> dict:
             "next_action": next_action,
         }
 
-    # 10b. LLM narrative — 用合并后的 projects（成长档案 + 简历项目），
-    #     防止成长档案为空时 narrative 缺项目素材只能输出套话
+    # 10b. LLM narrative
     narrative_text = narrative._generate_narrative(
         target_label=goal.target_label,
-        match_score=match_score,
-        four_dim=four_dim,
-        gap_skills=goal.gap_skills or [],
-        market_info=market_info,
-        growth_delta=growth_delta,
-        education=profile_data.get("education"),
-        projects=merged_projects,   # ← 关键修复：从 projects 改成 merged_projects
-        claimed_skills=claimed_skills[:3],
-        applications=applications,
-        delta=delta,
+        summary=summary,
+        education_line=narrative._format_education(profile_data.get("education")),
+        market_line=narrative._format_market(market_info),
     )
 
     # 10c. Profile diagnosis (档案体检 — content completeness check)
@@ -503,6 +481,7 @@ def generate_report(user_id: int, db) -> dict:
         profile_data=profile_data,
         projects=projects,
         node_label=goal.target_label,
+        db=db,
     )
 
     # ── 方向对齐分析（LLM 分析 + graph 绑定）──
@@ -512,6 +491,7 @@ def generate_report(user_id: int, db) -> dict:
             projects=projects,
             graph_nodes=loaders._load_graph_nodes(),
             target_node_id=node_id,
+            summary=summary,
         )
     except Exception as e:
         logger.warning("Career alignment build failed: %s", e)
@@ -575,10 +555,69 @@ def generate_report(user_id: int, db) -> dict:
         "ai_impact_narrative": node.get("ai_impact_narrative", ""),
         "project_recommendations": enriched_projects,
         "project_mismatch": project_mismatch,
+        "summary": summary,
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     return report_data
+
+
+def _format_node_requirements(node: dict) -> str:
+    tiers = node.get("skill_tiers", {})
+    core = [s.get("name") if isinstance(s, dict) else s for s in tiers.get("core", [])][:5]
+    return f"核心技能：{', '.join(core) or '（未定义）'}"
+
+
+def _format_prev_recs(recs: list[str]) -> str:
+    if not recs:
+        return "（这是第一份报告，无上次建议）"
+    return "\n".join(f"- {r}" for r in recs[:6])
+
+
+def _format_completed(items: list[str]) -> str:
+    if not items:
+        return "（本期无已完成的旧建议）"
+    return "\n".join(f"- {it}" for it in items)
+
+
+_IMPERATIVE_PREFIXES = (
+    "完成", "搭建", "实现", "编写", "学习", "掌握", "阅读",
+    "深入", "用", "通过", "进行", "梳理", "配置", "部署",
+    "建议你", "你应该", "你需要", "你必须", "最好", "先",
+)
+
+
+def _sanitize_action_text(text: str) -> str:
+    t = text.strip()
+    if any(t.startswith(p) for p in _IMPERATIVE_PREFIXES):
+        return "结合当前方向的特点，探索适合自己的学习或实践路径。"
+    return text
+
+
+def _coerce_action_plan(raw: dict) -> dict:
+    """确保 raw 至少有 stages[3]，每个 stage 有 items。缺的补空。"""
+    stages = raw.get("stages", [])
+    while len(stages) < 3:
+        stages.append({
+            "stage": len(stages) + 1,
+            "label": ["立即整理", "技能补强", "项目冲刺与求职"][len(stages)],
+            "duration": ["0-2周", "2-6周", "6-12周"][len(stages)],
+            "milestone": "",
+            "items": [],
+        })
+    # sanitize item texts and ensure evidence_ref exists
+    for stg in stages[:3]:
+        for it in stg.get("items", []):
+            it["text"] = _sanitize_action_text(it.get("text", ""))
+            if "evidence_ref" not in it:
+                it["evidence_ref"] = ""
+    return {
+        "stages": stages[:3],
+        # 兼容字段：skills/project/job_prep 从 stages 里展平
+        "skills": [it for s in stages for it in s.get("items", []) if it.get("type") == "skill"],
+        "project": [it for s in stages for it in s.get("items", []) if it.get("type") == "project"],
+        "job_prep": [it for s in stages for it in s.get("items", []) if it.get("type") == "job_prep"],
+    }
 
 
 def polish_narrative(narrative: str, target_label: str) -> str:

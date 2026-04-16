@@ -1806,6 +1806,36 @@ def reset_profile(
         CareerGoal.user_id == user.id
     ).delete(synchronize_session=False)
 
+    # Safety net: warn if new FK-linked tables appear but aren't in explicit list
+    try:
+        from sqlalchemy import inspect as sa_inspect
+        from backend.db import Base
+
+        def _enumerate_user_owned_tables(metadata):
+            tables = []
+            for table_name, table in metadata.tables.items():
+                for col in table.columns:
+                    for fk in col.foreign_keys:
+                        if fk.column.table.name in ("users", "profiles"):
+                            tables.append((table_name, col.name))
+                            break
+            return tables
+
+        _auto = _enumerate_user_owned_tables(Base.metadata)
+        _known = {
+            "project_logs", "interview_records", "interview_debriefs",
+            "job_applications", "project_records", "reports", "jd_diagnoses",
+            "coach_results", "sjt_sessions", "career_goals",
+        }
+        _missing = [t for t, _ in _auto if t not in _known]
+        if _missing:
+            logger.warning(
+                "reset_profile: tables FK-linked to user/profile but NOT in explicit list: %s",
+                _missing,
+            )
+    except Exception:
+        pass
+
     db.commit()
     return ok(message="画像已重置")
 

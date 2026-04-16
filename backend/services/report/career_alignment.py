@@ -96,7 +96,7 @@ def _normalize_project_sources(profile_data: dict, projects: list) -> list[dict]
     return pool
 
 
-def _build_alignment_ctx(skills, projects, soft_skills, candidates, target_node_id, profile_data=None):
+def _build_alignment_ctx(skills, projects, soft_skills, candidates, target_node_id, profile_data=None, summary=None):
     # 合并简历 + 成长档案项目
     all_projects = _normalize_project_sources(profile_data or {}, projects)
 
@@ -133,12 +133,44 @@ def _build_alignment_ctx(skills, projects, soft_skills, candidates, target_node_
 
     skills_list = ", ".join(str(s) for s in (skills or [])[:30])
 
+    # 行为信号格式化
+    summary = summary or {}
+    signals = summary.get("signals", {})
+    interview = signals.get("interview", {}) or {}
+    application = signals.get("application", {}) or {}
+
+    latest = interview.get("latest") or {}
+    if latest and latest.get("company"):
+        interview_line = (
+            f"最近面试：{latest.get('company')} {latest.get('round')}，"
+            f"自评{latest.get('self_rating')}，结果{latest.get('result')}"
+        )
+    else:
+        interview_line = "近期暂无面试记录"
+
+    directions = application.get("directions", []) or []
+    if directions:
+        application_directions = "；".join(
+            f"{d['label']}（{d['count']} 次）" for d in directions[:3]
+        )
+    else:
+        application_directions = "暂无投递记录"
+
+    pain_points = interview.get("pain_points", []) or []
+    if pain_points:
+        pain_points_line = "\n".join(f"- {p}" for p in pain_points[:5])
+    else:
+        pain_points_line = "（暂无明确痛点记录）"
+
     return {
         "candidates_json": candidates_json,
         "target_node_id": target_hint,
         "skills_list": skills_list,
         "projects_list": projects_list,
         "soft_skills_summary": soft_skills_summary,
+        "interview_line": interview_line,
+        "application_directions": application_directions,
+        "pain_points_line": pain_points_line,
     }
 
 
@@ -147,6 +179,7 @@ def _build_career_alignment(
     projects: list,              # ProjectRecord list
     graph_nodes: list[dict],     # data/graph.json 的 nodes 数组
     target_node_id: str | None = None,  # 学生当前的目标岗位（如有）
+    summary: dict | None = None,
 ) -> dict | None:
     """
     基于学生数据做方向对齐分析。输出绑定 graph.json node_id。
@@ -216,6 +249,7 @@ def _build_career_alignment(
         candidates=candidates,
         target_node_id=target_node_id,
         profile_data=profile_data,  # 让 prompt builder 也能读简历项目
+        summary=summary,
     )
 
     # ── [Step 3] 调用 LLM ──

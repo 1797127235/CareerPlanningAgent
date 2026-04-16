@@ -22,19 +22,21 @@ output: text
 
 目标方向：{target_label}
 
-学生已声明的技能（来自简历）：
-{claimed_skills}
+## 学生这段时间的活动摘要
 
-学生的项目清单（名字 + 描述）：
-{projects_list}
+**最近做的事**（milestones，最多 5 条）：
+{milestones_line}
 
-学生教育背景：
-{education_line}
+**本期新练过的技能**：{practiced_in_window}
+**上次报告后刚掌握的**：{gained_since_last_report}
+**还只是简历上的（没有项目证据）**：{still_claimed_only}
 
-上一份报告到现在的变化（若有）：
-{delta_line}
+## 市场侧
 
-市场侧看这个方向的处境：
 {market_line}
 
-请写这封观察手记。
+## 教育背景
+
+{education_line}
+
+请基于以上**具体行为信号**，写一封 400-600 字的观察手记。必须至少引用 2 条具体的 milestone 或技能名，不要停留在空话。

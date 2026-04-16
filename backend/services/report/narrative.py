@@ -7,6 +7,8 @@ import logging
 import re as _re_diag
 from typing import Any
 
+from sqlalchemy.orm import Session
+
 logger = logging.getLogger(__name__)
 
 
@@ -40,30 +42,28 @@ _HOLLOW_PATTERNS = [
 
 def _generate_narrative(
     target_label: str,
-    match_score: int,
-    four_dim: dict,
-    gap_skills: list[str],
-    market_info: dict | None,
-    growth_delta: float,
-    # Rich context for personalization
-    education: dict | None = None,
-    projects: list | None = None,
-    claimed_skills: list[str] | None = None,
-    applications: list | None = None,
-    delta: dict | None = None,
+    summary: dict,
+    education_line: str,
+    market_line: str,
 ) -> str:
-    """Call LLM to generate personalized narrative using real student data."""
+    """Call LLM to generate personalized narrative using summary JSON."""
     try:
         from backend.skills import invoke_skill
+
+        milestones_line = _format_milestones(summary.get("milestones", [])[:5])
+        practiced = ", ".join(summary.get("skill_deltas", {}).get("practiced_in_window", []) or []) or "（暂无）"
+        gained = ", ".join(summary.get("skill_deltas", {}).get("gained_since_last_report", []) or []) or "（暂无）"
+        claimed = ", ".join(summary.get("skill_deltas", {}).get("still_claimed_only", [])[:5] or []) or "（暂无）"
 
         text = invoke_skill(
             "narrative",
             target_label=target_label,
-            claimed_skills=", ".join(s for s in (claimed_skills or []) if s),
-            projects_list="\n".join(_format_projects_for_prompt(projects or [])),
-            education_line=_format_education(education),
-            delta_line=_format_delta_line(delta),
-            market_line=_format_market(market_info),
+            milestones_line=milestones_line,
+            practiced_in_window=practiced,
+            gained_since_last_report=gained,
+            still_claimed_only=claimed,
+            market_line=market_line,
+            education_line=education_line,
         )
         return text.strip()
     except Exception as e:
@@ -82,6 +82,7 @@ def _diagnose_profile(
     profile_data: dict,
     projects: list,
     node_label: str,
+    db: Session,
 ) -> list[dict]:
     """
     Scan profile projects/experience for hollow statements.
@@ -134,6 +135,20 @@ def _diagnose_profile(
     if not items_to_check:
         return []
 
+    # Attach recent logs for growth_log items
+    for it in items_to_check:
+        if it["source_type"] == "growth_log":
+            try:
+                from backend.db_models import ProjectLog as _ProjectLog
+                logs = db.query(_ProjectLog).filter(
+                    _ProjectLog.project_id == it["source_id"]
+                ).order_by(_ProjectLog.created_at.desc()).limit(3).all()
+                it["logs"] = [l.content[:200] for l in logs]
+            except Exception:
+                it["logs"] = []
+        else:
+            it["logs"] = []
+
     # Step 1: Rule-based detection
     needs_fix: list[dict] = []
     passed: list[dict] = []
@@ -157,6 +172,7 @@ def _diagnose_profile(
                 "source_type": it["source_type"],
                 "source_id": it["source_id"],
                 "issues": it["issues"],
+                "logs": it["logs"],
             })
 
         try:
@@ -209,18 +225,13 @@ def _diagnose_profile(
     return results
 
 
-def _format_projects_for_prompt(projects: list) -> list[str]:
-    lines = []
-    for p in projects[:4]:
-        name = getattr(p, "name", "") or "未命名"
-        desc = getattr(p, "description", "") or getattr(p, "_desc", "") or ""
-        status = getattr(p, "status", "")
-        status_tag = "[已完成]" if status == "completed" else "[进行中]" if status == "in_progress" else ""
-        if desc:
-            lines.append(f"- {status_tag}{name}：{desc[:180]}")
-        else:
-            lines.append(f"- {status_tag}{name}")
-    return lines
+def _format_milestones(milestones: list[dict]) -> str:
+    if not milestones:
+        return "（这段时间档案里还没留下具体记录）"
+    return "\n".join(
+        f"- [{m['date_iso'][:10]}] {m['title']}（{m.get('detail','')[:80]}）"
+        for m in milestones
+    )
 
 
 def _format_education(education: dict | None) -> str:
@@ -230,29 +241,6 @@ def _format_education(education: dict | None) -> str:
     major = education.get("major", "")
     if school or major:
         return f"{school + ' ' if school else ''}{major + '专业' if major else ''}"
-    return ""
-
-
-def _format_delta_line(delta: dict | None) -> str:
-    if not delta:
-        return ""
-    from datetime import datetime, timezone
-    prev_date = delta.get("prev_date", "")
-    gained = delta.get("gained_skills", [])
-    days = 0
-    if prev_date:
-        try:
-            prev_dt = datetime.fromisoformat(prev_date)
-            days = (datetime.now(timezone.utc) - prev_dt).days
-        except Exception:
-            pass
-    parts = []
-    if days > 0:
-        parts.append(f"距上次报告 {days} 天")
-    if gained:
-        parts.append(f"期间多掌握了 {', '.join(gained)}")
-    if parts:
-        return "，".join(parts) + "。"
     return ""
 
 
