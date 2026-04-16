@@ -140,12 +140,16 @@ export function ChapterII({ data, onSave, saving }: ChapterIIProps) {
           </div>
         )}
 
-        {marketBits.length > 0 && (
+        {(data.market_narrative || marketBits.length > 0) && (
           <div className="mt-10 pt-5 border-t border-slate-200">
             <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-500 mb-2">
               市场信号
             </p>
-            <p className="text-[14px] text-slate-700 tabular-nums">{marketBits.join(' · ')}</p>
+            {data.market_narrative ? (
+              <p className="text-[15px] text-slate-700 leading-relaxed">{data.market_narrative}</p>
+            ) : (
+              <p className="text-[14px] text-slate-700 tabular-nums">{marketBits.join(' · ')}</p>
+            )}
           </div>
         )}
       </Chapter>

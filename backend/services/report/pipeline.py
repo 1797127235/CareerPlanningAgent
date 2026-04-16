@@ -532,6 +532,15 @@ def generate_report(user_id: int, db) -> dict:
         top_missing=enriched_missing,
     )
 
+    # 12c. Market narrative — replaces the hardcoded salary/demand/timing line
+    # with a per-user LLM paragraph that hides year numbers.
+    market_narrative = _build_market_narrative(
+        target_label=goal.target_label,
+        market_info=market_info,
+        node=node,
+        summary=summary,
+    )
+
     # 13. Assemble report payload
     report_data = {
         "version": "1.0",
@@ -556,6 +565,7 @@ def generate_report(user_id: int, db) -> dict:
             "timing": market_info.get("timing", "good") if market_info else "good",
             "timing_label": market_info.get("timing_label", "") if market_info else "",
         },
+        "market_narrative": market_narrative,
         "skill_gap": report_skill_gap,
         "growth_curve": growth_curve,
         "action_plan": action_plan_data,
@@ -571,6 +581,61 @@ def generate_report(user_id: int, db) -> dict:
     }
 
     return report_data
+
+
+def _build_market_narrative(
+    target_label: str,
+    market_info: dict | None,
+    node: dict,
+    summary: dict,
+) -> str:
+    """Generate a prose paragraph about the user's market situation.
+    Returns empty string on failure (frontend falls back to old marketBits)."""
+    try:
+        from backend.skills import invoke_skill
+
+        salary_p50 = node.get("salary_p50", 0)
+        mi = market_info or {}
+        demand_label = mi.get("demand_label", "暂无需求走势数据")
+        salary_label = mi.get("salary_label", "暂无薪资趋势数据")
+        timing_label = mi.get("timing_label", "暂无入场时机判断")
+
+        app = summary.get("signals", {}).get("application", {})
+        iv = summary.get("signals", {}).get("interview", {})
+
+        parts: list[str] = []
+        app_count = app.get("count_in_window", 0)
+        if app_count > 0:
+            funnel = app.get("funnel", {})
+            parts.append(
+                f"近期投了 {app_count} 家，"
+                f"{funnel.get('interviewed', 0)} 家到面试阶段，"
+                f"{funnel.get('rejected', 0)} 家被拒"
+            )
+        iv_count = iv.get("count_in_window", 0)
+        if iv_count > 0:
+            latest = iv.get("latest") or {}
+            if latest.get("company"):
+                parts.append(
+                    f"最近面试在 {latest['company']}（{latest.get('round', '')}），"
+                    f"自评 {latest.get('self_rating', '一般')}"
+                )
+        user_market_signal = "；".join(parts) + "。" if parts else "暂无投递和面试记录。"
+
+        text = invoke_skill(
+            "market-narrative",
+            target_label=target_label,
+            salary_p50=salary_p50,
+            demand_label=demand_label,
+            salary_label=salary_label,
+            timing_label=timing_label,
+            user_market_signal=user_market_signal,
+        )
+        result = text.strip() if isinstance(text, str) else ""
+        return result if len(result) >= 30 else ""
+    except Exception as e:
+        logger.warning("market-narrative skill failed: %s", e)
+        return ""
 
 
 def _build_differentiation_advice(

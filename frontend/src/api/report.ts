@@ -98,6 +98,7 @@ export interface ReportV2Data {
     timing: string
     timing_label: string
   }
+  market_narrative?: string
   skill_gap: {
     core: { total: number; matched: number; pct: number; practiced_count: number; claimed_count: number }
     important: { total: number; matched: number; pct: number; practiced_count: number; claimed_count: number }
