@@ -622,6 +622,9 @@ def _build_market_narrative(
                 )
         user_market_signal = "；".join(parts) + "。" if parts else "暂无投递和面试记录。"
 
+        ai_label = mi.get("ai_label", "暂无 AI 影响数据")
+        ai_impact = node.get("ai_impact_narrative", "暂无该方向的 AI 影响分析")
+
         text = invoke_skill(
             "market-narrative",
             target_label=target_label,
@@ -629,6 +632,8 @@ def _build_market_narrative(
             demand_label=demand_label,
             salary_label=salary_label,
             timing_label=timing_label,
+            ai_label=ai_label,
+            ai_impact_narrative=ai_impact[:500],
             user_market_signal=user_market_signal,
         )
         result = text.strip() if isinstance(text, str) else ""
