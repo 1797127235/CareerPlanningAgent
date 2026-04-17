@@ -79,6 +79,11 @@ evidence_ref            claimed_only           _practiced            completed_p
 
 `evidence_ref` 字段（在 items 里）可以保留 `profile.projects[0]` 这种代码形式——它是给程序看的技术标签，不会显示给用户。但 observation / action / tag / label / milestone 的正文里，一律用自然中文。
 
+**重要：`still_claimed_only` 仅基于成长档案记录判断，不代表用户完全没有实践经验。**
+用户的简历项目（`profile_core.projects`）可能已经涉及这些技能。在写 observation 时，
+必须先看 `profile_core.projects` 里有没有相关项目——如果有，说"你的 XX 项目已涉及这个方向"，
+而不是说"没有实践记录"。只有简历项目里也找不到证据时，才能说缺少实践。
+
 禁止使用"你声称了 X 但没证据"的万能句式。若技能确实是 claimed-only，必须说具体：
 - 错：**"你列出了 Linux 作为核心技能但没有项目里程碑验证"**（空）
 - 对：**"你在 XX 公司写了 2 年 Linux 后台，但成长档案近 90 天没有 Linux 相关条目——面试追问时容易只剩下'用过'这个层次"**（具体）

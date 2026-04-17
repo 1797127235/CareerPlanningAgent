@@ -618,28 +618,6 @@ def _build_skill_deltas(
     except Exception as e:
         logger.warning("_build_skill_deltas all_practiced failed: %s", e)
 
-    # ── 新增：从简历项目描述中提取已实践技能 ──
-    try:
-        profile_data = json.loads(profile.profile_json or "{}")
-        resume_proj_text = " ".join(
-            str(p.get("description", "") if isinstance(p, dict) else p)
-            for p in (profile_data.get("projects", []) or [])
-        ).lower()
-
-        if resume_proj_text.strip():
-            from backend.services.report.shared import _PROJECT_SKILL_HINTS
-            # 用 _PROJECT_SKILL_HINTS 做关键词匹配
-            for skill_name, hints in _PROJECT_SKILL_HINTS.items():
-                if any(h in resume_proj_text for h in hints):
-                    all_practiced.add(skill_name)
-            # 同时检查用户声明的技能名是否直接出现在项目描述中
-            for s in (profile_data.get("skills", []) or []):
-                name = s.get("name", "") if isinstance(s, dict) else str(s)
-                if name and len(name) >= 2 and name.lower() in resume_proj_text:
-                    all_practiced.add(name.strip())
-    except Exception as e:
-        logger.warning("_build_skill_deltas resume_project_evidence failed: %s", e)
-
     # ── gained_since_last_report ──
     gained_since_last_report: set[str] = set()
     if prev_report is not None and skill_gap_current is not None:

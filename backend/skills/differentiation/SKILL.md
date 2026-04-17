@@ -41,7 +41,7 @@ output: text
 
 {top_missing_block}
 
-## 只在简历上声明、没有项目证据的技能
+## 成长档案中暂无实践记录的技能（简历项目可能已涉及，请自行判断）
 
 {still_claimed_only_line}
 
