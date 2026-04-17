@@ -291,7 +291,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
       style={isPanel ? undefined : floatStyle}
       className={
         isPanel
-          ? 'flex flex-col h-full w-full bg-white/30 backdrop-blur-sm'
+          ? 'flex flex-col h-full w-full bg-white/90'
           : `fixed z-50 w-[380px] h-[560px] max-h-[calc(100vh-48px)] flex flex-col bg-white/70 backdrop-blur-[24px] backdrop-saturate-[140%] border border-white/50 rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] ${pos ? '' : 'bottom-6 right-6'}`
       }
     >
@@ -511,7 +511,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
                   </div>
                   <span className="text-[12px] font-semibold text-slate-500">思考中</span>
                 </div>
-                <div className="flex gap-[5px] px-4 py-3 bg-white/[0.38] backdrop-blur-[16px] border border-white/[0.35] rounded-[4px_14px_14px_14px] w-fit">
+                <div className="flex gap-[5px] px-4 py-3 bg-white/80 border border-slate-200/50 rounded-[4px_14px_14px_14px] w-fit">
                   <div className="typing-dot bg-slate-400" />
                   <div className="typing-dot bg-slate-400" />
                   <div className="typing-dot bg-slate-400" />
@@ -904,7 +904,7 @@ function PanelBubble({
           </button>
         )}
       </div>
-      <div className="bg-white/[0.38] backdrop-blur-[16px] border border-white/[0.35] text-[var(--text-1)] px-4 py-3 rounded-[4px_14px_14px_14px] max-w-[95%] text-[13px] leading-[1.7] shadow-[0_1px_4px_rgba(0,0,0,0.04)]">
+      <div className="bg-white/80 border border-slate-200/50 text-[var(--text-1)] px-4 py-3 rounded-[4px_14px_14px_14px] max-w-[95%] text-[13px] leading-[1.7] shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
         <AIMarkdown text={message.text} />
       </div>
       {message.card && onCardClick && (
