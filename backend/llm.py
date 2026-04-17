@@ -82,7 +82,7 @@ def get_llm_client(timeout: int = 30):
 # ── Model name lookup ────────────────────────────────────────────────────────
 
 _MODEL_MAP: dict[str, str] = {
-    "fast": "qwen-plus",       # 稳定 GA 版，响应比 qwen3.6-plus 稳
+    "fast": "qwen-plus",
     "strong": "qwen-max",
     "router": "qwen-plus",
     "default": "qwen-plus",

@@ -217,31 +217,18 @@ export default function ProfilePage() {
     }
   }, [hasProfile, loading, recsLoading, profile?.name, showNamePrompt])
 
-  // After upload: fire personalized coach greeting with actual profile data
+  // After upload: fire coach greeting AFTER recommendations are ready
+  const coachTriggered = useRef(false)
   useEffect(() => {
+    if (coachTriggered.current) return
     if (!justUploaded || loading || !hasProfile) return
+    if (recsLoading || recs.length === 0) return
+    coachTriggered.current = true
     clearJustUploaded()
-    // Build rich context from actual profile
-    const prof = profile?.profile ?? {}
-    const skillNames = ((prof.skills ?? []) as Array<{ name?: string } | string>)
-      .slice(0, 6)
-      .map(s => (typeof s === 'string' ? s : s.name ?? ''))
-      .filter(Boolean)
-      .join('、')
-    const domain = (prof as any).primary_domain ?? ''
-    const name = profile?.name ? `（${profile.name}同学）` : ''
-    const edu = (prof.education as any) ?? {}
-    const schoolInfo = edu.school ? `${edu.school} ${edu.degree ?? ''}` : ''
-    const ctx = [
-      `用户${name}刚上传了简历，画像已生成。`,
-      skillNames ? `技能：${skillNames}。` : '',
-      domain ? `主方向：${domain}。` : '',
-      schoolInfo ? `学校：${schoolInfo}。` : '',
-      '请给出个性化的欢迎词，结合用户技能背景推荐2-3个最适合的职业方向，语气亲切简洁（3-4句话即可）。'
-    ].join('')
-    dispatchCoachTrigger('resume-uploaded', ctx)
+    const topLabels = recs.slice(0, 4).map(r => r.label).join('、')
+    dispatchCoachTrigger('resume-uploaded', `用户刚上传了简历，画像已生成。系统推荐方向：${topLabels}。`)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [justUploaded, hasProfile, loading])
+  }, [justUploaded, hasProfile, loading, recsLoading, recs])
 
   function handleNameConfirm() {
     if (!pendingName.trim()) return

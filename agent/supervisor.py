@@ -42,47 +42,12 @@ _STAGE_LABELS = {
     "sprinting": "冲刺期（面试 ≥3 次 或 有 offer）",
 }
 
-_STAGE_DIRECTIVES = {
-    "exploring": (
-        "【教练行为指令 · exploring 阶段】用户尚未选定目标方向。\n"
-        "■ 首要任务：引导用户从系统推荐里选一个方向设为目标。\n"
-        "■ 怎么做：调 recommend_jobs 查看系统已生成的推荐方向，告诉用户「系统根据你的背景推荐了 XX、YY、ZZ，"
-        "你去画像页看看详情，选一个感兴趣的设为目标」。用推荐里的真实岗位名，不要自己编方向名。\n"
-        "■ 回复控制：3-5 句话，点到即止，不展开深度分析。\n"
-        "■ 如果用户表达迷茫/不知道选什么 → 应用 coach-direction-scaffold skill。\n"
-        "■ 如果用户在两个方向之间纠结 → 应用 coach-decision-socratic skill。\n"
-        "■ 禁止（违反视为严重错误）：\n"
-        "  · 编造系统中不存在的方向名（如「AI基础设施」「云原生基础设施」）\n"
-        "  · 做面试辅导、拆解项目细节、推荐具体公司/团队\n"
-        "  · 给薪资数据、需求涨跌、AI替代率等市场分析——选完方向后再看\n"
-        "  · 给长期规划或学习建议——先选方向再说其他"
-    ),
-    "focusing": (
-        "【教练行为指令 · focusing 阶段】用户已选目标方向，正在补齐技能差距。\n"
-        "■ 重点：帮用户分析目标岗位的差距、建议做JD诊断看看真实市场要求。\n"
-        "■ 如果用户请求简历点评 → 应用 coach-resume-review skill。\n"
-        "■ 如果用户问市场前景 → 应用 coach-market-signal skill。"
-    ),
-    "job_hunting": (
-        "【教练行为指令 · job_hunting 阶段】用户正在求职面试中。\n"
-        "■ 重点：复盘面试、分析薄弱环节、准备下一场面试。\n"
-        "■ 如果用户要准备面试 → 应用 coach-interview-prep skill。"
-    ),
-    "sprinting": (
-        "【教练行为指令 · sprinting 阶段】用户在冲刺阶段，有多次面试或已拿offer。\n"
-        "■ 重点：帮用户比较offer、准备谈薪、做最终决策。\n"
-        "■ 如果用户在多个offer间纠结 → 应用 coach-decision-socratic skill。"
-    ),
-}
-
-
-def _normalize_stage(state: dict) -> tuple[str, str, str]:
-    """Return (stage, label, directive) from raw user_stage, handling old→new mapping."""
+def _normalize_stage(state: dict) -> tuple[str, str]:
+    """Return (stage, label) from raw user_stage, handling old→new mapping."""
     raw = state.get("user_stage", "unknown")
     stage = _OLD_TO_NEW_STAGE.get(raw, raw)
     label = _STAGE_LABELS.get(stage, stage)
-    directive = _STAGE_DIRECTIVES.get(stage, "")
-    return stage, label, directive
+    return stage, label
 
 
 def _get_global_market_summary() -> str:
@@ -141,31 +106,27 @@ def build_context_summary(
     human_count = sum(
         1 for m in state.get("messages", []) if isinstance(m, HumanMessage)
     )
-    _stage, label, directive = _normalize_stage(state)
+    _stage, label = _normalize_stage(state)
 
     rec_labels = state.get("recommended_labels", [])
     rec_line = ""
-    if rec_labels and _stage == "exploring":
-        rec_line = f"- 系统推荐方向：{'、'.join(rec_labels)}（只能引用这些名字，不要改名或编造）\n"
+    if rec_labels:
+        rec_line = f"- 系统推荐方向：{'、'.join(rec_labels)}"
 
     if human_count <= 2:
-        return (
-            f"- 当前阶段：{label}\n"
-            f"{rec_line}"
-            "（冷启动期：用户刚开口，不要反引用系统里的画像细节，不要调用任何工具。）\n"
-            f"{directive}"
-        )
+        parts = [f"- 当前阶段：{label}"]
+        if rec_line:
+            parts.append(rec_line)
+        return "\n".join(parts)
 
     if human_count <= 4:
         lines = [f"- 当前阶段：{label}"]
         if rec_line:
-            lines.append(rec_line.strip())
+            lines.append(rec_line)
         goal = state.get("career_goal")
         if goal:
             lines.append(f"- 目标岗位：{goal.get('label', '')}")
         lines.append("（深度画像请通过 get_user_profile 等工具按需调用）")
-        if directive:
-            lines.append(directive)
         return "\n".join(lines)
 
     return _build_full_context(state, for_triage)
@@ -278,10 +239,8 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
     else:
         parts.append("- 目标岗位: 未设定（建议去画像页查看推荐方向）")
 
-    _stage, label, directive = _normalize_stage(state)
+    _stage, label = _normalize_stage(state)
     parts.append(f"- 当前阶段: {label}")
-    if directive:
-        parts.append(directive)
 
     if state.get("current_node_id"):
         parts.append(f"- 图谱定位: {state['current_node_id']}")
@@ -671,15 +630,17 @@ def _make_agent_node(agent, agent_name: str):
         # Coach 专属：pull tool 的 ContextVar
         if agent_name == "coach_agent":
             from agent.tools.coach_context_tools import (
-                _ctx_profile, _ctx_goal, _ctx_user_id,
+                _ctx_profile, _ctx_goal, _ctx_user_id, _ctx_recommended,
             )
             tok_p = _ctx_profile.set(state.get("user_profile"))
             tok_g = _ctx_goal.set(state.get("career_goal"))
             tok_u = _ctx_user_id.set(state.get("user_id"))
+            tok_r = _ctx_recommended.set(state.get("recommended_data"))
             _ctx_resets.extend([
                 (_ctx_profile, tok_p),
                 (_ctx_goal, tok_g),
                 (_ctx_user_id, tok_u),
+                (_ctx_recommended, tok_r),
             ])
 
         # 其他 agent 的原有 ContextVar 注入（growth/jd/search/navigator）保持不变

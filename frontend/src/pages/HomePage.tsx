@@ -261,33 +261,19 @@ export default function HomePage() {
                     {/* Actions */}
                     <div className="flex items-center gap-2">
                       {/* Graph position / goal */}
-                      {graphPos ? (
+                      {graphPos && hasGoal ? (
                         <button
-                          onClick={() => navigate(hasGoal ? `/graph?node=${encodeURIComponent(graphPos.target_node_id)}` : '/graph')}
+                          onClick={() => navigate(`/graph?node=${encodeURIComponent(graphPos.target_node_id)}`)}
                           className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-left group transition-colors hover:bg-white/30 cursor-pointer"
                         >
-                          {hasGoal ? (
-                            <>
-                              <Target className="w-4 h-4 text-[var(--blue)] shrink-0" />
-                              <span className="text-[13px] font-semibold text-slate-700 group-hover:text-[var(--blue)] transition-colors truncate max-w-[140px]">
-                                {graphPos.target_label}
-                              </span>
-                              {zone && (
-                                <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${zone.color}`}>
-                                  {zone.text}
-                                </span>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
-                              <div className="flex flex-col">
-                                <span className="text-[11px] text-slate-400 leading-tight">当前定位</span>
-                                <span className="text-[13px] font-semibold text-slate-600 group-hover:text-[var(--blue)] transition-colors truncate max-w-[120px] leading-tight">
-                                  {graphPos.from_node_label || graphPos.target_label}
-                                </span>
-                              </div>
-                            </>
+                          <Target className="w-4 h-4 text-[var(--blue)] shrink-0" />
+                          <span className="text-[13px] font-semibold text-slate-700 group-hover:text-[var(--blue)] transition-colors truncate max-w-[140px]">
+                            {graphPos.target_label}
+                          </span>
+                          {zone && (
+                            <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${zone.color}`}>
+                              {zone.text}
+                            </span>
                           )}
                         </button>
                       ) : (

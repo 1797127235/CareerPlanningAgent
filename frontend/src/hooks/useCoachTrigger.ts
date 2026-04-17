@@ -7,11 +7,8 @@
 import { useEffect, useCallback } from 'react'
 
 export type TriggerType =
-  | 'profile-updated'
   | 'goal-set'
-  | 'jd-diagnosed'
   | 'resume-uploaded'
-  | 'learning-started'
 
 interface CoachTriggerDetail {
   type: TriggerType
@@ -31,11 +28,8 @@ export function dispatchCoachTrigger(type: TriggerType, context: string) {
 
 /** System messages sent to the coach for each trigger type */
 const triggerMessages: Record<TriggerType, (ctx: string) => string> = {
-  'profile-updated': (ctx) => `[系统通知] 用户刚更新了能力画像。${ctx}。请作为教练给出简短的下一步建议。`,
   'goal-set': (ctx) => `[系统通知] 用户刚设定了职业目标：${ctx}。请给出鼓励和具体的下一步行动建议。`,
-  'jd-diagnosed': (ctx) => `[系统通知] 用户刚完成了一次JD诊断。${ctx}。请从教练角度解读结果并建议下一步。`,
-  'resume-uploaded': (ctx) => `[系统通知] 用户刚上传了简历，画像已生成。${ctx}。请欢迎用户并建议探索方向。`,
-  'learning-started': (ctx) => `[系统通知] 用户开始了一个学习路径。${ctx}。请鼓励并给出学习建议。`,
+  'resume-uploaded': (ctx) => `[系统通知] ${ctx}`,
 }
 
 /** Send a direct prompt to the coach panel (from any page) */

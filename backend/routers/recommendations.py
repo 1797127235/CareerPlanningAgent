@@ -145,62 +145,32 @@ _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背
 [{{"role_id": "岗位ID", "label": "中文名", "channel": "entry|growth|explore", "reason": "一句话推荐理由（必须提到熟练度）", "affinity_pct": 匹配度0到100}}]"""
 
 
-# Keywords to role_id mapping for programmatic job_target override
-# ⚠ 一定要各归各，不能把"数据分析"映射到"ai-data-scientist"（两个方向门槛差巨大）
-_JOB_TARGET_ROLE_MAP = [
-    (["产品经理", "product manager", "pm", "产品实习"], "product-manager"),
-    (["前端", "frontend", "front-end", "web开发"], "frontend"),
-    (["后端", "backend", "服务端", "java开发"], "java"),
-    (["全栈", "full stack", "full-stack"], "full-stack"),
-    (["算法", "algorithm", "研究员", "研究岗"], "algorithm-engineer"),
-    (["机器学习", "ml工程", "machine learning"], "machine-learning"),
-    (["ai工程", "ai engineer", "大模型", "llm"], "ai-engineer"),
-    # 修复：数据分析 ≠ AI 数据科学家，两个方向门槛差巨大
-    (["数据分析", "data analyst", "数据分析师"], "data-analyst"),
-    (["数据科学", "data scientist", "ai数据"], "ai-data-scientist"),
-    (["数据工程", "data engineer", "数据工程师"], "data-engineer"),
-    (["bi", "商业智能", "bi分析"], "bi-analyst"),
-    (["搜索引擎", "search engine"], "search-engine-engineer"),
-    (["运维", "devops", "sre"], "devops"),
-    (["安全", "security", "网络安全"], "cyber-security"),
-    (["游戏", "game"], "game-developer"),
-    (["c++", "c plus"], "cpp"),
-    (["go", "golang"], "golang"),
-    (["python工程师", "python developer"], "python"),
-]
-
-
-def _find_role_id_for_job_target(job_target: str) -> str | None:
-    """Map job_target text to a role_id using keyword matching."""
-    if not job_target or job_target == "未指定":
-        return None
-    target_lower = job_target.lower()
-    for keywords, role_id in _JOB_TARGET_ROLE_MAP:
-        if any(kw in target_lower for kw in keywords):
-            return role_id
-    return None
-
-
 def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     """Call LLM to generate recommendations. Returns response dict or None on failure."""
     from backend.llm import llm_chat, parse_json_response, get_model
-    from backend.routers._profiles_graph import _get_role_list_text
+    from backend.routers._profiles_graph import (
+        _get_role_list_text, embedding_prefilter, find_role_id_for_job_target,
+    )
 
-    # Preserve level: pass full skill objects to downstream formatting
     skill_objs = [s for s in profile_data.get("skills", []) if isinstance(s, dict) and s.get("name")]
     if not skill_objs:
         return {"recommendations": [], "user_skill_count": 0}
 
-    # Format skills with mastery level so LLM can calibrate affinity_pct
-    # e.g. "Python(intermediate), 机器学习(familiar), SQL(familiar)"
     skills_with_level = ", ".join(
         f"{s.get('name')}({s.get('level') or 'unspecified'})" for s in skill_objs
     )
 
     job_target = profile_data.get("job_target", "") or "未指定"
+    pin_ids = []
+    target_role = find_role_id_for_job_target(job_target)
+    if target_role:
+        pin_ids.append(target_role)
+
+    candidate_ids = embedding_prefilter(profile_data, pin_node_ids=pin_ids)
+
     edu = profile_data.get("education", {})
     prompt = _RECOMMEND_PROMPT.format(
-        role_list=_get_role_list_text(),
+        role_list=_get_role_list_text(candidate_ids),
         job_target=job_target,
         user_skills=skills_with_level,
         major=edu.get("major", "未知"),
@@ -244,7 +214,7 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     # ── Programmatic job_target override (double insurance) ──────────────────
     # If user explicitly stated a job target, ensure that role appears first.
     # Never rely solely on LLM to respect a hard constraint.
-    target_role_id = _find_role_id_for_job_target(job_target)
+    target_role_id = find_role_id_for_job_target(job_target)
     if target_role_id and target_role_id in graph_nodes:
         existing_ids = [r["role_id"] for r in enriched]
         if target_role_id in existing_ids:

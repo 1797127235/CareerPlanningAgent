@@ -293,7 +293,7 @@ def _postprocess_profile(parsed: dict) -> dict:
 def _vlm_supplement_certificates(content: bytes) -> list[str]:
     """Secondary VLM call dedicated to extracting certificates.
 
-    Why a separate call: qwen-vl-plus often subjectively filters out items like
+    Why a separate call: qwen-vl-ocr often subjectively filters out items like
     "普通话二级乙等" or "机动车驾驶证C2" during JSON extraction even when the main
     prompt says "100% include" — too many instructions dilute attention.
 
@@ -339,7 +339,7 @@ def _vlm_supplement_certificates(content: bytes) -> list[str]:
 
         client = openai.OpenAI(api_key=DASHSCOPE_API_KEY, base_url=LLM_BASE_URL)
         resp = client.chat.completions.create(
-            model="qwen-vl-plus",
+            model="qwen-vl-ocr",
             messages=[{"role": "user", "content": content_parts}],
             max_tokens=500,
         )
@@ -354,7 +354,7 @@ def _vlm_supplement_certificates(content: bytes) -> list[str]:
 
 
 def _extract_profile_multimodal_vl(content: bytes) -> dict:
-    """Directly extract structured profile from scanned PDF pages using qwen-vl-plus.
+    """Directly extract structured profile from scanned PDF pages using qwen-vl-ocr.
 
     Skips the OCR→text intermediate step. Sends each page image + resume parse prompt
     to the vision model and returns a structured profile dict.
@@ -395,7 +395,7 @@ def _extract_profile_multimodal_vl(content: bytes) -> dict:
 
         client = openai.OpenAI(api_key=DASHSCOPE_API_KEY, base_url=LLM_BASE_URL)
         resp = client.chat.completions.create(
-            model="qwen-vl-plus",
+            model="qwen-vl-ocr",
             messages=[{"role": "user", "content": content_parts}],
             max_tokens=3000,
         )
@@ -446,7 +446,7 @@ def _extract_profile_multimodal_vl(content: bytes) -> dict:
 
 
 def _ocr_pdf_with_vl(content: bytes) -> str:
-    """OCR fallback for scanned PDFs using qwen-vl-plus vision API.
+    """OCR fallback for scanned PDFs using qwen-vl-ocr vision API.
     Used as last resort when _extract_profile_multimodal_vl also fails.
     """
     try:
@@ -467,7 +467,7 @@ def _ocr_pdf_with_vl(content: bytes) -> str:
             pix = page.get_pixmap(dpi=150)
             img_b64 = base64.b64encode(pix.tobytes("png")).decode()
             resp = client.chat.completions.create(
-                model="qwen-vl-plus",
+                model="qwen-vl-ocr",
                 messages=[{"role": "user", "content": [
                     {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
                     {"type": "text", "text": "请识别并提取这张简历图片中的所有文字内容，保持原始格式，不要添加额外说明。"},

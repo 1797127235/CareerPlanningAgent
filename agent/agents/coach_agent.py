@@ -12,6 +12,7 @@ from langchain.agents import create_agent as create_react_agent
 from agent.llm import get_chat_model
 from agent.tools.coach_context_tools import (
     get_user_profile, get_career_goal, get_market_signal, get_memory_recall,
+    get_recommended_roles,
 )
 from agent.tools.graph_tools import recommend_jobs, search_jobs
 from agent.tools.search_tools import search_real_jd
@@ -51,12 +52,11 @@ def create_coach_agent():
     return create_react_agent(
         model=model,
         tools=[
-            # Pull context tools (按需查询)
             get_user_profile,
             get_career_goal,
             get_market_signal,
             get_memory_recall,
-            # Action tools (明确请求时执行)
+            get_recommended_roles,
             search_real_jd,
             recommend_jobs,
             search_jobs,

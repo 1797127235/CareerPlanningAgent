@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import logging
 from contextvars import ContextVar
-from typing import Any, Optional
 
 from langchain_core.tools import tool
 
@@ -16,10 +15,10 @@ from agent.market import get_signal as _get_market_signal
 
 logger = logging.getLogger(__name__)
 
-# Supervisor 在 _make_agent_node 里 set 这些 ContextVar
-_ctx_profile: ContextVar[Optional[dict]] = ContextVar("coach_profile", default=None)
-_ctx_goal: ContextVar[Optional[dict]] = ContextVar("coach_goal", default=None)
-_ctx_user_id: ContextVar[Optional[int]] = ContextVar("coach_user_id", default=None)
+_ctx_profile: ContextVar[dict | None] = ContextVar("coach_profile", default=None)
+_ctx_goal: ContextVar[dict | None] = ContextVar("coach_goal", default=None)
+_ctx_user_id: ContextVar[int | None] = ContextVar("coach_user_id", default=None)
+_ctx_recommended: ContextVar[list | None] = ContextVar("coach_recommended", default=None)
 
 
 @tool
@@ -181,3 +180,42 @@ def get_memory_recall(query: str = "用户偏好") -> str:
     except Exception as e:
         logger.warning("get_memory_recall(%s) failed user=%s: %s", query, user_id, e)
         return "记忆检索暂不可用"
+
+
+@tool
+def get_recommended_roles() -> str:
+    """获取系统为用户推荐的岗位方向（与画像页看到的数据完全一致）。
+
+    何时调用：
+    - 用户问"推荐了什么方向/有哪些推荐/帮我对比推荐方向"
+    - 用户问某个推荐方向的详情、匹配度、差距
+    - 需要引用推荐结果给建议
+
+    何时不调用：
+    - 用户没有画像
+    - 闲聊、问候
+    """
+    recs = _ctx_recommended.get()
+    if not recs:
+        return "系统尚未生成推荐方向（可能画像刚建好，推荐正在后台计算，建议用户刷新画像页查看）"
+
+    lines = [f"系统为你推荐了 {len(recs)} 个方向（与画像页一致）：\n"]
+    for r in recs:
+        label = r.get("label", r.get("role_id", "?"))
+        pct = r.get("affinity_pct", 0)
+        zone = r.get("zone", "")
+        reason = r.get("reason", "")
+        channel = r.get("channel", "")
+        gap = r.get("gap_skills", [])
+
+        lines.append(f"【{label}】匹配度 {pct}%  {zone}区")
+        if reason:
+            lines.append(f"  推荐理由：{reason}")
+        if channel:
+            lines.append(f"  通道：{channel}")
+        if gap:
+            gap_names = [g if isinstance(g, str) else str(g) for g in gap[:4]]
+            lines.append(f"  待补技能：{', '.join(gap_names)}")
+        lines.append("")
+
+    return "\n".join(lines)

@@ -81,6 +81,41 @@ def _get_role_list_text(node_ids: list[str] | None = None) -> str:
     return _ROLE_LIST_CACHE
 
 
+# ── Job-target → node_id keyword mapping ────────────────────────────────────
+
+_JOB_TARGET_ROLE_MAP = [
+    (["产品经理", "product manager", "pm", "产品实习"], "product-manager"),
+    (["前端", "frontend", "front-end", "web开发"], "frontend"),
+    (["后端", "backend", "服务端", "java开发"], "java"),
+    (["全栈", "full stack", "full-stack"], "full-stack"),
+    (["算法", "algorithm", "研究员", "研究岗"], "algorithm-engineer"),
+    (["机器学习", "ml工程", "machine learning"], "machine-learning"),
+    (["ai工程", "ai engineer", "大模型", "llm"], "ai-engineer"),
+    (["数据分析", "data analyst", "数据分析师"], "data-analyst"),
+    (["数据科学", "data scientist", "ai数据"], "ai-data-scientist"),
+    (["数据工程", "data engineer", "数据工程师"], "data-engineer"),
+    (["bi", "商业智能", "bi分析"], "bi-analyst"),
+    (["搜索引擎", "search engine"], "search-engine-engineer"),
+    (["运维", "devops", "sre"], "devops"),
+    (["安全", "security", "网络安全"], "cyber-security"),
+    (["游戏", "game"], "game-developer"),
+    (["c++", "c plus"], "cpp"),
+    (["go", "golang"], "golang"),
+    (["python工程师", "python developer"], "python"),
+]
+
+
+def find_role_id_for_job_target(job_target: str) -> str | None:
+    """Map job_target text to a node_id using keyword matching."""
+    if not job_target or job_target == "未指定":
+        return None
+    target_lower = job_target.lower()
+    for keywords, role_id in _JOB_TARGET_ROLE_MAP:
+        if any(kw in target_lower for kw in keywords):
+            return role_id
+    return None
+
+
 # ── Embedding pre-filter ─────────────────────────────────────────────────────
 
 _NODE_EMBEDDINGS: dict | None = None
@@ -99,25 +134,42 @@ def _load_node_embeddings() -> dict:
     return _NODE_EMBEDDINGS
 
 
-def _embedding_prefilter(profile_data: dict, ratio: float = 0.70) -> list[str]:
-    """Use cosine similarity + relative threshold to find matching node IDs.
+def embedding_prefilter(
+    profile_data: dict,
+    *,
+    pin_node_ids: list[str] | None = None,
+    min_k: int = 12,
+    max_k: int = 18,
+    ratio: float = 0.65,
+) -> list[str]:
+    """Use cosine similarity to narrow candidate nodes before LLM matching.
 
-    Returns node_ids where sim >= top_sim * ratio (relative threshold).
-    Also includes project descriptions for better matching.
+    Args:
+        profile_data: User profile dict (skills, projects, job_target, …).
+        pin_node_ids: Node IDs that MUST appear in the result (e.g. job_target match).
+        min_k / max_k: Floor / ceiling on how many candidates to return.
+        ratio: Relative similarity threshold (keep nodes with sim >= top_sim * ratio).
+
+    Returns sorted list of node_ids (best match first). Falls back to all nodes
+    if embeddings are unavailable or the API call fails.
     """
     import numpy as np
+
+    all_node_ids = list(_get_graph_nodes().keys())
 
     emb_data = _load_node_embeddings()
     node_embs = emb_data.get("nodes", {})
     if not node_embs:
-        return list(_get_graph_nodes().keys())
+        return all_node_ids
 
-    # Build rich user text: skills + project names + descriptions
     skills = [s.get("name", "") for s in profile_data.get("skills", []) if isinstance(s, dict) and s.get("name")]
     if not skills:
-        return list(node_embs.keys())
+        return all_node_ids
 
     parts = [" ".join(skills)]
+    jt = profile_data.get("job_target") or ""
+    if jt:
+        parts.append(jt)
     for p in profile_data.get("projects", [])[:3]:
         if not isinstance(p, dict):
             continue
@@ -134,7 +186,6 @@ def _embedding_prefilter(profile_data: dict, ratio: float = 0.70) -> list[str]:
 
     user_text = " | ".join(parts)
 
-    # Get user embedding
     try:
         from openai import OpenAI
         client = OpenAI(
@@ -148,10 +199,9 @@ def _embedding_prefilter(profile_data: dict, ratio: float = 0.70) -> list[str]:
         )
         user_vec = np.array(resp.data[0].embedding)
     except Exception as e:
-        logger.warning("Embedding pre-filter failed: %s", e)
-        return list(node_embs.keys())
+        logger.warning("Embedding pre-filter failed, falling back to all nodes: %s", e)
+        return all_node_ids
 
-    # Cosine similarity
     node_ids = list(node_embs.keys())
     node_vecs = np.array([node_embs[nid] for nid in node_ids])
     norms = np.linalg.norm(node_vecs, axis=1, keepdims=True)
@@ -161,17 +211,21 @@ def _embedding_prefilter(profile_data: dict, ratio: float = 0.70) -> list[str]:
     sims = node_vecs_normed @ user_normed
     ranking = np.argsort(sims)[::-1]
 
-    # Relative threshold: keep nodes with sim >= top_sim * ratio
     top_sim = sims[ranking[0]]
     threshold = top_sim * ratio
     candidates = [node_ids[i] for i in ranking if sims[i] >= threshold]
 
-    # Ensure at least 5, at most 8
-    if len(candidates) < 5:
-        candidates = [node_ids[i] for i in ranking[:5]]
-    elif len(candidates) > 8:
-        candidates = candidates[:8]
+    if len(candidates) < min_k:
+        candidates = [node_ids[i] for i in ranking[:min_k]]
+    elif len(candidates) > max_k:
+        candidates = candidates[:max_k]
 
+    if pin_node_ids:
+        for nid in pin_node_ids:
+            if nid in all_node_ids and nid not in candidates:
+                candidates.append(nid)
+
+    logger.info("Embedding prefilter: %d/%d nodes selected", len(candidates), len(all_node_ids))
     return candidates
 
 
@@ -280,30 +334,31 @@ _ROLE_MATCH_PROMPT = """你是一个职业匹配 AI。根据用户的完整背�
 
 
 def _llm_match_role(profile_data: dict) -> dict | None:
-    """LLM role matching using full node list (embedding prefilter removed — only 40 nodes)."""
+    """LLM role matching with embedding prefilter to reduce prompt size."""
     try:
         from backend.llm import llm_chat, parse_json_response
 
-        # Preserve level for LLM affinity_pct calibration
         skill_objs = [s for s in profile_data.get("skills", []) if isinstance(s, dict) and s.get("name")]
         if skill_objs:
             skills_with_level = ", ".join(
                 f"{s.get('name')}({s.get('level') or 'unspecified'})" for s in skill_objs
             )
         else:
-            # Fallback: use knowledge_areas when skills are empty (no level info available)
             ka = (profile_data.get("knowledge_areas") or [])[:10]
             if not ka:
                 return None
             skills_with_level = ", ".join(ka)
 
-        # Use all nodes directly — 40 nodes fits comfortably in one LLM call
-        all_node_ids = list(_get_graph_nodes().keys())
-        role_list = _get_role_list_text(all_node_ids)
-        candidate_ids = all_node_ids
+        job_target = profile_data.get("job_target", "") or "未指定"
+        pin_ids = []
+        target_role = find_role_id_for_job_target(job_target)
+        if target_role:
+            pin_ids.append(target_role)
+
+        candidate_ids = embedding_prefilter(profile_data, pin_node_ids=pin_ids)
+        role_list = _get_role_list_text(candidate_ids)
 
         edu = profile_data.get("education", {})
-        job_target = profile_data.get("job_target", "") or "未指定"
         primary_domain = profile_data.get("primary_domain", "未知")
         cs = profile_data.get("career_signals", {})
         career_signals_text = (
