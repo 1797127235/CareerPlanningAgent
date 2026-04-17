@@ -618,6 +618,31 @@ def _build_skill_deltas(
     except Exception as e:
         logger.warning("_build_skill_deltas all_practiced failed: %s", e)
 
+    # ── resume project text evidence (no hardcoded mapping) ──
+    # Check if user's claimed skill names appear in their own resume project
+    # descriptions. Uses the skill's own name as search term — not an external
+    # keyword table. E.g. skill "C/C++" → check "c++", "c" in project text.
+    try:
+        _prof = json.loads(profile.profile_json or "{}")
+        _proj_texts = " ".join(
+            str(p.get("description", "") if isinstance(p, dict) else p)
+            for p in (_prof.get("projects", []) or [])
+        ).lower()
+        if _proj_texts.strip():
+            for s in (_prof.get("skills", []) or []):
+                name = s.get("name", "") if isinstance(s, dict) else str(s)
+                if not name or len(name) < 2:
+                    continue
+                parts = [name.lower()]
+                for seg in name.split("/"):
+                    seg = seg.strip().lower()
+                    if seg and len(seg) >= 2:
+                        parts.append(seg)
+                if any(part in _proj_texts for part in parts):
+                    all_practiced.add(name.strip())
+    except Exception as e:
+        logger.warning("_build_skill_deltas resume_text_check failed: %s", e)
+
     # ── gained_since_last_report ──
     gained_since_last_report: set[str] = set()
     if prev_report is not None and skill_gap_current is not None:
