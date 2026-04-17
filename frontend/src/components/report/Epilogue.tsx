@@ -1,11 +1,15 @@
+import { Sparkles } from 'lucide-react'
+
 interface EpilogueProps {
   generatedAt: string
   onRegenerate?: () => void
   regenerating?: boolean
   onExport?: () => void
+  onPolish?: () => void
+  polishing?: boolean
 }
 
-export function Epilogue({ generatedAt, onRegenerate, regenerating, onExport }: EpilogueProps) {
+export function Epilogue({ generatedAt, onRegenerate, regenerating, onExport, onPolish, polishing }: EpilogueProps) {
   const date = new Date(generatedAt).toISOString().slice(0, 10)
   return (
     <footer className="pt-16 pb-12 border-t border-slate-200 mt-24">
@@ -20,6 +24,16 @@ export function Epilogue({ generatedAt, onRegenerate, regenerating, onExport }: 
             className="inline-flex items-center gap-1 text-[13px] font-semibold text-slate-900 border-b-2 border-slate-900 pb-0.5 hover:text-blue-700 hover:border-blue-700 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-wait"
           >
             {regenerating ? '正在重新生成…' : '再生成一次 →'}
+          </button>
+        )}
+        {onPolish && (
+          <button
+            onClick={onPolish}
+            disabled={polishing}
+            className="inline-flex items-center gap-2 text-[13px] font-semibold text-slate-600 hover:text-blue-700 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            {polishing ? '润色中…' : '智能润色'}
           </button>
         )}
         {onExport && (
