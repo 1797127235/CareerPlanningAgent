@@ -14,14 +14,17 @@ _PROJECT_SKILL_HINTS: dict[str, list[str]] = {
     "性能优化": ["性能", "高性能", "压测", "benchmark", "qps", "延迟", "吞吐", "profile", "热点", "优化"],
     "高并发":   ["并发", "高并发", "多线程", "线程池", "epoll", "reactor", "内存池", "qps", "压测"],
     "系统编程": ["系统编程", "系统调用", "内核", "epoll", "reactor", "内存池", "多线程", "linux系统", "io_uring"],
-    "网络编程": ["网络", "socket", "tcp", "epoll", "reactor", "网络库", "网络框架"],
-    "内存管理": ["内存", "内存池", "tcmalloc", "jemalloc", "malloc", "分配器"],
+    "网络编程": ["网络", "socket", "tcp", "epoll", "reactor", "网络库", "网络框架", "tcp/ip"],
+    "内存管理": ["内存", "内存池", "tcmalloc", "jemalloc", "malloc", "分配器", "cache"],
     "GDB":      ["gdb", "调试", "core dump", "断点"],
     "CMake":    ["cmake", "makefile", "构建", "编译系统"],
-    "Linux":    ["linux", "系统调用", "epoll", "内核", "posix"],
-    "STL":      ["stl", "标准库", "容器", "迭代器", "模板"],
-    "多线程":   ["多线程", "线程池", "并发", "锁", "mutex", "原子操作"],
-    "C++":      ["c++", "cpp", "stl", "模板", "虚函数"],
+    "Linux":    ["linux", "系统调用", "epoll", "内核", "posix", "linux网络"],
+    "STL":      ["stl", "标准库", "容器", "迭代器", "模板", "vector", "map", "智能指针", "shared_ptr", "unique_ptr"],
+    "多线程":   ["多线程", "线程池", "并发", "锁", "mutex", "原子操作", "thread"],
+    "C++":      ["c++", "cpp", "stl", "模板", "虚函数", "raii", "智能指针"],
+    "TCP/IP":   ["tcp", "tcp/ip", "socket", "网络协议", "三次握手", "epoll", "网络库"],
+    "数据结构": ["数据结构", "链表", "红黑树", "哈希", "b+树", "跳表", "队列", "堆"],
+    "操作系统": ["操作系统", "进程", "线程", "虚拟内存", "页表", "调度", "信号", "文件系统"],
 }
 
 _PROFICIENCY_MULTIPLIER = {"completed": 1.2, "practiced": 1.0, "claimed": 0.7}
