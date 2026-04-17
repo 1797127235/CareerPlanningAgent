@@ -10,7 +10,8 @@ interface EpilogueProps {
 }
 
 export function Epilogue({ generatedAt, onRegenerate, regenerating, onExport, onPolish, polishing }: EpilogueProps) {
-  const date = new Date(generatedAt).toISOString().slice(0, 10)
+  const _d = new Date(generatedAt)
+  const date = `${_d.getFullYear()}-${String(_d.getMonth() + 1).padStart(2, '0')}-${String(_d.getDate()).padStart(2, '0')}`
   return (
     <footer className="pt-16 pb-12 border-t border-slate-200 mt-24">
       <p className="text-[13px] text-slate-400 italic tabular-nums">

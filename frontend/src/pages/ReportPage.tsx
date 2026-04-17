@@ -242,15 +242,6 @@ export default function ReportPage() {
     }
   }
 
-  function getCompletenessIssues(data: ReportV2Data): string[] {
-    const issues: string[] = []
-    if (!data.narrative?.trim()) issues.push('第一章"你是谁"缺少叙事')
-    if (!data.career_alignment?.observations?.length) issues.push('第二章"你能去哪"缺少分析')
-    if (!data.differentiation_advice?.trim()) issues.push('第三章"差距"缺少差异化建议')
-    if (!data.action_plan?.stages?.length) issues.push('第四章"下一步"缺少行动计划')
-    if (!data.market?.salary_p50) issues.push('缺少市场数据')
-    return issues
-    }
 
   // Save edited chapter prose. Key "narrative" targets Chapter I (the flat
   // narrative field, via narrative_summary). Any other key targets
@@ -472,25 +463,6 @@ export default function ReportPage() {
             exporting={exporting}
             exportError={exportError}
           />
-          {(() => {
-            const issues = getCompletenessIssues(data)
-            if (issues.length > 0) {
-              return (
-                <div className="mt-3 px-4 py-2.5 rounded-lg bg-amber-50 border border-amber-100 text-[12px] text-amber-700">
-                  <span className="font-semibold">完整性提示：</span>
-                  {issues.join('；')}
-                </div>
-              )
-            }
-            return (
-              <div className="mt-3">
-                <span className="inline-flex items-center gap-1 text-[12px] text-emerald-600 font-medium">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                  报告完整
-                </span>
-              </div>
-            )
-          })()}
           <HistoryStrip
             items={reportList}
             currentId={currentId}
