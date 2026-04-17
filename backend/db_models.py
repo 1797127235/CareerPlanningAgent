@@ -717,6 +717,7 @@ class InterviewRecord(Base):
     content_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")   # 自由文本：问了什么
     self_rating: Mapped[str] = mapped_column(String(16), nullable=False, default="medium")  # good|medium|bad
     result: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")  # passed|failed|pending
+    stage: Mapped[str] = mapped_column(String(32), nullable=False, default="applied")  # applied|written_test|interviewing|offered|rejected
     reflection: Mapped[str | None] = mapped_column(Text, nullable=True)  # 自己的感受和收获
     ai_analysis: Mapped[str | None] = mapped_column(Text, nullable=True)  # AI生成的复盘分析JSON
 
@@ -748,6 +749,22 @@ class CoachResult(Base):
     detail_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     metadata_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+
+class MockInterview(Base):
+    """AI 模拟面试会话"""
+    __tablename__ = "mock_interviews"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    target_role: Mapped[str] = mapped_column(String(256), nullable=False)
+    jd_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    questions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    answers_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    evaluation_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="created")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
 
 class GrowthEntry(Base):

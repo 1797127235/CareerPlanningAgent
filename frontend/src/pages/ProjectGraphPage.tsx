@@ -1,11 +1,10 @@
 /**
- * 项目进展页 — 交替时间线（Chronology 风格）
- * 节点左右交替，点击可编辑，支持删除
+ * 项目笔记本 — 顶部项目信息 + 内联快速记录 + 按日期分组日志时间线
  */
-import { useState } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Plus, Trash2, Pencil, Check, X } from 'lucide-react'
+import { ArrowLeft, Trash2, Pencil, Check, X } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
 import { listProjects, listProjectLogs, createProjectLog, deleteProjectLog } from '@/api/growthLog'
@@ -26,18 +25,30 @@ const STATUS_CFG: Record<TaskStatus, { color: string; bg: string; label: string 
   blocked:     { color: '#fff', bg: '#EF4444', label: '遇到问题' },
 }
 
-// Decorative cycling palette — blue+slate shades only, no rainbow
-const COLORS = ['#2563EB', '#475569', '#60A5FA', '#64748B', '#3B82F6', '#94A3B8']
-
-function fmtDate(iso: string) {
+function fmtTime(iso: string) {
   const d = new Date(iso)
-  if (isNaN(d.getTime())) return '--'
-  const yyyy = d.getFullYear()
-  const mm = d.getMonth() + 1
-  const dd = d.getDate()
-  const hh = String(d.getHours()).padStart(2, '0')
-  const min = String(d.getMinutes()).padStart(2, '0')
-  return `${yyyy}/${mm}/${dd} ${hh}:${min}`
+  return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`
+}
+
+function groupLogsByDate(logs: LogEntry[]): { label: string; items: LogEntry[] }[] {
+  const now = new Date()
+  const todayStr = now.toISOString().slice(0, 10)
+  const yesterdayStr = new Date(now.getTime() - 86400000).toISOString().slice(0, 10)
+
+  const groups: Record<string, LogEntry[]> = {}
+
+  logs.forEach((log) => {
+    const dateStr = log.created_at.slice(0, 10)
+    let label: string
+    if (dateStr === todayStr) label = '今天'
+    else if (dateStr === yesterdayStr) label = '昨天'
+    else label = dateStr.slice(5).replace('-', '/')
+
+    if (!groups[label]) groups[label] = []
+    groups[label].push(log)
+  })
+
+  return Object.entries(groups).map(([label, items]) => ({ label, items }))
 }
 
 /* ── Inline Edit Card ── */
@@ -98,98 +109,6 @@ function EditCard({ log, projectId, onClose }: {
   )
 }
 
-/* ── Reflection with expand/collapse ── */
-const REFLECTION_LIMIT = 60
-
-function ReflectionText({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false)
-  const isLong = text.length > REFLECTION_LIMIT
-
-  return (
-    <div className="mt-1.5">
-      <p className="text-[11px] text-slate-500 leading-relaxed">
-        {isLong && !expanded ? text.slice(0, REFLECTION_LIMIT) + '…' : text}
-      </p>
-      {isLong && (
-        <button
-          onClick={e => { e.stopPropagation(); setExpanded(v => !v) }}
-          className="text-[10px] text-blue-500 hover:text-blue-700 cursor-pointer mt-0.5 transition-colors"
-        >
-          {expanded ? '收起' : '展开全文'}
-        </button>
-      )}
-    </div>
-  )
-}
-
-/* ── Add Form (modal) ── */
-function AddForm({ projectId, onClose }: { projectId: number; onClose: () => void }) {
-  const [content, setContent] = useState('')
-  const [reflection, setReflection] = useState('')
-  const [status, setStatus] = useState<TaskStatus>('done')
-  const qc = useQueryClient()
-
-  const { mutate: create, isPending } = useMutation({
-    mutationFn: () => createProjectLog(projectId, {
-      content: content.trim(),
-      reflection: reflection.trim() || undefined,
-      task_status: status,
-    }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['project-logs', projectId] })
-      onClose()
-    },
-    onError: () => {
-      alert('保存失败，请重试')
-    },
-  })
-
-  const inputCls = "w-full px-3.5 py-2.5 text-[13px] rounded-xl outline-none bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white transition-colors"
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
-      <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.96 }}
-        className="relative bg-white rounded-2xl p-6 w-full max-w-[440px] shadow-xl z-10">
-        <p className="text-[15px] font-bold text-slate-800 mb-4">添加进展</p>
-        <div className="space-y-3">
-          <textarea value={content} onChange={e => setContent(e.target.value)}
-            placeholder="记录这条进展..." rows={2} autoFocus
-            className={inputCls + ' resize-none'} />
-          <div className="flex gap-2">
-            {(Object.entries(STATUS_CFG) as [TaskStatus, typeof STATUS_CFG[TaskStatus]][]).map(([k, cfg]) => (
-              <button key={k} type="button" onClick={() => setStatus(k)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all cursor-pointer border"
-                style={{
-                  background: status === k ? cfg.bg : 'transparent',
-                  color: status === k ? '#fff' : '#94A3B8',
-                  borderColor: status === k ? cfg.bg : 'rgba(0,0,0,0.08)',
-                }}>
-                {cfg.label}
-              </button>
-            ))}
-          </div>
-          <textarea value={reflection} onChange={e => setReflection(e.target.value)}
-            placeholder="心得体会（可选）" rows={2}
-            className={inputCls + ' resize-none'} />
-          <div className="flex gap-2 pt-1">
-            <button onClick={() => create()} disabled={isPending || !content.trim()}
-              className="flex-1 py-2.5 text-[13px] font-semibold text-white rounded-xl cursor-pointer disabled:opacity-50 transition-colors"
-              style={{ background: '#2563EB' }}>
-              {isPending ? '记录中...' : '记录进展'}
-            </button>
-            <button onClick={onClose}
-              className="px-4 py-2.5 text-[13px] text-slate-500 rounded-xl cursor-pointer border border-slate-200 hover:bg-slate-50 transition-colors">
-              取消
-            </button>
-          </div>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
-
 /* ── Main ── */
 export default function ProjectGraphPage() {
   const { id } = useParams<{ id: string }>()
@@ -197,15 +116,23 @@ export default function ProjectGraphPage() {
   const qc = useQueryClient()
   const projectId = Number(id)
 
-  const [showAdd, setShowAdd] = useState(false)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState<number | null>(null)
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null)
+
+  const [newLogContent, setNewLogContent] = useState('')
+  const [newLogStatus, setNewLogStatus] = useState<TaskStatus>('done')
+
+  const [reflectionText, setReflectionText] = useState('')
 
   const { data: projectsData } = useQuery({
     queryKey: ['growth-projects'], queryFn: listProjects, staleTime: 60_000,
   })
   const project: ProjectRecord | undefined = (projectsData?.projects ?? []).find(p => p.id === projectId)
+
+  useEffect(() => {
+    if (project?.reflection !== undefined) setReflectionText(project.reflection || '')
+  }, [project?.reflection])
 
   const { data: logsData, isLoading } = useQuery({
     queryKey: ['project-logs', projectId],
@@ -214,6 +141,37 @@ export default function ProjectGraphPage() {
     staleTime: 0,
   })
   const logs: LogEntry[] = (logsData?.logs ?? []) as LogEntry[]
+
+  const logGroups = useMemo(() => groupLogsByDate(logs), [logs])
+
+  const updateProjectMut = useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      rawFetch(`/growth-log/projects/${projectId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['growth-projects'] })
+    },
+  })
+  const updateProject = (data: Record<string, unknown>) => updateProjectMut.mutate(data)
+
+  const quickAddMut = useMutation({
+    mutationFn: () => createProjectLog(projectId, {
+      content: newLogContent.trim(),
+      task_status: newLogStatus,
+    }),
+    onSuccess: () => {
+      setNewLogContent('')
+      setNewLogStatus('done')
+      qc.invalidateQueries({ queryKey: ['project-logs', projectId] })
+    },
+  })
+  const quickAddPending = quickAddMut.isPending
+  const handleQuickAdd = () => {
+    if (!newLogContent.trim()) return
+    quickAddMut.mutate()
+  }
 
   const handleDelete = (logId: number) => setConfirmDeleteId(logId)
 
@@ -241,127 +199,211 @@ export default function ProjectGraphPage() {
 
   return (
     <div className="max-w-[760px] mx-auto px-4 py-6 md:px-8">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-8">
+      {/* Project info */}
+      <div className="mb-6">
         <button onClick={() => navigate('/growth-log')}
-          className="p-1.5 rounded-lg hover:bg-white/40 transition-colors cursor-pointer text-slate-400 hover:text-slate-700">
-          <ArrowLeft className="w-4 h-4" />
+          className="flex items-center gap-1 text-[13px] text-slate-400 hover:text-slate-600 transition-colors cursor-pointer mb-4">
+          <ArrowLeft className="w-3.5 h-3.5" /> 返回成长档案
         </button>
-        <div className="flex-1 min-w-0">
-          <p
-            className="text-[20px] font-bold text-slate-900 truncate"
-            style={{ viewTransitionName: `record-proj-${projectId}` } as React.CSSProperties}
-          >
-            {project?.name ?? '项目'}
-          </p>
-          {project?.description && (
-            <p className="text-[12px] text-slate-500 truncate mt-0.5">{project.description}</p>
-          )}
-        </div>
-        <button onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1.5 px-4 py-2 bg-slate-800 text-white rounded-xl text-[12px] font-semibold hover:bg-slate-700 transition-colors cursor-pointer shrink-0">
-          <Plus className="w-3.5 h-3.5" /> 添加进展
-        </button>
-      </div>
 
-      {/* Timeline */}
-      {isLoading ? (
-        <div className="space-y-4">
-          {[1,2,3].map(i => <div key={i} className="h-24 glass-static animate-pulse rounded-2xl" />)}
-        </div>
-      ) : logs.length === 0 ? (
-        <div className="glass-static rounded-2xl py-16 text-center">
-          <p className="text-[14px] text-slate-500 mb-1">还没有进展记录</p>
-          <p className="text-[12px] text-slate-400">点击「添加进展」开始记录</p>
-        </div>
-      ) : (
-        <div className="relative">
-          {/* Center spine */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-0 bottom-0 w-0.5 bg-slate-200" />
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-[24px] font-bold text-slate-900 tracking-tight">
+              {project?.name ?? '项目'}
+            </h1>
+            {project?.description && (
+              <p className="text-[14px] text-slate-500 mt-1">{project.description}</p>
+            )}
+            {project?.skills_used && project.skills_used.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-3">
+                {project.skills_used.map((skill: string) => (
+                  <span key={skill}
+                    className="px-2 py-0.5 rounded-md text-[12px] font-medium bg-slate-100 text-slate-600">
+                    {skill}
+                  </span>
+                ))}
+              </div>
+            )}
+            {project?.github_url && (
+              <a href={project.github_url} target="_blank" rel="noreferrer"
+                className="text-[12px] text-blue-500 hover:text-blue-600 mt-2 inline-block">
+                {project.github_url}
+              </a>
+            )}
+          </div>
 
-          <div className="space-y-8">
-            {logs.map((log, i) => {
-              const isLeft = i % 2 === 0
-              const st = (log.task_status ?? 'done') as TaskStatus
-              const cfg = STATUS_CFG[st]
-              const accentColor = COLORS[i % COLORS.length]
-              const isEditing = editingId === log.id
-
+          {/* Status selector */}
+          <div className="flex gap-1.5 shrink-0">
+            {(['planning', 'in_progress', 'completed'] as const).map((s) => {
+              const labels: Record<string, string> = { planning: '规划中', in_progress: '进行中', completed: '已完成' }
+              const active = project?.status === s
               return (
-                <motion.div
-                  key={log.id}
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06, duration: 0.3 }}
-                  className={`relative flex items-start gap-0 ${isLeft ? 'flex-row' : 'flex-row-reverse'}`}
+                <button
+                  key={s}
+                  onClick={() => updateProject({ status: s })}
+                  className={`px-2.5 py-1 rounded-lg text-[12px] font-medium border transition-all duration-200 cursor-pointer ${
+                    active
+                      ? 'border-blue-400 bg-blue-50 text-blue-700'
+                      : 'border-slate-200 text-slate-400 hover:border-blue-300'
+                  }`}
                 >
-                  {/* Card */}
-                  <div className={`w-[calc(50%-24px)] group flex ${isLeft ? 'pr-3 justify-end' : 'pl-3 justify-start'}`}>
-                    <div
-                      className="glass-static rounded-xl px-3 py-2.5 max-w-full cursor-pointer hover:shadow-md transition-shadow"
-                      style={{ minWidth: 100 }}
-                      onClick={() => !isEditing && setEditingId(isEditing ? null : log.id)}
-                    >
-                      {/* Status badge */}
-                      <div className={`flex items-center gap-2 mb-1.5 ${isLeft ? 'justify-end' : 'justify-start'}`}>
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white"
-                          style={{ background: cfg.bg }}>
-                          {cfg.label}
-                        </span>
-                      </div>
-
-                      {/* Content */}
-                      {isEditing ? (
-                        <EditCard log={log} projectId={projectId} onClose={() => setEditingId(null)} />
-                      ) : (
-                        <>
-                          <p className="text-[13px] font-semibold text-slate-800 leading-relaxed">
-                            {log.content}
-                          </p>
-                          {log.reflection && (
-                            <ReflectionText text={log.reflection} />
-                          )}
-                          {/* Actions */}
-                          <div className={`flex gap-1.5 mt-2 opacity-0 group-hover:opacity-100 transition-opacity ${isLeft ? 'justify-end' : 'justify-start'}`}>
-                            <button
-                              onClick={e => { e.stopPropagation(); setEditingId(log.id) }}
-                              className="p-1 rounded text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors cursor-pointer">
-                              <Pencil className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={e => { e.stopPropagation(); handleDelete(log.id) }}
-                              disabled={deleting === log.id}
-                              className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer">
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Center dot + date */}
-                  <div className="flex flex-col items-center shrink-0 w-12 z-10">
-                    <div className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
-                      style={{ background: accentColor }} />
-                    <span className="text-[9px] text-slate-400 mt-1 tabular-nums whitespace-nowrap">
-                      {fmtDate(log.created_at)}
-                    </span>
-                  </div>
-
-                  {/* Empty side */}
-                  <div className="w-[calc(50%-24px)]" />
-                </motion.div>
+                  {labels[s]}
+                </button>
               )
             })}
           </div>
         </div>
+      </div>
+
+      {/* Quick log input */}
+      <div className="mb-8 rounded-xl border border-slate-200/60 bg-white/50 p-4">
+        <textarea
+          value={newLogContent}
+          onChange={(e) => setNewLogContent(e.target.value)}
+          placeholder="记录一条进展..."
+          rows={2}
+          className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-white/50 text-[14px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-300 transition-all resize-none"
+        />
+        <div className="flex items-center justify-between mt-3">
+          <div className="flex gap-1.5">
+            {(Object.entries(STATUS_CFG) as [TaskStatus, typeof STATUS_CFG[TaskStatus]][]).map(([k, cfg]) => (
+              <button key={k} onClick={() => setNewLogStatus(k as TaskStatus)}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer ${
+                  newLogStatus === k
+                    ? 'text-white'
+                    : 'text-slate-400 border-slate-200 hover:border-slate-300'
+                }`}
+                style={newLogStatus === k ? { background: cfg.bg, borderColor: cfg.bg } : {}}>
+                {cfg.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleQuickAdd}
+            disabled={!newLogContent.trim() || quickAddPending}
+            className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-[13px] font-bold hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-30 cursor-pointer"
+          >
+            {quickAddPending ? '记录中...' : '记录'}
+          </button>
+        </div>
+      </div>
+
+      {/* Logs grouped by date */}
+      {isLoading ? (
+        <div className="space-y-4">
+          {[1,2,3].map(i => <div key={i} className="h-24 bg-slate-100 animate-pulse rounded-xl" />)}
+        </div>
+      ) : logs.length === 0 ? (
+        <div className="py-12 text-center text-[14px] text-slate-400">
+          还没有进展记录，在上面写一条吧
+        </div>
+      ) : (
+        <div>
+          {logGroups.map((group, gIdx) => (
+            <div key={group.label}>
+              <div className="flex items-center gap-3 py-4">
+                <div className="flex-1 h-px bg-slate-200" />
+                <span className="text-[11px] font-bold text-slate-400 tracking-wider">{group.label}</span>
+                <div className="flex-1 h-px bg-slate-200" />
+              </div>
+              <div className="space-y-3">
+                {group.items.map((log, i) => {
+                  const st = (log.task_status ?? 'done') as TaskStatus
+                  const cfg = STATUS_CFG[st]
+                  const isEditing = editingId === log.id
+
+                  return (
+                    <motion.div
+                      key={log.id}
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03, duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                      className="group rounded-lg border border-slate-200/60 bg-white/70 p-4 hover:bg-white hover:border-slate-300/60 transition-all duration-200"
+                    >
+                      {isEditing ? (
+                        <EditCard log={log} projectId={projectId} onClose={() => setEditingId(null)} />
+                      ) : (
+                        <>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                {log.content}
+                              </p>
+                              {log.reflection && (
+                                <p className="text-[12px] text-slate-400 mt-2 leading-relaxed italic">
+                                  {log.reflection}
+                                </p>
+                              )}
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white shrink-0"
+                              style={{ background: cfg.bg }}>
+                              {cfg.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between mt-3">
+                            <span className="text-[11px] text-slate-400">
+                              {fmtTime(log.created_at)}
+                            </span>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                onClick={() => setEditingId(log.id)}
+                                className="p-1 rounded text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors cursor-pointer">
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(log.id)}
+                                disabled={deleting === log.id}
+                                className="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors cursor-pointer">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </motion.div>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
 
-      {/* Add modal */}
-      <AnimatePresence>
-        {showAdd && <AddForm projectId={projectId} onClose={() => setShowAdd(false)} />}
-      </AnimatePresence>
+      {/* Project reflection */}
+      <div className="mt-10 pt-6 border-t border-slate-200">
+        <p className="text-[13px] font-semibold text-slate-500 mb-2">
+          {project?.status === 'completed' ? '项目反思' : '项目反思（完成后填写）'}
+        </p>
+        <textarea
+          value={reflectionText}
+          onChange={(e) => setReflectionText(e.target.value)}
+          onBlur={() => {
+            if (reflectionText !== (project?.reflection || '')) {
+              updateProject({ reflection: reflectionText })
+            }
+          }}
+          placeholder="这个项目让你学到了什么？遇到的最大挑战是什么？下次会怎么做不同？"
+          rows={3}
+          className="w-full px-4 py-3 rounded-lg border border-slate-200 bg-white/50 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-300 transition-all resize-none leading-relaxed"
+        />
+      </div>
+
+      {/* Delete project */}
+      <div className="mt-8 pt-6 border-t border-slate-200 flex justify-end">
+        <button
+          onClick={() => {
+            if (confirm('确定删除这个项目？所有进展记录也会一并删除，无法恢复。')) {
+              rawFetch(`/growth-log/projects/${projectId}`, { method: 'DELETE' }).then(() => {
+                qc.invalidateQueries({ queryKey: ['growth-projects'] })
+                navigate('/growth-log')
+              })
+            }
+          }}
+          className="text-[12px] text-red-400 hover:text-red-600 transition-colors cursor-pointer"
+        >
+          删除项目
+        </button>
+      </div>
 
       <AnimatePresence>
         {confirmDeleteId && (

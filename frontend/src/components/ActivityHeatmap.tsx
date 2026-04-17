@@ -145,7 +145,7 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
                 return (
                   <div
                     key={day.date}
-                    className={`rounded-[3px] cursor-default ${isFuture ? 'bg-transparent' : LEVEL_COLORS[level]} hover:ring-1 hover:ring-slate-400/40 transition-all`}
+                    className={`rounded-[3px] cursor-default ${isFuture ? 'bg-transparent' : LEVEL_COLORS[level]} hover:ring-2 hover:ring-blue-300/50 hover:scale-110 transition-all duration-150`}
                     style={{ width: cellSize, height: cellSize }}
                     onMouseEnter={(e) => {
                       if (isFuture) return

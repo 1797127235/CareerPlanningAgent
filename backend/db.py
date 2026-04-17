@@ -146,6 +146,11 @@ def init_db() -> None:
             conn.commit()
         except Exception:
             pass  # column already exists
+        try:
+            conn.execute(text("ALTER TABLE interview_records ADD COLUMN stage VARCHAR(32) NOT NULL DEFAULT 'applied'"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
 
 
 def get_db():

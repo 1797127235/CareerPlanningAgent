@@ -1,17 +1,37 @@
 import { useState, useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { motion } from 'framer-motion'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { GoalBar } from '@/components/growth-log/GoalBar'
 import { QuickInput } from '@/components/growth-log-v2/QuickInput'
 import { EntryCard } from '@/components/growth-log-v2/EntryCard'
 import { PlanRow } from '@/components/growth-log-v2/PlanRow'
 import { LegacyRecordRow, type UnifiedRecord } from '@/components/growth-log-v2/LegacyRecordRow'
+import { InterviewKanban } from '@/components/growth-log-v2/InterviewKanban'
+import { ProjectKanban } from '@/components/growth-log-v2/ProjectKanban'
 import { useGrowthEntries } from '@/components/growth-log-v2/useEntries'
 import type { GrowthEntry } from '@/components/growth-log-v2/mockData'
 import { listProjects } from '@/api/growthLog'
 import { listApplications } from '@/api/applications'
+import { rawFetch } from '@/api/client'
 import type { ProjectRecord } from '@/api/growthLog'
 import type { JobApplication } from '@/types/application'
+import { LayoutList, Kanban } from 'lucide-react'
+
+interface InterviewRecordData {
+  id: number
+  company: string
+  position: string
+  round: string
+  content_summary: string
+  self_rating: string
+  result: string
+  stage: string
+  reflection: string | null
+  ai_analysis: Record<string, unknown> | null
+  interview_at: string | null
+  created_at: string
+}
 
 type FilterKey = 'all' | 'project' | 'interview' | 'learning' | 'plan'
 
@@ -97,8 +117,8 @@ function FilterChips({ value, onChange }: { value: FilterKey; onChange: (v: Filt
             key={f.key}
             onClick={() => onChange(f.key)}
             className={[
-              'relative text-[13px] font-medium transition-colors cursor-pointer pb-1',
-              active ? 'text-slate-900' : 'text-slate-500 hover:text-slate-900',
+              'relative text-[13px] font-medium cursor-pointer pb-1 hover:bg-slate-50 active:scale-[0.97] transition-all duration-200',
+              active ? 'text-slate-900 scale-[1.02]' : 'text-slate-500 hover:text-slate-900',
             ].join(' ')}
           >
             {f.label}
@@ -140,6 +160,15 @@ export default function GrowthLogV2Page() {
   })
 
   const [filter, setFilter] = useState<FilterKey>('all')
+  const [interviewView, setInterviewView] = useState<'list' | 'kanban'>('kanban')
+  const [projectView, setProjectView] = useState<'list' | 'kanban'>('kanban')
+  const qc = useQueryClient()
+
+  const { data: interviewsData, refetch: refetchInterviews } = useQuery({
+    queryKey: ['growth-interviews'],
+    queryFn: () => rawFetch<{ interviews: InterviewRecordData[] }>('/growth-log/interviews'),
+    staleTime: 30_000,
+  })
 
   const plans = entries.filter((e) => e.is_plan && e.status === 'pending')
 
@@ -208,7 +237,8 @@ export default function GrowthLogV2Page() {
   }
 
   return (
-    <div className="max-w-[900px] mx-auto px-4 py-5 md:px-8 min-h-screen">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.2 }}>
+      <div className="max-w-[900px] mx-auto px-4 py-5 md:px-8 min-h-screen">
       <section className="space-y-2 mb-8">
         <GoalBar />
       </section>
@@ -220,6 +250,46 @@ export default function GrowthLogV2Page() {
       <section className="mb-6">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <FilterChips value={filter} onChange={setFilter} />
+          {filter === 'interview' && (
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setInterviewView('list')}
+                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
+                  interviewView === 'list' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setInterviewView('kanban')}
+                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
+                  interviewView === 'kanban' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Kanban className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+          {filter === 'project' && (
+            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+              <button
+                onClick={() => setProjectView('list')}
+                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
+                  projectView === 'list' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setProjectView('kanban')}
+                className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
+                  projectView === 'kanban' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                <Kanban className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </div>
       </section>
 
@@ -253,40 +323,72 @@ export default function GrowthLogV2Page() {
         </section>
       )}
 
-      <div>
-        {entriesLoading ? (
-          <div className="pt-12 text-slate-400 text-[13px] text-center">加载中…</div>
-        ) : groups.length === 0 ? (
-          <div className="pt-12 text-slate-400 text-[13px] text-center">没有符合条件的记录</div>
-        ) : (
-          groups.map((group, idx) => (
-            <div key={group.label}>
-              <div className={`flex items-center gap-4 ${idx === 0 ? 'pt-2' : 'pt-10'} pb-5`}>
-                <div className="flex-1 h-px bg-slate-300" />
-                <span className="text-[11px] font-bold text-slate-500 tracking-[0.2em]">{group.label}</span>
-                <div className="flex-1 h-px bg-slate-300" />
+      {filter === 'interview' && interviewView === 'kanban' ? (
+        <InterviewKanban
+          interviews={interviewsData?.interviews ?? []}
+          onRefresh={() => refetchInterviews()}
+        />
+      ) : filter === 'project' && projectView === 'kanban' ? (
+        <ProjectKanban
+          projects={(projectsData?.projects ?? []) as ProjectRecord[]}
+          onRefresh={() => qc.invalidateQueries({ queryKey: ['growth-projects'] })}
+        />
+      ) : (
+        <div>
+          {entriesLoading ? (
+            <div className="pt-12 text-slate-400 text-[13px] text-center">加载中…</div>
+          ) : groups.length === 0 ? (
+            <div className="pt-12 text-slate-400 text-[13px] text-center">没有符合条件的记录</div>
+          ) : (
+            groups.map((group, idx) => (
+              <div key={group.label}>
+                <motion.div
+                  className={`flex items-center gap-4 ${idx === 0 ? 'pt-2' : 'pt-10'} pb-5`}
+                  initial={{ opacity: 0, x: -8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <div className="flex-1 h-px bg-slate-300" />
+                  <span className="text-[11px] font-bold text-slate-500 tracking-[0.2em]">{group.label}</span>
+                  <div className="flex-1 h-px bg-slate-300" />
+                </motion.div>
+                <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+                  {group.items.map((item, i) => {
+                    const isLargeGroup = group.items.length > 20
+                    return (
+                      <motion.div
+                        key={item.kind === 'entry' ? `entry-${item.entry.id}-${i}` : `legacy-${item.record.id}-${i}`}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{
+                          delay: isLargeGroup ? 0 : i * 0.03,
+                          duration: 0.25,
+                          ease: [0.22, 1, 0.36, 1],
+                        }}
+                        className="hover:bg-white/50 hover:-translate-y-px transition-all duration-200"
+                      >
+                        {item.kind === 'entry' ? (
+                          <EntryCard
+                            entry={item.entry}
+                            onMutate={() => {}}
+                            onRequestAi={requestAiSuggestions}
+                            onConvertAi={handleConvertAi}
+                            onUpdate={updateEntry}
+                            onDelete={deleteEntry}
+                          />
+                        ) : (
+                          <LegacyRecordRow record={item.record} />
+                        )}
+                      </motion.div>
+                    )
+                  })}
+                </div>
               </div>
-              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
-                {group.items.map((item, i) =>
-                  item.kind === 'entry' ? (
-                    <EntryCard
-                      key={`entry-${item.entry.id}-${i}`}
-                      entry={item.entry}
-                      onMutate={() => {}}
-                      onRequestAi={requestAiSuggestions}
-                      onConvertAi={handleConvertAi}
-                      onUpdate={updateEntry}
-                      onDelete={deleteEntry}
-                    />
-                  ) : (
-                    <LegacyRecordRow key={`legacy-${item.record.id}-${i}`} record={item.record} />
-                  )
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
-  )
+  </motion.div>
+)
 }

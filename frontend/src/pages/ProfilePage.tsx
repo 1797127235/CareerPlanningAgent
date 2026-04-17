@@ -307,16 +307,33 @@ export default function ProfilePage() {
   const gapTotal = goal?.gap_skills?.length ?? 0
 
   // Right Panel Data
-  const projects = prof.projects ?? []
+  const rawProjects = prof.projects ?? []
+  const projects = rawProjects.map((p: unknown) =>
+    typeof p === 'string' ? p : typeof p === 'object' && p !== null
+      ? ((p as Record<string, unknown>).name || (p as Record<string, unknown>).title || JSON.stringify(p)) as string
+      : String(p)
+  )
   const education = prof.education ?? {}
   const experienceYears = prof.experience_years ?? 0
   const knowledgeAreas = prof.knowledge_areas ?? []
   const softSkills = prof.soft_skills
-  const internships = (prof.internships ?? []) as Array<{
-    company: string; role: string; duration?: string
-    tech_stack?: string[]; highlights?: string; tier?: string
-  }>
-  const certificates = (prof.certificates ?? []) as string[]
+  const rawInternships = (prof.internships ?? []) as unknown[]
+  const internships = rawInternships.map((item) => {
+    if (typeof item === 'string') return { company: item, role: '', highlights: '' }
+    const obj = item as Record<string, unknown>
+    return {
+      company: String(obj.company ?? obj.title ?? ''),
+      role: String(obj.role ?? obj.position ?? ''),
+      duration: obj.duration ? String(obj.duration) : undefined,
+      tech_stack: Array.isArray(obj.tech_stack) ? obj.tech_stack.map(String) : undefined,
+      highlights: typeof obj.highlights === 'string' ? obj.highlights
+        : Array.isArray(obj.highlights) ? obj.highlights.join('；')
+        : typeof obj.highlights === 'object' && obj.highlights ? JSON.stringify(obj.highlights)
+        : '',
+      tier: obj.tier ? String(obj.tier) : undefined,
+    }
+  })
+  const certificates = (prof.certificates ?? []).map((c: unknown) => typeof c === 'string' ? c : String(c))
 
   const sjtDims = ['communication', 'learning', 'collaboration', 'innovation', 'resilience'] as const
   const DIM_LABEL: Record<string, string> = {
@@ -332,7 +349,7 @@ export default function ProfilePage() {
       
       {/* 左栏 */}
       <div className="w-[280px] shrink-0 sticky top-20 max-h-[calc(100vh-5rem)] overflow-y-auto no-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-        <div className="glass-static p-6">
+        <div className="glass-static p-6 hover:border-slate-300/60 transition-colors duration-200">
           <div className="g-inner flex flex-col gap-5">
             {/* A. 身份区 */}
             <div className="flex items-center gap-3">
@@ -503,7 +520,7 @@ export default function ProfilePage() {
 
             {/* 区块 1：有目标 → 目标概览卡  |  无目标 → 推荐方向 */}
             {hasGoal ? (
-              <div className="glass-static p-6">
+              <div className="glass-static p-6 hover:border-slate-300/60 transition-colors duration-200">
                 <div className="g-inner">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
@@ -529,7 +546,7 @@ export default function ProfilePage() {
                         {goal!.gap_skills.slice(0, 8).map(s => (
                           <span
                             key={s}
-                            className="text-[11px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium border border-blue-100"
+                            className="text-[11px] px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-medium border border-blue-100 hover:scale-[1.05] hover:shadow-sm transition-all duration-150 cursor-default"
                           >
                             {s}
                           </span>
@@ -643,7 +660,7 @@ export default function ProfilePage() {
 
             {/* 区块 2.5：实习经历 + 证书 (仅当有数据时显示) */}
             {(internships.length > 0 || certificates.length > 0) && (
-              <div className="glass-static p-5">
+              <div className="glass-static p-5 hover:border-slate-300/60 transition-colors duration-200">
                 <div className="g-inner space-y-4">
 
                   {/* 实习经历 */}

@@ -167,6 +167,7 @@ class CreateInterviewRequest(BaseModel):
     content_summary: str
     self_rating: str = "medium"        # good | medium | bad
     result: str = "pending"            # passed | failed | pending
+    stage: str = "applied"             # applied | written_test | interviewing | offered | rejected
     reflection: Optional[str] = None
     interview_at: Optional[str] = None
     application_id: Optional[int] = None
@@ -176,6 +177,11 @@ class UpdateInterviewRequest(BaseModel):
     result: Optional[str] = None
     reflection: Optional[str] = None
     self_rating: Optional[str] = None
+    stage: Optional[str] = None
+    content_summary: Optional[str] = None
+    company: Optional[str] = None
+    position: Optional[str] = None
+    round: Optional[str] = None
 
 
 # ── Timeline ──────────────────────────────────────────────────────────────────
@@ -416,6 +422,7 @@ def delete_project(
     ).first()
     if not project:
         raise HTTPException(status_code=404, detail="项目不存在")
+    db.query(ProjectLog).filter(ProjectLog.project_id == project_id).delete()
     db.delete(project)
     db.commit()
 
@@ -646,6 +653,7 @@ def create_interview(
         content_summary=req.content_summary,
         self_rating=req.self_rating,
         result=req.result,
+        stage=req.stage,
         reflection=req.reflection,
         ai_analysis=None,
         interview_at=interview_at or datetime.now(timezone.utc),
@@ -677,6 +685,16 @@ def update_interview(
         record.reflection = req.reflection
     if req.self_rating is not None:
         record.self_rating = req.self_rating
+    if req.stage is not None:
+        record.stage = req.stage
+    if req.content_summary is not None:
+        record.content_summary = req.content_summary
+    if req.company is not None:
+        record.company = req.company
+    if req.position is not None:
+        record.position = req.position
+    if req.round is not None:
+        record.round = req.round
 
     db.commit()
     db.refresh(record)
@@ -746,6 +764,7 @@ def _serialize_interview(i: InterviewRecord) -> dict:
         "content_summary": i.content_summary,
         "self_rating": i.self_rating,
         "result": i.result,
+        "stage": i.stage,
         "reflection": i.reflection,
         "ai_analysis": ai,
         "application_id": i.application_id,

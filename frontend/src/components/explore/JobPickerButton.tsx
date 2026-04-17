@@ -17,7 +17,7 @@ export function JobPickerButton({ label, selectedNode, availableNodes, allNodes,
     <div className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full border border-slate-300 py-3 px-4 text-left hover:border-slate-900 transition-colors cursor-pointer"
+        className="w-full border border-slate-300 py-3 px-4 text-left hover:border-blue-300 hover:bg-blue-50/30 hover:-translate-y-px transition-all duration-200 cursor-pointer"
       >
         <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">
           {label}
@@ -38,7 +38,7 @@ export function JobPickerButton({ label, selectedNode, availableNodes, allNodes,
             <button
               key={n.node_id}
               onClick={() => { onSelect(n.node_id); setOpen(false) }}
-              className="block w-full text-left px-4 py-2.5 text-[14px] text-slate-900 hover:bg-slate-100 cursor-pointer"
+              className="block w-full text-left px-4 py-2.5 text-[14px] text-slate-900 hover:bg-slate-100 hover:pl-5 transition-all duration-150 cursor-pointer"
             >
               {n.label}
               <span className="text-[11px] text-slate-400 ml-2">· {n.role_family}</span>

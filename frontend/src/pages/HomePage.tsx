@@ -146,7 +146,7 @@ export default function HomePage() {
               {/* 主 CTA：上传简历 */}
               <label
                 htmlFor="home-file-input"
-                className="flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[var(--blue)] text-white text-[15px] font-semibold hover:brightness-110 transition-all cursor-pointer shadow-lg shadow-blue-500/25"
+                className="flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[var(--blue)] text-white text-[15px] font-semibold hover:brightness-110 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-none active:scale-[0.98] transition-all duration-200 cursor-pointer shadow-lg shadow-blue-500/25"
               >
                 <Upload className="w-4 h-4" />
                 上传简历
@@ -154,7 +154,7 @@ export default function HomePage() {
               {/* 次 CTA：对话建档 */}
               <button
                 onClick={() => sendToCoach('我没有简历，想通过对话建立画像')}
-                className="flex items-center gap-2 px-5 py-3.5 rounded-xl border border-[var(--blue)]/30 text-[var(--blue)] text-[14px] font-semibold hover:bg-[var(--blue)]/[0.06] transition-all cursor-pointer"
+                className="flex items-center gap-2 px-5 py-3.5 rounded-xl border border-[var(--blue)]/30 text-[var(--blue)] text-[14px] font-semibold hover:bg-[var(--blue)]/[0.06] hover:-translate-y-0.5 hover:shadow-sm active:translate-y-0 active:scale-[0.97] transition-all duration-200 cursor-pointer"
               >
                 <MessageSquare className="w-4 h-4" />
                 对话建档
@@ -162,7 +162,7 @@ export default function HomePage() {
               {/* 三级入口：手动填写 */}
               <button
                 onClick={() => navigate('/profile')}
-                className="flex items-center gap-2 px-4 py-3.5 text-slate-500 text-[14px] font-medium hover:text-slate-800 transition-colors cursor-pointer"
+                className="flex items-center gap-2 px-4 py-3.5 text-slate-500 text-[14px] font-medium hover:text-slate-800 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
               >
                 <PenLine className="w-4 h-4" />
                 手动填写
@@ -247,7 +247,12 @@ export default function HomePage() {
                     <div className="w-px h-9 bg-slate-200/60 hidden sm:block" />
 
                     {/* Inline metrics */}
-                    <div className="flex items-center gap-6">
+                    <motion.div
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.1, duration: 0.25 }}
+                      className="flex items-center gap-6"
+                    >
                       {[
                         { label: '技能', value: skillCount, suffix: '项' },
                         ...(stats ? [
@@ -263,7 +268,7 @@ export default function HomePage() {
                           <span className="text-[12px] text-slate-400 mt-1">{label}</span>
                         </div>
                       ))}
-                    </div>
+                    </motion.div>
 
                     {/* Spacer */}
                     <div className="flex-1" />
@@ -287,7 +292,7 @@ export default function HomePage() {
                           )}
                         </button>
                       ) : (
-                        <button onClick={() => navigate('/graph')} className="flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-white/30 transition-colors cursor-pointer">
+                        <button onClick={() => navigate('/graph')} className="flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-white/30 hover:-translate-y-0.5 transition-all cursor-pointer">
                           <MapPin className="w-4 h-4 text-slate-300 shrink-0" />
                           <span className="text-[13px] text-slate-400">探索图谱</span>
                         </button>
@@ -295,21 +300,21 @@ export default function HomePage() {
 
                       <label
                         htmlFor="home-file-input"
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#2563EB] text-white text-[13px] font-semibold hover:bg-[#1d4ed8] transition-colors cursor-pointer shadow-sm shadow-blue-500/25 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#2563EB] text-white text-[13px] font-semibold hover:bg-[#1d4ed8] hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:shadow-none active:scale-[0.98] transition-all duration-200 cursor-pointer shadow-sm shadow-blue-500/25 ${uploading ? 'opacity-60 pointer-events-none' : ''}`}
                       >
                         <Upload className="w-3.5 h-3.5" />
                         {uploading ? '上传中…' : '补充画像'}
                       </label>
                       <button
                         onClick={() => navigate('/profile')}
-                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold text-slate-600 cursor-pointer transition-all hover:text-slate-800 btn-glass"
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[13px] font-semibold text-slate-600 cursor-pointer transition-all hover:text-slate-800 hover:-translate-y-0.5 hover:shadow-sm btn-glass"
                       >
                         <User className="w-3.5 h-3.5" />
                         画像
                       </button>
                       <button
                         onClick={() => setDeleteConfirm(true)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50/60 transition-colors cursor-pointer shrink-0"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50/60 active:scale-[0.97] transition-all duration-150 cursor-pointer shrink-0"
                         title="重置画像"
                       >
                         <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
@@ -379,7 +384,7 @@ export default function HomePage() {
                     return step ? (
                       <button
                         onClick={step.onClick}
-                        className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-gradient-to-r from-blue-50/60 to-indigo-50/40 border border-blue-100/60 hover:border-blue-200 hover:shadow-sm transition-all cursor-pointer text-left group"
+                        className="w-full flex items-center gap-4 px-5 py-4 rounded-xl bg-gradient-to-r from-blue-50/60 to-indigo-50/40 border border-blue-100/60 hover:border-blue-200 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-pointer text-left group"
                       >
                         <div className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 flex items-center justify-center shrink-0 shadow-sm">
                           {step.icon}
@@ -395,9 +400,6 @@ export default function HomePage() {
                       </button>
                     ) : null
                   })()}
-
-                  {/* ── Divider ── */}
-                  <div className="h-px bg-slate-200/50" />
 
                   {/* ── Activity Heatmap (full width) ── */}
                   <div>

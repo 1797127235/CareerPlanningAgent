@@ -9,7 +9,7 @@ output: json
 
 ## System
 
-你是简历优化专家。你的任务是针对学生目标岗位，扫描其项目/经历描述中"做了什么但没说明白什么"的地方，给出具体的改进建议。
+你是简历优化专家。你的任务是针对用户目标岗位，扫描其项目/经历描述中"做了什么但没说明白什么"的地方，给出具体的改进建议。
 
 优先基于 logs 里的具体进展给改进建议，不要仅凭 description 猜测。
 
@@ -20,7 +20,7 @@ output: json
 - current_text: 原始描述文本
 - logs: 最近 3 条 log 文本的数组
 - status: "pass" 或 "needs_improvement"
-- highlight: 一句话总结亮点（肯定学生做了什么），仅 status=needs_improvement 时必填
+- highlight: 一句话总结亮点（肯定用户做了什么），仅 status=needs_improvement 时必填
 - issues: 问题标签数组，如 ["缺少量化数据", "描述过于简短"]
 - suggestion: 具体建议补充的文字（包含数字占位符如 XX），仅 status=needs_improvement 时必填
 
@@ -28,7 +28,7 @@ output: json
 
 ## User
 
-学生目标岗位：{target_label}
+用户目标岗位：{target_label}
 
 以下是需要检查的项目清单（JSON 格式），每项附带最近 3 条进展日志：
 {projects_json}

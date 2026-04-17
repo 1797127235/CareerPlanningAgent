@@ -10,6 +10,7 @@ import GrowthLogV2Page from '@/pages/GrowthLogV2Page'
 import ProjectGraphPage from '@/pages/ProjectGraphPage'
 import PursuitDetailPage from '@/pages/PursuitDetailPage'
 import CoachResultPage from '@/pages/CoachResultPage'
+import InterviewPage from '@/pages/InterviewPage'
 import RoleDetailPage from '@/pages/RoleDetailPage'
 import ExplorePage from '@/pages/ExplorePage'
 import LoginPage from '@/pages/LoginPage'
@@ -49,6 +50,7 @@ export default function App() {
             <Route path="/growth-log/projects/:id" element={<ProjectGraphPage />} />
             <Route path="/growth-log/pursuits/:id" element={<PursuitDetailPage />} />
             <Route path="/coach/result/:id" element={<CoachResultPage />} />
+            <Route path="/interview" element={<InterviewPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

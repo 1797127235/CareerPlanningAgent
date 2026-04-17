@@ -5,7 +5,7 @@ interface TagChipsProps {
   onChange: (tags: string[]) => void
 }
 
-const PRESETS = ['项目', '面试', '学习']
+const PRESETS = ['项目', '学习']
 
 export function TagChips({ tags, onChange }: TagChipsProps) {
   const [showInput, setShowInput] = useState(false)

@@ -96,6 +96,7 @@ def create_app() -> FastAPI:
         graph,
         growth_log,
         guidance,
+        interview,
         jd,
         profiles,
         recommendations,
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
     app.include_router(recommendations.router, prefix="/api/recommendations", tags=["推荐"])
     app.include_router(coach_results.router, prefix="/api/coach/results", tags=["教练结果"])
     app.include_router(growth_log.router, prefix="/api/growth-log", tags=["成长档案"])
+    app.include_router(interview.router, prefix="/api/interview", tags=["模拟面试"])
 
     return app
 

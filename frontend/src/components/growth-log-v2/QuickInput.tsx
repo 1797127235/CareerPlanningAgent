@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
 import { TagChips } from './TagChips'
-import { InterviewForm } from './InterviewForm'
-import { ProjectForm } from './ProjectForm'
 import type { GrowthEntry } from './mockData'
 
 interface QuickInputProps {
@@ -16,8 +14,6 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
   const [isPlan, setIsPlan] = useState(false)
   const [dueType, setDueType] = useState<'daily' | 'weekly' | 'custom'>('daily')
   const [customDate, setCustomDate] = useState('')
-  const [showInterview, setShowInterview] = useState(false)
-  const [showProject, setShowProject] = useState(false)
   const [sending, setSending] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
 
@@ -145,18 +141,6 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setShowInterview(true)}
-              className="px-3 py-1.5 text-[12px] font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
-            >
-              面试复盘
-            </button>
-            <button
-              onClick={() => setShowProject(true)}
-              className="px-3 py-1.5 text-[12px] font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md transition-colors cursor-pointer"
-            >
-              记录项目
-            </button>
-            <button
               onClick={handleSend}
               className={[
                 'px-4 py-1.5 text-[12px] font-semibold rounded-md transition-colors cursor-pointer',
@@ -185,39 +169,7 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
         )}
       </div>
 
-      {showInterview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/20"
-            style={{ backdropFilter: 'blur(4px)' }}
-            onClick={() => setShowInterview(false)}
-          />
-          <div className="relative w-full max-w-[520px] z-10">
-            <InterviewForm
-              onClose={() => setShowInterview(false)}
-              onSaved={onSent}
-              onAddEntry={onAddEntry}
-            />
-          </div>
-        </div>
-      )}
 
-      {showProject && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/20"
-            style={{ backdropFilter: 'blur(4px)' }}
-            onClick={() => setShowProject(false)}
-          />
-          <div className="relative w-full max-w-[520px] z-10">
-            <ProjectForm
-              onClose={() => setShowProject(false)}
-              onSaved={onSent}
-              onAddEntry={onAddEntry}
-            />
-          </div>
-        </div>
-      )}
     </>
   )
 }

@@ -10,6 +10,7 @@ import {
   Home,
   FolderKanban,
   CircleUser,
+  Mic,
 } from 'lucide-react'
 import type { User } from '@/types/user'
 import { useAuth } from '@/hooks/useAuth'
@@ -19,11 +20,12 @@ interface SidebarProps {
 }
 
 const navItems = [
-  { key: 'home',         label: '首页',    icon: Home,          route: '/' },
-  { key: 'profile',      label: '我的画像', icon: CircleUser,    route: '/profile' },
-  { key: 'graph',        label: '岗位图谱', icon: Map,           route: '/graph' },
-  { key: 'growth-log',   label: '成长档案', icon: FolderKanban,  route: '/growth-log' },
-  { key: 'report',       label: '发展报告', icon: FileText,      route: '/report' },
+  { key: 'home',         label: '首页',     icon: Home,          route: '/' },
+  { key: 'profile',      label: '我的画像',  icon: CircleUser,    route: '/profile' },
+  { key: 'graph',        label: '岗位图谱',  icon: Map,           route: '/graph' },
+  { key: 'growth-log',   label: '成长档案',  icon: FolderKanban,  route: '/growth-log' },
+  { key: 'report',       label: '发展报告',  icon: FileText,      route: '/report' },
+  { key: 'interview',    label: '模拟面试',  icon: Mic,           route: '/interview' },
 ] as const
 
 function routeToKey(pathname: string): string {

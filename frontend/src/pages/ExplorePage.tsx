@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchGraphMap } from '@/api/graph'
@@ -85,7 +86,12 @@ export default function ExplorePage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-10">
+    <motion.main
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.2 }}
+      className="min-h-screen px-6 py-10"
+    >
       <div className="mx-auto max-w-[880px]">
         <header className="mb-10">
           <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-slate-400 mb-3">
@@ -119,26 +125,32 @@ export default function ExplorePage() {
         {leftNode?.contextual_narrative && rightNode?.contextual_narrative && (
           <>
             <div className="space-y-8 mb-10">
-              {FIELD_ORDER.map(({ key, label }) => (
-                <ComparisonRow
+              {FIELD_ORDER.map(({ key, label }, index) => (
+                <motion.div
                   key={key}
-                  label={label}
-                  leftText={leftNode.contextual_narrative![key]}
-                  rightText={rightNode.contextual_narrative![key]}
-                />
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.04, duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                >
+                  <ComparisonRow
+                    label={label}
+                    leftText={leftNode.contextual_narrative![key]}
+                    rightText={rightNode.contextual_narrative![key]}
+                  />
+                </motion.div>
               ))}
             </div>
 
             <div className="grid grid-cols-2 gap-6 pt-8 border-t border-slate-200">
               <button
                 onClick={() => chooseAsTarget(leftNode.node_id)}
-                className="text-[13px] font-semibold text-slate-900 border border-slate-900 py-3 px-4 hover:bg-slate-900 hover:text-white transition-colors cursor-pointer"
+                className="text-[13px] font-semibold text-slate-900 border border-slate-900 py-3 px-4 hover:bg-slate-900 hover:text-white hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] transition-all duration-200 cursor-pointer"
               >
                 选 {leftNode.label} 作为我的目标 →
               </button>
               <button
                 onClick={() => chooseAsTarget(rightNode.node_id)}
-                className="text-[13px] font-semibold text-slate-900 border border-slate-900 py-3 px-4 hover:bg-slate-900 hover:text-white transition-colors cursor-pointer"
+                className="text-[13px] font-semibold text-slate-900 border border-slate-900 py-3 px-4 hover:bg-slate-900 hover:text-white hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.98] transition-all duration-200 cursor-pointer"
               >
                 选 {rightNode.label} 作为我的目标 →
               </button>
@@ -154,6 +166,6 @@ export default function ExplorePage() {
           </div>
         )}
       </div>
-    </main>
+    </motion.main>
   )
 }

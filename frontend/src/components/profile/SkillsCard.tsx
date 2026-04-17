@@ -29,7 +29,7 @@ function SkillRow({ skill, index }: { skill: Skill; index: number }) {
       variants={tagVariants}
       initial="hidden"
       animate="visible"
-      className="flex items-center justify-between px-4 py-2.5 last:border-b-0 hover:bg-white/20 transition-colors"
+      className="flex items-center justify-between px-4 py-2.5 last:border-b-0 hover:bg-white/20 hover:scale-[1.01] hover:shadow-sm transition-all duration-150 cursor-default"
     >
       <span className="text-[13px] font-medium text-[var(--text-1)]">{skill.name}</span>
       <span className={`text-[10px] font-bold w-[26px] h-5 flex items-center justify-center flex-shrink-0 rounded-sm ${badge}`}>
