@@ -34,7 +34,7 @@ export default function ExplorePage() {
   })
 
   const availableNodes = useMemo(
-    () => (graphData?.nodes ?? []).filter(n => n.contextual_narrative),
+    () => graphData?.nodes ?? [],
     [graphData?.nodes],
   )
 

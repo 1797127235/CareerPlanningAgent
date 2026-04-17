@@ -288,6 +288,19 @@ def _hydrate_state(user: User, db: Session) -> dict:
     # 4. Compute journey stage (新 4 阶段)
     state["user_stage"] = determine_stage(user.id, db)
 
+    # 4b. Inject cached recommendation labels for exploring-stage context
+    state["recommended_labels"] = []
+    if profile and profile.cached_recs_json:
+        try:
+            cached = json.loads(profile.cached_recs_json)
+            recs = cached.get("data", {}).get("recommendations", [])
+            state["recommended_labels"] = [
+                r.get("label") or r.get("role_id", "")
+                for r in recs[:4] if r.get("label") or r.get("role_id")
+            ]
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     # 5. Growth coach state
     state["coach_memo"] = ""
     state["page_context"] = None

@@ -11,16 +11,16 @@ No separate routing LLM call. Simple messages get 1 LLM call total.
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Annotated
 
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import InjectedToolCallId, tool
 from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.types import Command
 
-from agent.llm import get_chat_model
 from agent.market import all_signals as _all_market_signals, get_signal_for_node as _get_market_signal_for_node
 from agent.state import CareerState
 
@@ -41,6 +41,48 @@ _STAGE_LABELS = {
     "job_hunting": "求职中（面试 1-2 次）",
     "sprinting": "冲刺期（面试 ≥3 次 或 有 offer）",
 }
+
+_STAGE_DIRECTIVES = {
+    "exploring": (
+        "【教练行为指令 · exploring 阶段】用户尚未选定目标方向。\n"
+        "■ 首要任务：引导用户从系统推荐里选一个方向设为目标。\n"
+        "■ 怎么做：调 recommend_jobs 查看系统已生成的推荐方向，告诉用户「系统根据你的背景推荐了 XX、YY、ZZ，"
+        "你去画像页看看详情，选一个感兴趣的设为目标」。用推荐里的真实岗位名，不要自己编方向名。\n"
+        "■ 回复控制：3-5 句话，点到即止，不展开深度分析。\n"
+        "■ 如果用户表达迷茫/不知道选什么 → 应用 coach-direction-scaffold skill。\n"
+        "■ 如果用户在两个方向之间纠结 → 应用 coach-decision-socratic skill。\n"
+        "■ 禁止（违反视为严重错误）：\n"
+        "  · 编造系统中不存在的方向名（如「AI基础设施」「云原生基础设施」）\n"
+        "  · 做面试辅导、拆解项目细节、推荐具体公司/团队\n"
+        "  · 给薪资数据、需求涨跌、AI替代率等市场分析——选完方向后再看\n"
+        "  · 给长期规划或学习建议——先选方向再说其他"
+    ),
+    "focusing": (
+        "【教练行为指令 · focusing 阶段】用户已选目标方向，正在补齐技能差距。\n"
+        "■ 重点：帮用户分析目标岗位的差距、建议做JD诊断看看真实市场要求。\n"
+        "■ 如果用户请求简历点评 → 应用 coach-resume-review skill。\n"
+        "■ 如果用户问市场前景 → 应用 coach-market-signal skill。"
+    ),
+    "job_hunting": (
+        "【教练行为指令 · job_hunting 阶段】用户正在求职面试中。\n"
+        "■ 重点：复盘面试、分析薄弱环节、准备下一场面试。\n"
+        "■ 如果用户要准备面试 → 应用 coach-interview-prep skill。"
+    ),
+    "sprinting": (
+        "【教练行为指令 · sprinting 阶段】用户在冲刺阶段，有多次面试或已拿offer。\n"
+        "■ 重点：帮用户比较offer、准备谈薪、做最终决策。\n"
+        "■ 如果用户在多个offer间纠结 → 应用 coach-decision-socratic skill。"
+    ),
+}
+
+
+def _normalize_stage(state: dict) -> tuple[str, str, str]:
+    """Return (stage, label, directive) from raw user_stage, handling old→new mapping."""
+    raw = state.get("user_stage", "unknown")
+    stage = _OLD_TO_NEW_STAGE.get(raw, raw)
+    label = _STAGE_LABELS.get(stage, stage)
+    directive = _STAGE_DIRECTIVES.get(stage, "")
+    return stage, label, directive
 
 
 def _get_global_market_summary() -> str:
@@ -96,25 +138,34 @@ def build_context_summary(
         return _build_full_context(state, for_triage)
 
     # coach 专用：按对话轮次裁剪
-    from langchain_core.messages import HumanMessage as _HM
     human_count = sum(
-        1 for m in state.get("messages", []) if isinstance(m, _HM)
+        1 for m in state.get("messages", []) if isinstance(m, HumanMessage)
     )
+    _stage, label, directive = _normalize_stage(state)
+
+    rec_labels = state.get("recommended_labels", [])
+    rec_line = ""
+    if rec_labels and _stage == "exploring":
+        rec_line = f"- 系统推荐方向：{'、'.join(rec_labels)}（只能引用这些名字，不要改名或编造）\n"
 
     if human_count <= 2:
         return (
-            "（冷启动期：用户刚开口，按本轮消息正常回应。"
-            "不要反引用系统里的画像细节；需要信息时调工具查。）"
+            f"- 当前阶段：{label}\n"
+            f"{rec_line}"
+            "（冷启动期：用户刚开口，不要反引用系统里的画像细节，不要调用任何工具。）\n"
+            f"{directive}"
         )
 
     if human_count <= 4:
-        raw_stage = state.get("user_stage", "unknown")
-        stage = _OLD_TO_NEW_STAGE.get(raw_stage, raw_stage)
-        lines = [f"- 当前阶段：{_STAGE_LABELS.get(stage, stage)}"]
+        lines = [f"- 当前阶段：{label}"]
+        if rec_line:
+            lines.append(rec_line.strip())
         goal = state.get("career_goal")
         if goal:
             lines.append(f"- 目标岗位：{goal.get('label', '')}")
         lines.append("（深度画像请通过 get_user_profile 等工具按需调用）")
+        if directive:
+            lines.append(directive)
         return "\n".join(lines)
 
     return _build_full_context(state, for_triage)
@@ -185,8 +236,7 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
                         pref_parts.append(label_map[val])
                 if pref_parts:
                     parts.append(f"- 就业意愿: {' / '.join(pref_parts)}")
-                    import json as _json
-                    parts.append(f"- 意愿数据(JSON): {_json.dumps(prefs, ensure_ascii=False)}")
+                    parts.append(f"- 意愿数据(JSON): {json.dumps(prefs, ensure_ascii=False)}")
             else:
                 # No preferences filled — remind coach to prompt user at right moment
                 parts.append("- 就业意愿: 未填写（如对话中合适，引导用户去画像页填写就业意愿问卷）")
@@ -228,9 +278,10 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
     else:
         parts.append("- 目标岗位: 未设定（建议去画像页查看推荐方向）")
 
-    raw_stage = state.get("user_stage", "unknown")
-    stage = _OLD_TO_NEW_STAGE.get(raw_stage, raw_stage)
-    parts.append(f"- 当前阶段: {_STAGE_LABELS.get(stage, stage)}")
+    _stage, label, directive = _normalize_stage(state)
+    parts.append(f"- 当前阶段: {label}")
+    if directive:
+        parts.append(directive)
 
     if state.get("current_node_id"):
         parts.append(f"- 图谱定位: {state['current_node_id']}")
@@ -303,8 +354,7 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
     if user_id and not for_triage:
         last_user_msg = ""
         for msg in reversed(state.get("messages", [])):
-            from langchain_core.messages import HumanMessage as _HM
-            if isinstance(msg, _HM):
+            if isinstance(msg, HumanMessage):
                 last_user_msg = str(msg.content or "")[:200]
                 break
 
@@ -551,8 +601,6 @@ def _make_agent_node(agent, agent_name: str):
     ToolMessages from routing) so the sub-agent only sees the clean
     conversation: user messages + actual AI responses.
     """
-    from langchain_core.messages import HumanMessage as _HM
-
     def node(state: CareerState) -> dict:
         context = build_context_summary(state, agent_name=agent_name)
         recent = state["messages"][-20:]
@@ -560,7 +608,7 @@ def _make_agent_node(agent, agent_name: str):
         # Clean: only pass user messages and AI messages with real content
         clean = []
         for m in recent:
-            if isinstance(m, _HM):
+            if isinstance(m, HumanMessage):
                 clean.append(m)
             elif isinstance(m, AIMessage) and m.content and not getattr(m, "tool_calls", None):
                 clean.append(m)
@@ -573,7 +621,7 @@ def _make_agent_node(agent, agent_name: str):
             last_human = None
             last_ai_before_human = None
             for i in range(len(clean) - 1, -1, -1):
-                if isinstance(clean[i], _HM) and last_human is None:
+                if isinstance(clean[i], HumanMessage) and last_human is None:
                     last_human = clean[i].content
                 elif isinstance(clean[i], AIMessage) and last_human is not None:
                     last_ai_before_human = clean[i].content

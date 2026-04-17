@@ -147,6 +147,14 @@ interface RoleDetail {
   entry_barrier?: 'low' | 'medium' | 'high'
   career_ceiling?: string
   distinguishing_features?: string[]
+  contextual_narrative?: {
+    what_you_actually_do: string
+    what_drains_you: string
+    three_year_outlook: string
+    who_fits: string
+    ai_impact_today: string
+    common_entry_path: string
+  }
   // Market signal (from ETL precomputed signals)
   market_signal?: {
     demand_trend?: 'growing' | 'stable' | 'shrinking'
@@ -169,6 +177,15 @@ interface RoleDetail {
     proxy_family?: string
   }
 }
+
+const NARRATIVE_FIELDS = [
+  { key: 'what_you_actually_do', label: '你每天真正在做的事', bg: 'bg-blue-50/50', border: 'border-blue-100', text: 'text-blue-500' },
+  { key: 'what_drains_you',      label: '什么会耗尽你',       bg: 'bg-amber-50/50', border: 'border-amber-100', text: 'text-amber-500' },
+  { key: 'three_year_outlook',    label: '三年后的你',         bg: 'bg-emerald-50/50', border: 'border-emerald-100', text: 'text-emerald-500' },
+  { key: 'who_fits',              label: '适合什么样的人',     bg: 'bg-violet-50/50', border: 'border-violet-100', text: 'text-violet-500' },
+  { key: 'ai_impact_today',       label: 'AI 对这个方向的影响', bg: 'bg-rose-50/50', border: 'border-rose-100', text: 'text-rose-500' },
+  { key: 'common_entry_path',     label: '常见入行路径',       bg: 'bg-slate-50/50', border: 'border-slate-100', text: 'text-slate-500' },
+] as const
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
@@ -657,6 +674,23 @@ export default function RoleDetailPage() {
 
           {data.contextual_narrative && (
             <>
+              <div className="border-t border-slate-100" />
+              <div className="px-5 py-4">
+                <h3 className="text-[13px] font-bold text-slate-900 mb-4">这个方向真实的样子</h3>
+                <div className="space-y-3">
+                  {NARRATIVE_FIELDS.map(({ key, label, bg, border, text }) => {
+                    const content = (data.contextual_narrative as Record<string, string>)?.[key]
+                    if (!content) return null
+                    return (
+                      <div key={key} className={`rounded-xl ${bg} border ${border} px-4 py-3`}>
+                        <p className={`text-[10px] ${text} font-bold uppercase tracking-wider mb-1.5`}>{label}</p>
+                        <p className="text-[12px] text-slate-600 leading-[1.7]">{content}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div className="border-t border-slate-100" />
               <div className="text-center py-2">
                 <Link
