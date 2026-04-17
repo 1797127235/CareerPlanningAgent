@@ -732,8 +732,7 @@ def _build_differentiation_advice(
                 )
         top_missing_block = "\n".join(top_missing_lines) or "（暂无明确缺口）"
 
-        still_claimed = summary.get("skill_deltas", {}).get("still_claimed_only", []) or []
-        still_claimed_line = ", ".join(still_claimed[:8]) or "（无）"
+        still_claimed_line = "（已移除——请根据 summary_json 中的 profile_core.projects 自行判断技能是否有实践证据）"
 
         pain_points = (
             summary.get("signals", {}).get("interview", {}).get("pain_points", []) or []

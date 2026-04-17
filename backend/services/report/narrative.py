@@ -53,15 +53,13 @@ def _generate_narrative(
         milestones_line = _format_milestones(summary.get("milestones", [])[:5])
         practiced = ", ".join(summary.get("skill_deltas", {}).get("practiced_in_window", []) or []) or "（暂无）"
         gained = ", ".join(summary.get("skill_deltas", {}).get("gained_since_last_report", []) or []) or "（暂无）"
-        claimed = ", ".join(summary.get("skill_deltas", {}).get("still_claimed_only", [])[:5] or []) or "（暂无）"
-
         text = invoke_skill(
             "narrative",
             target_label=target_label,
             milestones_line=milestones_line,
             practiced_in_window=practiced,
             gained_since_last_report=gained,
-            still_claimed_only=claimed,
+            still_claimed_only="（已移除——请根据用户项目描述自行判断技能是否有实践证据）",
             market_line=market_line,
             education_line=education_line,
         )
