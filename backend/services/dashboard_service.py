@@ -277,7 +277,10 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
     Returns:
         { days: [ { date: "2026-04-08", count: 3, activities: ["项目", "JD诊断"] } ], streak: N }
     """
-    from backend.db_models import JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile
+    from backend.db_models import (
+        JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord,
+        Profile, ChatSession, CareerGoal,
+    )
 
     cutoff = datetime.now(timezone.utc) - timedelta(weeks=weeks)
 
@@ -314,8 +317,8 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
         if dt:
             _add(dt.isoformat(), "项目")
 
-    # Job applications / pursuits
     if user_id:
+        # Job applications / pursuits
         apps = db.query(JobApplication.created_at).filter(
             JobApplication.user_id == user_id,
             JobApplication.created_at >= cutoff,
@@ -332,6 +335,33 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
         for (dt,) in interviews:
             if dt:
                 _add(dt.isoformat(), "面试")
+
+        # Chat sessions (coach conversations — deduplicated per day)
+        chats = db.query(ChatSession.created_at).filter(
+            ChatSession.user_id == user_id,
+            ChatSession.created_at >= cutoff,
+        ).all()
+        for (dt,) in chats:
+            if dt:
+                _add(dt.isoformat(), "教练对话")
+
+        # Profile updates (resume upload / manual edit)
+        profile_updated = db.query(Profile.updated_at).filter(
+            Profile.user_id == user_id,
+            Profile.updated_at >= cutoff,
+        ).all()
+        for (dt,) in profile_updated:
+            if dt:
+                _add(dt.isoformat(), "画像更新")
+
+        # Career goal setting
+        goals = db.query(CareerGoal.set_at).filter(
+            CareerGoal.user_id == user_id,
+            CareerGoal.set_at >= cutoff,
+        ).all()
+        for (dt,) in goals:
+            if dt:
+                _add(dt.isoformat(), "设定目标")
 
     # Build sorted list
     days = []

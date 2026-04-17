@@ -219,3 +219,89 @@ def get_recommended_roles() -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+@tool
+def save_profile_from_chat(profile_data: str) -> str:
+    """将教练对话中收集的用户信息保存为画像。
+
+    参数:
+        profile_data: JSON 字符串，包含教练从对话中收集的画像数据。
+                      格式：{"education": {"degree": "本科", "major": "计算机科学", "school": "XX大学"},
+                             "skills": [{"name": "Python", "level": "familiar"}, ...],
+                             "projects": ["项目描述1", ...],
+                             "job_target": "后端开发",
+                             "experience_years": 0,
+                             "knowledge_areas": ["数据结构", ...],
+                             "preferences": {"work_style": "tech", ...}}
+
+    何时调用：
+    - 教练通过问答收集完用户信息后，一次性保存
+    - 用户确认信息无误后再调用
+
+    何时不调用：
+    - 还在提问过程中（信息不完整）
+    - 用户没有确认
+    """
+    user_id = _ctx_user_id.get()
+    if not user_id:
+        return "用户未登录，无法保存画像"
+
+    try:
+        import json as _json
+        data = _json.loads(profile_data)
+    except (json.JSONDecodeError, TypeError):
+        return "数据格式错误，请检查 JSON 格式"
+
+    # 标记来源
+    data["source"] = "chat_guided"
+
+    try:
+        from backend.db import SessionLocal
+        from backend.db_models import Profile
+        from backend.routers.profiles import _get_or_create_profile
+        from backend.services.profile_service import ProfileService
+        from backend.routers._profiles_graph import _auto_locate_on_graph
+
+        db = SessionLocal()
+        try:
+            profile = _get_or_create_profile(user_id, db)
+
+            # Merge with existing profile (don't overwrite resume data if any)
+            existing = _json.loads(profile.profile_json or "{}")
+            if existing.get("skills"):
+                # 已有简历数据，合并模式
+                from backend.routers._profiles_helpers import _merge_profiles
+                merged = _merge_profiles(existing, data)
+            else:
+                merged = data
+
+            profile.profile_json = _json.dumps(merged, ensure_ascii=False)
+            quality_data = ProfileService.compute_quality(merged)
+            profile.quality_json = _json.dumps(quality_data, ensure_ascii=False)
+            db.commit()
+            db.refresh(profile)
+
+            # 后台跑图谱定位 + 推荐（和简历上传后完全一样）
+            import threading
+            _pid, _uid = profile.id, user_id
+            _final = _json.loads(profile.profile_json)
+
+            def _bg():
+                _bg_db = SessionLocal()
+                try:
+                    _auto_locate_on_graph(_pid, _uid, _final, _bg_db)
+                except Exception:
+                    pass
+                finally:
+                    _bg_db.close()
+
+            threading.Thread(target=_bg, daemon=True).start()
+
+            skill_count = len(merged.get("skills", []))
+            return f"画像已保存！识别到 {skill_count} 项技能。系统正在后台生成推荐方向，刷新画像页即可查看。"
+        finally:
+            db.close()
+    except Exception as e:
+        logger.warning("save_profile_from_chat failed for user=%s: %s", user_id, e)
+        return f"保存画像失败：{e}"

@@ -37,9 +37,11 @@ const GAP = 4
 export function ActivityHeatmap({ days, weeks = 16 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [cellSize, setCellSize] = useState(0)
+  const tooltipRef = useRef<HTMLDivElement>(null)
   const [tooltip, setTooltip] = useState<{
-    x: number; y: number; date: string; count: number; activities: string[]
+    date: string; count: number; activities: string[]
   } | null>(null)
+  const [tooltipPos, setTooltipPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 })
 
   // Build full grid: weeks × 7 days
   const grid = useMemo(() => {
@@ -148,12 +150,11 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
                     onMouseEnter={(e) => {
                       if (isFuture) return
                       const rect = e.currentTarget.getBoundingClientRect()
-                      setTooltip({
-                        x: rect.left + rect.width / 2,
-                        y: rect.top - 8,
-                        date: day.date,
-                        count: day.count,
-                        activities: day.activities,
+                      const containerRect = containerRef.current?.getBoundingClientRect()
+                      setTooltip({ date: day.date, count: day.count, activities: day.activities })
+                      setTooltipPos({
+                        left: rect.left + rect.width / 2 - (containerRect?.left ?? 0),
+                        top: rect.top - (containerRect?.top ?? 0) - 10,
                       })
                     }}
                     onMouseLeave={() => setTooltip(null)}
@@ -174,25 +175,26 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
         <span className="text-[11px] text-slate-400">多</span>
       </div>
 
-      {/* Tooltip */}
+      {/* Tooltip — GitHub style */}
       {tooltip && (
         <div
-          className="fixed z-[100] bg-slate-800 text-white text-[11px] rounded-lg px-3 py-2 shadow-lg pointer-events-none"
+          ref={tooltipRef}
+          className="absolute z-[100] pointer-events-none"
           style={{
-            left: tooltip.x,
-            top: tooltip.y,
+            left: tooltipPos.left,
+            top: tooltipPos.top,
             transform: 'translate(-50%, -100%)',
           }}
         >
-          <p className="font-medium">{formatTooltipDate(tooltip.date)}</p>
-          {tooltip.count > 0 ? (
-            <>
-              <p className="text-slate-300">{tooltip.count} 项活动</p>
-              <p className="text-slate-400">{tooltip.activities.join(' · ')}</p>
-            </>
-          ) : (
-            <p className="text-slate-400">无活动</p>
-          )}
+          <div className="bg-slate-800 text-white text-[12px] rounded-md px-3 py-1.5 shadow-lg whitespace-nowrap">
+            {tooltip.count > 0
+              ? `${tooltip.count} 项活动 于 ${formatTooltipDate(tooltip.date)}`
+              : `${formatTooltipDate(tooltip.date)} 无活动`
+            }
+          </div>
+          <div className="flex justify-center -mt-[1px]">
+            <div className="w-2 h-2 bg-slate-800 rotate-45" />
+          </div>
         </div>
       )}
     </div>

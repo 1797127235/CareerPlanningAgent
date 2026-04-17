@@ -717,6 +717,7 @@ def _build_greeting(user: User, db: Session) -> dict:
         "chips": chips,
         "market_card": market_card,
         "processing": is_processing,
+        "has_profile": stage != "no_profile",
         "context": {
             "profile_name": profile_name,
             "skill_count": skill_count,

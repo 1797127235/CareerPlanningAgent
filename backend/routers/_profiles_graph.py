@@ -489,10 +489,17 @@ def _filter_recommendations(
                 return True
         return False
 
+    graph_nodes = _get_graph_nodes()
+
     filtered: list[dict] = []
     for rec in recs:
         role_id = rec.get("role_id", "")
         affinity = rec.get("affinity_pct", 0)
+
+        # ── Layer 0: Graph existence gate ─────────────────────────────────────
+        if role_id not in graph_nodes:
+            logger.warning("LLM hallucinated role_id=%s, skipping", role_id)
+            continue
 
         # ── Layer 1: Primary skill gate ────────────────────────────────────────
         req = _ROLE_PRIMARY_REQUIREMENTS.get(role_id)
@@ -586,7 +593,10 @@ def _auto_locate_on_graph(
             enriched = []
             for r in recs_raw[:6]:
                 rid = r.get("role_id", "")
-                gn = graph_nodes.get(rid, {})
+                if rid not in graph_nodes:
+                    logger.warning("LLM hallucinated role_id=%s in auto_locate, skipping", rid)
+                    continue
+                gn = graph_nodes[rid]
                 enriched.append({
                     "role_id": rid,
                     "label": r.get("label", gn.get("label", rid)),

@@ -1,7 +1,7 @@
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import { motion } from 'framer-motion'
-import { ArrowRight, Upload, PenLine, MapPin, Target, User, Flame, BookOpen, FileSearch, Zap } from 'lucide-react'
+import { ArrowRight, Upload, PenLine, MapPin, Target, User, Flame, BookOpen, FileSearch, Zap, MessageSquare } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UploadProgress } from '@/components/profile'
 import { useGuidance } from '@/hooks/useGuidance'
@@ -10,10 +10,11 @@ import { useProfileData } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { useDashboardStats } from '@/hooks/useDashboard'
 import { useActivityHeatmap } from '@/hooks/useActivityHeatmap'
-import { useCurrentStage } from '@/hooks/useCareerStage'
+
 import { SignatureHero } from '@/components/SignatureHero'
 import { ActivityHeatmap } from '@/components/ActivityHeatmap'
 import { rawFetch } from '@/api/client'
+import { sendToCoach } from '@/hooks/useCoachTrigger'
 
 const ease = [0.23, 1, 0.32, 1] as const
 
@@ -39,7 +40,6 @@ export default function HomePage() {
   const { data: heatmapData } = useActivityHeatmap(52)
   const { fileInputRef, onFileSelected, uploading, uploadStep, uploadError } = useResumeUpload(loadProfile)
 
-  const stage = useCurrentStage()
   const hasProfile = (profile?.profile?.skills?.length ?? 0) > 0
     || (profile?.profile?.knowledge_areas?.length ?? 0) > 0
     || (profile?.profile?.projects?.length ?? 0) > 0
@@ -132,7 +132,7 @@ export default function HomePage() {
               transition={{ delay: 0.22, duration: 0.45, ease }}
               className="text-[16px] text-slate-500 leading-relaxed mb-8"
             >
-              上传简历，告诉我你是谁——<br />
+              上传简历或和教练聊聊，告诉我你是谁——<br />
               我来帮你找方向、准备面试、分析差距。
             </motion.p>
 
@@ -143,6 +143,7 @@ export default function HomePage() {
               transition={{ delay: 0.58, duration: 0.35, ease }}
               className="flex items-center gap-4"
             >
+              {/* 主 CTA：上传简历 */}
               <label
                 htmlFor="home-file-input"
                 className="flex items-center gap-2 px-7 py-3.5 rounded-xl bg-[var(--blue)] text-white text-[15px] font-semibold hover:brightness-110 transition-all cursor-pointer shadow-lg shadow-blue-500/25"
@@ -150,6 +151,15 @@ export default function HomePage() {
                 <Upload className="w-4 h-4" />
                 上传简历
               </label>
+              {/* 次 CTA：对话建档 */}
+              <button
+                onClick={() => sendToCoach('我没有简历，想通过对话建立画像')}
+                className="flex items-center gap-2 px-5 py-3.5 rounded-xl border border-[var(--blue)]/30 text-[var(--blue)] text-[14px] font-semibold hover:bg-[var(--blue)]/[0.06] transition-all cursor-pointer"
+              >
+                <MessageSquare className="w-4 h-4" />
+                对话建档
+              </button>
+              {/* 三级入口：手动填写 */}
               <button
                 onClick={() => navigate('/profile')}
                 className="flex items-center gap-2 px-4 py-3.5 text-slate-500 text-[14px] font-medium hover:text-slate-800 transition-colors cursor-pointer"
