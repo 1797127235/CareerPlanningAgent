@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Target, Brain, Upload, PenLine, RefreshCw, AlertTriangle, Check, ArrowUpRight
+  Target, Brain, Upload, PenLine, RefreshCw, AlertTriangle, Check, ArrowUpRight, Crosshair
 } from 'lucide-react'
 
 import { useAuth } from '@/hooks/useAuth'
@@ -151,47 +151,77 @@ export default function ProfilePage() {
 
   // 防止并发 fetch：profile 每 6s 轮询一次，上次 LLM 还没回又起一次会导致请求堆积
   const recsFetchInFlight = useRef(false)
+  const recsRefetchCount = useRef(0)
+  const recsRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // 清理推荐重试定时器
+  useEffect(() => {
+    return () => {
+      if (recsRetryTimer.current) {
+        clearTimeout(recsRetryTimer.current)
+        recsRetryTimer.current = null
+      }
+    }
+  }, [])
+
+  const doFetchRecs = useCallback(async (isRetry = false) => {
+    if (recsFetchInFlight.current) return
+    recsFetchInFlight.current = true
+    setRecsLoading(true)
+    if (!isRetry) setRecsFetchFailed(false)
+    try {
+      const res = await fetchRecommendations(6)
+      const list = res.recommendations || []
+      setRecs(list)
+      if (list.length === 0) {
+        // 空数组可能是后端还在生成，自动重试最多 3 次（18s）
+        if (recsRefetchCount.current < 3) {
+          recsRefetchCount.current += 1
+          recsRetryTimer.current = setTimeout(() => {
+            doFetchRecs(true)
+          }, 6000)
+        } else {
+          setRecsFetchFailed(true)
+        }
+      } else {
+        recsRefetchCount.current = 0
+      }
+    } catch (err) {
+      console.error(err)
+      setRecsFetchFailed(true)
+    } finally {
+      setRecsLoading(false)
+      recsFetchInFlight.current = false
+    }
+  }, [])
 
   useEffect(() => {
-    if (hasProfile && !editing && !hasGoal) {
-      if (recsFetchInFlight.current) return  // 已有请求在飞，等它回
-      recsFetchInFlight.current = true
-      setRecsLoading(true)
-      setRecsFetchFailed(false)
-      fetchRecommendations(6)
-        .then(res => {
-          const list = res.recommendations || []
-          setRecs(list)
-          if (list.length === 0) setRecsFetchFailed(true)
-        })
-        .catch((err) => {
-          console.error(err)
-          setRecsFetchFailed(true)
-        })
-        .finally(() => {
-          setRecsLoading(false)
-          recsFetchInFlight.current = false
-        })
+    if (hasProfile && !editing && !hasGoal && recs.length === 0) {
+      recsRefetchCount.current = 0
+      doFetchRecs()
     } else if (hasGoal) {
       setRecsLoading(false)
       setRecsFetchFailed(false)
+      recsRefetchCount.current = 0
+      if (recsRetryTimer.current) {
+        clearTimeout(recsRetryTimer.current)
+        recsRetryTimer.current = null
+      }
     }
-  }, [hasProfile, editing, hasGoal, profileUpdatedAt])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasProfile, editing, hasGoal])
+
+  // profile 更新时若已有推荐/已失败/已在重试中则不重刷；若仍为空则再试一次
+  useEffect(() => {
+    if (hasProfile && !editing && !hasGoal && recs.length === 0 && !recsFetchFailed && !recsRetryTimer.current) {
+      doFetchRecs()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileUpdatedAt])
 
   const retryFetchRecs = () => {
-    setRecsLoading(true)
-    setRecsFetchFailed(false)
-    fetchRecommendations(6)
-      .then(res => {
-        const list = res.recommendations || []
-        setRecs(list)
-        if (list.length === 0) setRecsFetchFailed(true)
-      })
-      .catch((err) => {
-        console.error(err)
-        setRecsFetchFailed(true)
-      })
-      .finally(() => setRecsLoading(false))
+    recsRefetchCount.current = 0
+    doFetchRecs()
   }
 
   // Reset name prompt guard when profile is deleted/cleared
@@ -308,11 +338,21 @@ export default function ProfilePage() {
 
   // Right Panel Data
   const rawProjects = prof.projects ?? []
-  const projects = rawProjects.map((p: unknown) =>
-    typeof p === 'string' ? p : typeof p === 'object' && p !== null
-      ? ((p as Record<string, unknown>).name || (p as Record<string, unknown>).title || JSON.stringify(p)) as string
-      : String(p)
-  )
+  const projects = rawProjects.map((p: unknown) => {
+    if (typeof p === 'string') return p
+    if (typeof p === 'object' && p !== null) {
+      const obj = p as Record<string, unknown>
+      const name = obj.project_name || obj.name || obj.title || ''
+      const desc = obj.project_description || obj.description || obj.details || obj.desc || ''
+      if (typeof name === 'string' && name.trim()) {
+        return typeof desc === 'string' && desc.trim() && desc.trim() !== name.trim()
+          ? `${name.trim()} — ${desc.trim()}`
+          : name.trim()
+      }
+      if (typeof desc === 'string' && desc.trim()) return desc.trim()
+    }
+    return String(p)
+  })
   const education = prof.education ?? {}
   const experienceYears = prof.experience_years ?? 0
   const knowledgeAreas = prof.knowledge_areas ?? []
@@ -333,7 +373,17 @@ export default function ProfilePage() {
       tier: obj.tier ? String(obj.tier) : undefined,
     }
   })
-  const certificates = (prof.certificates ?? []).map((c: unknown) => typeof c === 'string' ? c : String(c))
+  const certificates = (prof.certificates ?? [])
+    .map((c: unknown) => {
+      if (typeof c === 'string') return c
+      if (c && typeof c === 'object') {
+        const obj = c as Record<string, unknown>
+        const name = obj.certificate_name || obj.name || obj.title || obj.cert_name
+        if (typeof name === 'string' && name.trim()) return name.trim()
+      }
+      return ''
+    })
+    .filter((c): c is string => c.length > 0)
 
   const sjtDims = ['communication', 'learning', 'collaboration', 'innovation', 'resilience'] as const
   const DIM_LABEL: Record<string, string> = {
@@ -512,11 +562,40 @@ export default function ProfilePage() {
               projects: projects,
               internships: internships,
               certificates: certificates,
-              awards: (prof.awards as string[]) || [],
+              awards: (prof.awards ?? [])
+                .map((a: unknown) => {
+                  if (typeof a === 'string') return a
+                  if (a && typeof a === 'object') {
+                    const obj = a as Record<string, unknown>
+                    const name = obj.award_name || obj.name || obj.title
+                    if (typeof name === 'string' && name.trim()) return name.trim()
+                  }
+                  return ''
+                })
+                .filter((a): a is string => a.length > 0),
             }}
           />
         ) : (
           <div className="space-y-8 pb-12">
+
+            {/* JD 诊断常驻入口 */}
+            <div className="glass-static p-5 flex items-center justify-between hover:border-slate-300/60 transition-colors duration-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                  <Crosshair className="w-5 h-5 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-[14px] font-semibold text-slate-700">诊断目标岗位</p>
+                  <p className="text-[12px] text-slate-400">粘贴 JD，看自己与岗位的真实差距</p>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/jd-diagnosis')}
+                className="px-4 py-2 rounded-lg bg-[var(--blue)] text-white text-[12px] font-semibold hover:brightness-110 transition-all cursor-pointer"
+              >
+                去诊断
+              </button>
+            </div>
 
             {/* 区块 1：有目标 → 目标概览卡  |  无目标 → 推荐方向 */}
             {hasGoal ? (

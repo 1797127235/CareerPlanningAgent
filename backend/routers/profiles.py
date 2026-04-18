@@ -28,6 +28,7 @@ from backend.routers._profiles_parsing import (
     _ocr_pdf_with_vl,
     _lazy_fix_misclassified_internships,
 )
+from backend.routers._profiles_resumesdk import parse_with_resumesdk
 from backend.routers._profiles_sjt import router as sjt_router
 from backend.services.profile import ProfileService
 from backend.utils import ok
@@ -177,6 +178,8 @@ async def parse_resume(
     if content_type and content_type not in _ALLOWED_MIMES and content_type != "application/octet-stream":
         raise HTTPException(400, "文件类型不符，请上传简历文档")
 
+    # ── Extract text for self-hosted fallback ──────────────────────────────
+    raw_text = ""
     if filename.lower().endswith(".pdf"):
         try:
             import pdfplumber
@@ -185,22 +188,46 @@ async def parse_resume(
                 raw_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
         except ImportError:
             raw_text = content.decode("utf-8", errors="ignore")
+    elif filename.lower().endswith(".docx"):
+        try:
+            import docx
+            import io
+            doc = docx.Document(io.BytesIO(content))
+            raw_text = "\n".join(p.text for p in doc.paragraphs if p.text)
+        except ImportError:
+            raw_text = content.decode("utf-8", errors="ignore")
+    elif filename.lower().endswith(".doc"):
+        # .doc is a binary format; third-party APIs handle the raw bytes.
+        # Skip text extraction so the LLM fallback gets a clean signal.
+        raw_text = ""
     else:
         raw_text = content.decode("utf-8", errors="ignore")
 
-    # Scanned PDF: use multimodal VL to extract profile directly (image → structured data)
-    if not raw_text.strip() and filename.lower().endswith(".pdf"):
-        profile_data = _extract_profile_multimodal_vl(content)
-        if profile_data and profile_data.get("skills"):
-            quality_data = ProfileService.compute_quality(profile_data)
-            return ok({"profile": profile_data, "quality": quality_data})
-        # Fallback: OCR text → LLM
+    is_scanned_pdf = not raw_text.strip() and filename.lower().endswith(".pdf")
+
+    # ── Strategy ──────────────────────────────────────────────────────────
+    # 文字版PDF: ResumeSDK → 自研LLM (fallback)
+    # 扫描版PDF: 直接 OCR → 自研LLM (第三方API对扫描版效果差且耗时长，跳过)
+    profile_data: dict | None = None
+
+    if is_scanned_pdf:
+        logger.info("Scanned PDF detected, using OCR+LLM pipeline")
         raw_text = _ocr_pdf_with_vl(content)
+        if not raw_text.strip():
+            raise HTTPException(400, "无法提取简历文本，请使用文字版 PDF 或直接粘贴简历文本")
+        profile_data = _extract_profile_with_llm(raw_text)
+    else:
+        # Text-based PDF / Word / TXT
+        # 1. Try ResumeSDK (commercial parser)
+        profile_data = parse_with_resumesdk(content, filename)
 
-    if not raw_text.strip():
-        raise HTTPException(400, "无法提取简历文本，请使用文字版 PDF 或直接粘贴简历文本")
+        # 2. Fallback: self-hosted LLM parsing
+        if not profile_data:
+            logger.info("ResumeSDK unavailable/failed, falling back to self-hosted parser")
+            if not raw_text.strip():
+                raise HTTPException(400, "无法提取简历文本，请使用文字版 PDF 或直接粘贴简历文本")
+            profile_data = _extract_profile_with_llm(raw_text)
 
-    profile_data = _extract_profile_with_llm(raw_text)
     quality_data = ProfileService.compute_quality(profile_data)
     return ok({"profile": profile_data, "quality": quality_data})
 
