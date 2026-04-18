@@ -41,19 +41,6 @@ def diagnose(
     auto_title = result.pop("jd_title", None)
     title = req.jd_title or auto_title or "JD 诊断"
 
-    # Persist diagnosis
-    row = JDDiagnosis(
-        user_id=user.id,
-        profile_id=profile_id,
-        jd_text=req.jd_text,
-        jd_title=title,
-        match_score=result.get("match_score", 0),
-        result_json=json.dumps(result, ensure_ascii=False),
-    )
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-
     # Attach graph context: map JD to graph node + escape routes
     graph_context = None
     extracted = result.get("extracted_skills", [])
@@ -83,6 +70,21 @@ def diagnose(
                 }
         except Exception:
             pass  # graph context is best-effort
+
+    # Persist diagnosis (include graph_context in result_json)
+    if graph_context:
+        result["graph_context"] = graph_context
+    row = JDDiagnosis(
+        user_id=user.id,
+        profile_id=profile_id,
+        jd_text=req.jd_text,
+        jd_title=title,
+        match_score=result.get("match_score", 0),
+        result_json=json.dumps(result, ensure_ascii=False),
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
 
     return {
         "id": row.id,
@@ -125,6 +127,7 @@ def list_diagnoses(
             item["gap_skills"] = detail.get("gap_skills", [])
             item["extracted_skills"] = detail.get("extracted_skills", [])
             item["resume_tips"] = detail.get("resume_tips", [])
+            item["graph_context"] = detail.get("graph_context")
         results.append(item)
     return results
 
@@ -135,7 +138,7 @@ def get_diagnosis(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get a single JD diagnosis record."""
+    """Get a single JD diagnosis record with full details."""
     row = (
         db.query(JDDiagnosis)
         .filter(JDDiagnosis.id == diagnosis_id, JDDiagnosis.user_id == user.id)
@@ -143,12 +146,29 @@ def get_diagnosis(
     )
     if not row:
         raise HTTPException(404, "记录不存在")
-    return {
+
+    result = {
         "id": row.id,
         "jd_title": row.jd_title,
+        "jd_text": row.jd_text,
         "match_score": row.match_score,
         "created_at": str(row.created_at),
     }
+
+    # Parse complete diagnosis result from result_json
+    if row.result_json:
+        try:
+            detail = json.loads(row.result_json)
+            result["dimensions"] = detail.get("dimensions", {})
+            result["matched_skills"] = detail.get("matched_skills", [])
+            result["gap_skills"] = detail.get("gap_skills", [])
+            result["extracted_skills"] = detail.get("extracted_skills", [])
+            result["resume_tips"] = detail.get("resume_tips", [])
+            result["graph_context"] = detail.get("graph_context")
+        except Exception:
+            pass
+
+    return result
 
 
 class RenameRequest(BaseModel):
