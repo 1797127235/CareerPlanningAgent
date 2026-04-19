@@ -797,3 +797,20 @@ class GrowthEntry(Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+
+class InterviewQuestionBank(Base):
+    """预生成面试题库 — 各方向高质量题目缓存"""
+
+    __tablename__ = "interview_question_bank"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    skill_id: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    difficulty: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    focus_area: Mapped[str] = mapped_column(String(200), nullable=False)
+    follow_ups: Mapped[str] = mapped_column(Text, default="[]")
+    topic_summary: Mapped[str] = mapped_column(String(200), nullable=False, index=True)
+    generated_by: Mapped[str] = mapped_column(String(20), default="llm")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

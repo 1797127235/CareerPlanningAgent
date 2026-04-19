@@ -49,7 +49,7 @@ def init_db() -> None:
         ActionPlanV2, PlanWeekProgress,
         ChatSession, ChatMessage,
         JobApplication, InterviewDebrief,
-        JobNodeIntro,
+        JobNodeIntro, InterviewQuestionBank,
     )
     from backend.market_signal_model import MarketSignal  # noqa: F401
     from backend.city_market_signal_model import CityMarketSignal  # noqa: F401

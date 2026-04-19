@@ -39,6 +39,7 @@ def _is_aliyun_market() -> bool:
 
 def _call_resumesdk(file_content: bytes, filename: str) -> dict | None:
     """Call ResumeSDK API and return raw result dict."""
+    logger.info("ResumeSDK call start: enabled=%s has_appcode=%s base_url=%s", RESUMESDK_ENABLED, bool(RESUMESDK_APPCODE), RESUMESDK_BASE_URL)
     if not RESUMESDK_ENABLED:
         logger.info("ResumeSDK disabled via config")
         return None
@@ -56,30 +57,35 @@ def _call_resumesdk(file_content: bytes, filename: str) -> dict | None:
             return None
         headers = {
             "Authorization": f"APPCODE {RESUMESDK_APPCODE}",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Content-Type": "application/json; charset=UTF-8",
         }
         payload = {
             "file_name": filename,
             "file_cont": b64_cont,
-            "need_avatar": "0",
+            "need_avatar": 0,
+            "ocr_type": 1,
         }
+        logger.info("ResumeSDK request: JSON body, file_name=%s file_cont_len=%d", filename, len(b64_cont))
         try:
             resp = requests.post(
                 RESUMESDK_BASE_URL,
                 headers=headers,
-                data=payload,
+                json=payload,
                 timeout=_TIMEOUT,
             )
+            logger.info("ResumeSDK (Aliyun) HTTP status=%s", resp.status_code)
             resp.raise_for_status()
             data = resp.json()
+            logger.info("ResumeSDK (Aliyun) response keys=%s", list(data.keys()))
         except requests.exceptions.Timeout:
             logger.warning("ResumeSDK (Aliyun) timed out after %ds", _TIMEOUT)
             return None
         except requests.exceptions.RequestException as e:
-            logger.warning("ResumeSDK (Aliyun) request failed: %s", e)
+            resp_text = getattr(e.response, 'text', '')[:500] if hasattr(e, 'response') and e.response else ''
+            logger.warning("ResumeSDK (Aliyun) request failed: %s | resp=%s", e, resp_text)
             return None
         except json.JSONDecodeError as e:
-            logger.warning("ResumeSDK (Aliyun) invalid JSON: %s", e)
+            logger.warning("ResumeSDK (Aliyun) invalid JSON: %s | raw=%s", e, resp.text[:200])
             return None
     else:
         # ── SaaS mode: JSON + uid/pwd ─────────────────────────────────────
@@ -116,11 +122,16 @@ def _call_resumesdk(file_content: bytes, filename: str) -> dict | None:
 
     status = data.get("status", {})
     code = status.get("code")
+    logger.info("ResumeSDK status code=%s message=%s", code, status.get("message"))
     if code != 200:
         logger.warning("ResumeSDK error: code=%s message=%s", code, status.get("message"))
         return None
 
-    return data.get("result")
+    result = data.get("result")
+    if result and isinstance(result, dict):
+        logger.info("ResumeSDK result keys=%s", list(result.keys()))
+    logger.info("ResumeSDK result type=%s has_skills=%s", type(result).__name__, bool(result and result.get("skills")))
+    return result
 
 
 # ── Field mapping: ResumeSDK → our profile format ───────────────────────────
@@ -659,6 +670,13 @@ def _map_resumesdk_to_profile(rs_result: dict) -> dict:
     """Convert ResumeSDK result to our internal profile format."""
     if not rs_result:
         return {}
+
+    # ── Debug: probe where skills are hiding ──
+    for k, v in rs_result.items():
+        if isinstance(v, list) and len(v) > 0:
+            logger.info("ResumeSDK probe: key=%s type=list len=%d sample=%s", k, len(v), str(v[0])[:100])
+        elif isinstance(v, dict) and v:
+            logger.info("ResumeSDK probe: key=%s type=dict keys=%s", k, list(v.keys()))
 
     basic = rs_result.get("basic_info", {}) or {}
     contact = rs_result.get("contact", {}) or {}

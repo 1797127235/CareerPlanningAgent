@@ -42,6 +42,9 @@ export default function SjtCtaCard({ onComplete }: Props) {
     setPhase('generating')
     try {
       const data = await generateSjt()
+      if (!data.questions || data.questions.length === 0) {
+        throw new Error('题目生成失败：返回数据为空')
+      }
       setSessionId(data.session_id)
       setQuestions(data.questions)
       setCurrentIdx(0)
@@ -124,6 +127,19 @@ export default function SjtCtaCard({ onComplete }: Props) {
 
   // ── Phase: Answering ──
   if (phase === 'answering') {
+    if (!questions || questions.length === 0 || !questions[currentIdx]) {
+      return (
+        <div className="glass p-6">
+          <p className="text-[14px] text-red-600">题目加载异常，请刷新页面重试。</p>
+          <button
+            onClick={() => setPhase('cta')}
+            className="mt-3 px-4 py-2 rounded-lg bg-blue-600 text-white text-[13px] font-medium cursor-pointer"
+          >
+            返回
+          </button>
+        </div>
+      )
+    }
     const q = questions[currentIdx]
     return (
       <div className="glass p-6">

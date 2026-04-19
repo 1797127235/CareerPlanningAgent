@@ -25,7 +25,9 @@ interface ManualProfileFormProps {
 const LEVEL_OPTIONS: { value: Skill['level']; label: string }[] = [
   { value: 'beginner', label: '入门' },
   { value: 'familiar', label: '熟悉' },
+  { value: 'intermediate', label: '熟练' },
   { value: 'proficient', label: '熟练' },
+  { value: 'advanced', label: '精通' },
   { value: 'expert', label: '精通' },
 ]
 

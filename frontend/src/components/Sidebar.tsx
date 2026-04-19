@@ -11,6 +11,7 @@ import {
   FolderKanban,
   CircleUser,
   Mic,
+  Crosshair,
 } from 'lucide-react'
 import type { User } from '@/types/user'
 import { useAuth } from '@/hooks/useAuth'
@@ -23,6 +24,7 @@ const navItems = [
   { key: 'home',         label: '首页',     icon: Home,          route: '/' },
   { key: 'profile',      label: '我的画像',  icon: CircleUser,    route: '/profile' },
   { key: 'graph',        label: '岗位图谱',  icon: Map,           route: '/graph' },
+  { key: 'jd-diagnosis', label: 'JD 诊断',   icon: Crosshair,     route: '/jd-diagnosis' },
   { key: 'growth-log',   label: '成长档案',  icon: FolderKanban,  route: '/growth-log' },
   { key: 'report',       label: '发展报告',  icon: FileText,      route: '/report' },
   { key: 'interview',    label: '模拟面试',  icon: Mic,           route: '/interview' },

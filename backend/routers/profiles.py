@@ -204,6 +204,7 @@ async def parse_resume(
         raw_text = content.decode("utf-8", errors="ignore")
 
     is_scanned_pdf = not raw_text.strip() and filename.lower().endswith(".pdf")
+    logger.info("Resume parser strategy: filename=%s is_scanned=%s raw_text_len=%d", filename, is_scanned_pdf, len(raw_text))
 
     # ── Strategy ──────────────────────────────────────────────────────────
     # 文字版PDF: ResumeSDK → 自研LLM (fallback)
@@ -219,6 +220,7 @@ async def parse_resume(
     else:
         # Text-based PDF / Word / TXT
         # 1. Try ResumeSDK (commercial parser)
+        logger.info("Trying ResumeSDK first for text-based file")
         profile_data = parse_with_resumesdk(content, filename)
 
         # 2. Fallback: self-hosted LLM parsing

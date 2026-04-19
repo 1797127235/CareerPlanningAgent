@@ -46,16 +46,20 @@ export default function GraphPage() {
 
   if (mapData && mapData.nodes.length > 0) {
     return (
-      <Coverflow
-        nodes={mapData.nodes}
-        edges={mapData.edges ?? []}
-        initialNodeId={initialNodeId}
-        profileId={profileId}
-        fromNodeId={fromNodeId}
-        targetNodeId={targetNodeId}
-        careerGoals={careerGoals}
-        onGoalSet={loadProfile}
-      />
+      <div className="h-full flex flex-col">
+        <div className="flex-1 min-h-0">
+          <Coverflow
+            nodes={mapData.nodes}
+            edges={mapData.edges ?? []}
+            initialNodeId={initialNodeId}
+            profileId={profileId}
+            fromNodeId={fromNodeId}
+            targetNodeId={targetNodeId}
+            careerGoals={careerGoals}
+            onGoalSet={loadProfile}
+          />
+        </div>
+      </div>
     )
   }
 

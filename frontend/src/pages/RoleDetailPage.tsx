@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ChevronLeft, Check, AlertTriangle, ArrowRight, Shield, Zap, X, Briefcase, BarChart2, ClipboardList } from 'lucide-react'
+import { ChevronLeft, Check, AlertTriangle, ArrowRight, Shield, Zap, X, Briefcase, BarChart2, ClipboardList, MessageSquare } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '@/hooks/useAuth'
 import { rawFetch } from '@/api/client'
@@ -716,6 +716,13 @@ export default function RoleDetailPage() {
                 className="w-full py-3 rounded-xl bg-[var(--blue)] text-white text-[14px] font-semibold cursor-pointer hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {confirming ? '设定中...' : `开始探索「${data.label}」方向`}
+              </button>
+              <button
+                onClick={() => navigate(`/interview?role=${encodeURIComponent(data.label)}`)}
+                className="w-full mt-2 py-2.5 rounded-xl border border-slate-200 bg-white/50 text-slate-600 text-[13px] font-medium cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 hover:text-blue-600 transition-all flex items-center justify-center gap-2"
+              >
+                <MessageSquare className="w-4 h-4" />
+                针对「{data.label}」模拟面试
               </button>
               <p className="text-[11px] text-slate-400 text-center mt-2">
                 系统将追踪你与此方向的差距，随时可以更换

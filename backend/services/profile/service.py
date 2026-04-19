@@ -53,14 +53,16 @@ class ProfileService:
             sjt_scores,
         )
 
-    def generate_sjt_questions(self, profile_data: dict) -> list[dict]:
+    @staticmethod
+    def generate_sjt_questions(profile_data: dict) -> list[dict]:
         return sjt.generate_sjt_questions(profile_data)
 
-    def score_sjt_v2(self, answers: list[dict], questions: list[dict]) -> dict:
+    @staticmethod
+    def score_sjt_v2(answers: list[dict], questions: list[dict]) -> dict:
         return sjt.score_sjt_v2(answers, questions)
 
+    @staticmethod
     def generate_sjt_advice(
-        self,
         dimensions: dict,
         answers: list[dict],
         questions: list[dict],

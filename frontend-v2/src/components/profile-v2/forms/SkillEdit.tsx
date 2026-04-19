@@ -4,7 +4,9 @@ import type { Skill } from '@/types/profile'
 
 const LEVEL_OPTIONS = [
   { value: 'expert', label: '熟练掌握' },
+  { value: 'advanced', label: '熟练掌握' },
   { value: 'proficient', label: '比较熟练' },
+  { value: 'intermediate', label: '比较熟练' },
   { value: 'familiar', label: '了解' },
   { value: 'beginner', label: '刚接触' },
 ] as const

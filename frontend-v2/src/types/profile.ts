@@ -2,7 +2,7 @@
 
 export interface Skill {
   name: string
-  level: 'expert' | 'proficient' | 'familiar' | 'beginner'
+  level: 'expert' | 'proficient' | 'familiar' | 'beginner' | 'advanced' | 'intermediate'
 }
 
 export interface CompetencyDimension {

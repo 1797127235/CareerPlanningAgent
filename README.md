@@ -10,10 +10,11 @@
 |------|---------|
 | 🎯 **能力画像** | 上传简历自动解析 → 提炼技能/项目/经历 → SJT 软技能评估 → 在职业图谱上定位你的坐标 |
 | 🗺️ **岗位图谱** | 45 个真实 IT 岗位节点 + 可视化探索 + 每个岗位含核心技能、典型实战项目、AI 影响、差异化建议 |
-| 🔍 **JD 诊断** | 粘贴任意真实 JD → 四维评分（基础/技能/素养/潜力）+ 技能缺口分析 + 可落地成长建议 |
+| 🔍 **JD 诊断** | 粘贴任意真实 JD → 四维评分（基础/技能/素养/潜力）+ 技能缺口分析 + **AI 影响分析（AEI 数据）** + **推荐转岗路线** + 可落地成长建议 |
 | 📈 **成长档案** | 项目追踪（记录你做过什么）+ 求职追踪（记录投递进度）+ 档案精修（学生自补空洞项目描述） |
 | 📊 **AI 发展报告** | 综合评价 · 技能覆盖 · 方向对齐（LLM 分析）· 补法路径地图 · 成长计划 · AI 影响参照 |
 | 💬 **AI 教练** | 右侧常驻对话面板 · 结合你当前画像/档案实时给建议 · 支持 JD 诊断、目标对齐、面试准备 |
+| 🎤 **AI 模拟面试** | **6 个方向 Skill 驱动出题**（C++/前端/Java/算法/产品/测试）· 画像联动（成长项目/gap 技能/报告结论注入 prompt）· 历史弱项自动复习 · **自定义题量/题型占比** · 空答案强制 0 分 · 多维度评估 |
 
 ---
 
@@ -34,6 +35,11 @@ DASHSCOPE_API_KEY=sk-your-dashscope-api-key-here
 ```
 
 ### 启动服务
+
+**一键启动（推荐）**
+```bash
+start.bat   # 按提示选 1 启动前端+后端
+```
 
 **手动启动（两个终端）**：
 
@@ -90,14 +96,19 @@ CareerPlanningAgent/
 │   │   ├── profiles.py         # 画像 CRUD + 简历解析
 │   │   ├── jd.py               # JD 诊断
 │   │   ├── report.py           # 职业发展报告生成
+│   │   ├── interview.py        # 模拟面试（方向 Skill 驱动 + 画像联动 + 题库缓存）
 │   │   ├── growth_log.py       # 成长档案
 │   │   ├── applications.py     # 求职追踪
 │   │   ├── chat.py             # AI 教练对话
 │   │   └── graph.py            # 岗位图谱 API
+│   ├── skills/                 # 后端 Skill 池（LLM prompt 模板）
+│   │   ├── mock-interview-gen/ #   · 模拟面试题目生成（fallback）
+│   │   ├── mock-interview-eval/#   · 模拟面试评估（多维度评分）
+│   │   └── ...                 #   · 报告生成、市场叙事等 Skill
 │   └── services/               # 业务逻辑层
-│       ├── report_service.py   # 报告生成核心
+│       ├── report/             # 报告生成 Pipeline（6 个 Skill 并发）
 │       ├── jd_service.py       # JD 诊断核心
-│       ├── profile_service.py  # 画像定位 + 评分
+│       ├── interview_skill_loader.py  # 面试 Skill 配置加载 + prompt 构建
 │       └── dashboard_service.py
 ├── agent/                      # LangGraph 多 Agent
 │   ├── supervisor.py           # 中央调度器 + agent-aware context builder
@@ -107,6 +118,16 @@ CareerPlanningAgent/
 │   └── skills/                 # Anthropic Skill 规范的 coach skill 池
 │       ├── loader.py           #   · Progressive Disclosure loader（catalog + load_full）
 │       └── coach-<scenario>/   #   · 每个场景独立目录 + SKILL.md（当前 13 个）
+├── backend/interview_skills/   # 面试方向 Skill 体系（按技术方向组织）
+│   ├── cpp-system-dev/         #   · C++ 系统开发方向
+│   ├── frontend-dev/           #   · 前端开发方向
+│   ├── java-backend/           #   · Java 后端方向
+│   ├── algorithm/              #   · 算法工程师方向
+│   ├── product-manager/        #   · 产品经理方向
+│   ├── test-development/       #   · 测试开发方向
+│   ├── _shared/
+│   │   └── references/         #       方向共享参考知识库（知识点清单）
+│   └── ...                     #   · 逐步扩充
 ├── frontend/                   # React 前端
 │   └── src/
 │       ├── pages/              # 路由级页面
@@ -118,10 +139,49 @@ CareerPlanningAgent/
 │   ├── market_signals.json     # 市场信号数据
 │   └── skill_fill_path_tags.json  # 技能补法路径分类
 └── docs/
+    ├── 项目概要介绍.md          # 大赛提交材料：项目概要
+    ├── 项目详细方案.md          # 大赛提交材料：详细方案
     ├── PROJECT_GUIDE.md        # 项目详细讲解 + 使用指南
-    ├── career-alignment-spec.md
     └── ...                     # 其他技术规范文档
 ```
+
+---
+
+## 🎤 AI 模拟面试 — 最新特性
+
+### 方向 Skill 驱动出题
+- **6 个方向**：C++ 系统开发、前端开发、Java 后端、算法、产品经理、测试开发
+- 每个方向 = SKILL.md（面试官人设）+ categories.yml（分类权重）+ 参考知识库（知识点清单）
+- LLM 基于知识库动态生成题目，不是死题库
+
+### 画像联动出题
+- 自动读取**成长项目**（ProjectRecord）→ 围绕真实项目深挖技术细节
+- 自动读取**目标方向 gap 技能**（CareerGoal）→ 优先考察薄弱项
+- 自动读取**发展报告结论**（Report）→ 出题深度与能力评估一致
+- 简历技能自动分级："熟练掌握"出深度题，"了解"出广度题
+
+### 历史弱项复习
+- 自动查询过往面试的 `skill_gaps`
+- 下次出题时至少覆盖 1-2 个历史薄弱技能
+
+### 自定义题量与题型
+- 题量可选：3 / 5 / 10 题
+- 题型占比可调：技术题 / 场景题 / 行为题
+- 按钮文案动态：`开始面试 · 10题 · 约30分钟`
+
+### 公平评分
+- 空答案/敷衍答案 → **强制 0 分**（后端硬约束，LLM 不能给同情分）
+- 有效长度检测：少于 15 字等效长度的答案直接判空
+
+### 反幻觉约束
+- 30+ 种占位符模式检测（XX/YY/ZZ/某项目/某个公司等）
+- 无简历项目名时禁止编造项目名
+- 过滤后的题目不足时自动 fallback 到通用题
+
+### 模块链路打通
+- **岗位图谱** → 点击"针对 XX 模拟面试"，自动预填岗位
+- **JD 诊断** → 诊断结果页一键跳转，带着 JD 原文出题
+- **成长档案** → 面试结果自动写入档案，形成闭环
 
 ---
 
@@ -159,8 +219,8 @@ Commit 规范：**Conventional Commits** 格式 `type(scope): subject`。
 - **[📑 文档索引 docs/INDEX.md](docs/INDEX.md)** · 所有文档入口（活跃 + 归档说明）
 - **[🧭 项目详细讲解 + 使用指南](docs/PROJECT_GUIDE.md)** · 设计理念、模块详解、使用流程、常见问题
 - **[🤖 Coach Skill 系统架构（Progressive Disclosure）](docs/coach-skill-progressive-disclosure.md)** · 当前 coach 13 skill + PD 架构权威文档
-- **[🔧 Backend 瘦身 Phase 1](docs/backend-slimdown-phase1-profile-service.md)** · profile_service 拆分任务（进行中）
+- **[🎤 模拟面试 P0 实现指南](docs/interview-p0-implementation-guide.md)** · 方向 Skill 配置 + 题库缓存 + 方向解析
+- **[🔗 成长档案数据接入](docs/interview-growth-data-integration.md)** · 成长项目/gap 技能/报告结论注入 prompt
+- **[🖥️ JD 诊断独立页面](docs/jd-diagnosis-page-implementation.md)** · 独立 JD 诊断页面实现方案
 
 历史文档见 [docs/archive/](docs/archive/)。
-
----

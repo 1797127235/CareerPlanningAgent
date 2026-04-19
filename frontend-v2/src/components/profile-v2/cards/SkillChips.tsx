@@ -4,21 +4,27 @@ import type { Skill } from '@/types/profile'
 
 const LEVEL_ORDER: Record<string, number> = {
   expert: 3,
+  advanced: 3,
   proficient: 2,
+  intermediate: 2,
   familiar: 1,
   beginner: 0,
 }
 
 const LEVEL_LABEL: Record<string, string> = {
   expert: '熟练掌握',
+  advanced: '熟练掌握',
   proficient: '比较熟练',
+  intermediate: '比较熟练',
   familiar: '了解',
   beginner: '刚接触',
 }
 
 const LEVEL_COLOR: Record<string, string> = {
   expert: 'bg-[var(--chestnut)] text-white border-[var(--chestnut)]',
+  advanced: 'bg-[var(--chestnut)] text-white border-[var(--chestnut)]',
   proficient: 'bg-emerald-700 text-white border-emerald-700',
+  intermediate: 'bg-emerald-700 text-white border-emerald-700',
   familiar: 'bg-[var(--ink-2)] text-white border-[var(--ink-2)]',
   beginner: 'bg-[var(--ink-3)] text-white border-[var(--ink-3)]',
 }

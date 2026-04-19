@@ -8,6 +8,7 @@ from collections import defaultdict
 from typing import Any
 
 from backend.services.profile.shared import FAMILY_KEYWORDS, _soft_skills_as_list
+from backend.services.graph_service import _get_skill_embedder
 
 
 def _collect_profile_text(profile: dict[str, Any]) -> list[tuple[str, float]]:
@@ -224,8 +225,20 @@ def _skill_names_from_profile(
 
 
 def _node_skill_set(node: dict[str, Any]) -> set[str]:
-    """Extract must_skills set from graph node (lowercased)."""
-    return {s.strip().lower() for s in node.get("must_skills", []) if s and s.strip()}
+    """Extract must_skills set from graph node (lowercased).
+
+    Splits composite skills like 'C++/Go' or 'TCP/IP' into atomic tokens
+    so that a user skill 'tcp' can hit both 'tcp/ip' and standalone 'tcp'.
+    """
+    raw = {s.strip().lower() for s in node.get("must_skills", []) if s and s.strip()}
+    expanded: set[str] = set()
+    for r in raw:
+        expanded.add(r)
+        # Split by common separators
+        for token in r.replace("/", " ").replace("&", " ").replace("、", " ").replace("，", " ").split():
+            if token:
+                expanded.add(token)
+    return expanded
 
 
 def _build_skill_idf(graph_nodes: dict[str, Any]) -> dict[str, float]:
@@ -252,10 +265,12 @@ def _weighted_skill_match(
     user_skills: set[str],
     node_skills: set[str],
     idf: dict[str, float],
+    semantic_hits: set[str] | None = None,
 ) -> float:
     """IDF-weighted skill match score.
 
-    Numerator: sum of IDF for skills in both user and node.
+    Numerator: sum of IDF for skills in both user and node
+               + sum of IDF * 0.7 for semantically matched skills.
     Denominator: sum of IDF for all node must_skills.
     Result range [0, 1].
     """
@@ -264,8 +279,13 @@ def _weighted_skill_match(
     total_w = sum(idf.get(s, 1.0) for s in node_skills)
     if total_w == 0:
         return 0.0
-    match_w = sum(idf.get(s, 1.0) for s in (user_skills & node_skills))
-    return match_w / total_w
+
+    exact_w = sum(idf.get(s, 1.0) for s in (user_skills & node_skills))
+    semantic_w = 0.0
+    if semantic_hits:
+        semantic_w = sum(idf.get(s, 1.0) * 0.7 for s in semantic_hits)
+
+    return (exact_w + semantic_w) / total_w
 
 
 def _extract_terms(text: str) -> set[str]:
@@ -415,12 +435,42 @@ def locate_on_graph(
             nid: n for nid, n in graph_nodes.items() if not n.get("is_milestone", False)
         }
 
+    # ── Semantic skill embedding pre-computation ──
+    embedder = _get_skill_embedder()
+    semantic_index: dict[str, set[str]] = {}  # nid -> semantically matched node skills
+    if embedder:
+        # Collect all graph skills and user skills
+        all_graph_skills: set[str] = set()
+        for node in candidate_nodes.values():
+            all_graph_skills.update(_node_skill_set(node))
+        all_user_skills = list(user_skills)
+
+        if all_graph_skills and all_user_skills:
+            embedder.ensure_embedded(list(all_graph_skills))
+            embedder.ensure_embedded(all_user_skills)
+
+            # Pre-compute semantic matches for each candidate node
+            SEMANTIC_THRESHOLD = 0.70
+            for nid, node in candidate_nodes.items():
+                node_skills = _node_skill_set(node)
+                exact = user_skills & node_skills
+                unmatched = node_skills - exact
+                sem_hits: set[str] = set()
+                for ns in unmatched:
+                    # find best semantic match among user skills
+                    best_sim = embedder.best_similarity(ns, all_user_skills)
+                    if best_sim >= SEMANTIC_THRESHOLD:
+                        sem_hits.add(ns)
+                if sem_hits:
+                    semantic_index[nid] = sem_hits
+
     # Stage 2: Multi-factor scoring
     scores: list[tuple[str, float]] = []
 
     for nid, node in candidate_nodes.items():
         node_skills = _node_skill_set(node)
-        skill_score = _weighted_skill_match(user_skills, node_skills, idf)
+        sem_hits = semantic_index.get(nid)
+        skill_score = _weighted_skill_match(user_skills, node_skills, idf, sem_hits)
         title_score = _title_bonus(user_title, node.get("label", ""))
         comp_score = _competency_match(profile, node)
         task_score = _task_match(profile, node)
@@ -474,4 +524,5 @@ def locate_on_graph(
         "score": round(best_score, 4),
         "family_confidence": round(best_family_conf, 4),
         "candidates": candidates,
+        "all_scores": scores,
     }

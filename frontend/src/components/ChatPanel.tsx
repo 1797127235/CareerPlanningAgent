@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Paperclip, ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, Mic, MicOff, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
+import { ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -9,7 +9,6 @@ import type { ChatMessage, CardData, JdCardData, MarketCardData } from '@/hooks/
 import { API_BASE } from '@/api/client'
 import { useSessions } from '@/hooks/useSessions'
 import { useBrowserTTS } from '@/hooks/useBrowserTTS'
-import { useBrowserSTT } from '@/hooks/useBrowserSTT'
 import { useCoachTriggerListener } from '@/hooks/useCoachTrigger'
 import { createApplication } from '@/api/applications'
 
@@ -161,11 +160,6 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
   useEffect(() => {
     if (!tts.speaking) setTtsPlayingId(null)
   }, [tts.speaking])
-
-  const handleSTTResult = useCallback((text: string) => {
-    setInputText((prev) => prev ? prev + ' ' + text : text)
-  }, [])
-  const stt = useBrowserSTT(handleSTTResult)
 
   /* ── Drag state ── */
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null)
@@ -542,34 +536,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
               ${placeholderFading ? 'placeholder:opacity-0' : 'placeholder:opacity-100'}
             `}
           />
-          {/* STT interim transcript preview */}
-          {stt.listening && stt.interimTranscript && (
-            <div className="px-2 pb-1 text-[11px] text-blue-500 italic truncate">
-              {stt.interimTranscript}...
-            </div>
-          )}
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-0.5">
-              <button
-                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-all cursor-pointer"
-                title="上传附件/简历"
-              >
-                <Paperclip className="w-4 h-4" />
-              </button>
-              {stt.supported && (
-                <button
-                  onClick={stt.listening ? stt.stop : stt.start}
-                  className={`p-1.5 rounded-lg transition-all cursor-pointer ${
-                    stt.listening
-                      ? 'text-red-500 bg-red-50 animate-pulse'
-                      : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                  }`}
-                  title={stt.listening ? '停止录音' : '语音输入'}
-                >
-                  {stt.listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
-              )}
-            </div>
+          <div className="flex items-center justify-end px-1">
             <button
               onClick={handleSend}
               disabled={!hasText}

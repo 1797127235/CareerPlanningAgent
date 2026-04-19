@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import { motion } from 'framer-motion'
-import { ArrowRight, Upload, PenLine, MapPin, Target, User, Flame, BookOpen, FileSearch, Zap, MessageSquare } from 'lucide-react'
+import { ArrowRight, Upload, PenLine, MapPin, Target, User, Flame, BookOpen, FileSearch, Zap, MessageSquare, Crosshair, Mic } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UploadProgress } from '@/components/profile'
 import { useGuidance } from '@/hooks/useGuidance'
@@ -320,6 +320,37 @@ export default function HomePage() {
                         <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
                       </button>
                     </div>
+                  </div>
+
+                  {/* ── Quick Tools ── */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      onClick={() => navigate('/jd-diagnosis')}
+                      className="flex items-center gap-4 px-5 py-4 rounded-xl bg-white/60 border border-slate-200/60 hover:bg-white/80 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 cursor-pointer text-left group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-[var(--blue)]/10 flex items-center justify-center shrink-0">
+                        <Crosshair className="w-5 h-5 text-[var(--blue)]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold text-slate-800 group-hover:text-[var(--blue)] transition-colors">JD 诊断</p>
+                        <p className="text-[13px] text-slate-400 mt-0.5 truncate">粘贴招聘要求，看看匹配度</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-[var(--blue)] group-hover:translate-x-0.5 transition-all" />
+                    </button>
+
+                    <button
+                      onClick={() => navigate('/interview')}
+                      className="flex items-center gap-4 px-5 py-4 rounded-xl bg-white/60 border border-slate-200/60 hover:bg-white/80 hover:-translate-y-0.5 hover:shadow-sm transition-all duration-200 cursor-pointer text-left group"
+                    >
+                      <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                        <Mic className="w-5 h-5 text-purple-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold text-slate-800 group-hover:text-purple-500 transition-colors">模拟面试</p>
+                        <p className="text-[13px] text-slate-400 mt-0.5 truncate">针对目标方向练习面试</p>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500 group-hover:translate-x-0.5 transition-all" />
+                    </button>
                   </div>
 
                   {deleteConfirm && (
