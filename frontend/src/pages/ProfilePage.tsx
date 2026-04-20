@@ -88,7 +88,7 @@ function RecommendationCard({
 
 export default function ProfilePage() {
   const { token } = useAuth()
-  const { profile, loading, loadError, loadProfile, handleSaveEdit, savingEdit } = useProfileData(token)
+  const { profile, loading, loadError, loadProfile, handleSaveEdit, savingEdit, actionError } = useProfileData(token)
   const { fileInputRef, triggerFileDialog, onFileSelected, uploading, uploadStep, uploadError, justUploaded, clearJustUploaded } = useResumeUpload(loadProfile)
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -130,7 +130,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!hasProfile || loading) return
     if (!!profile?.graph_position?.from_node_id) { locateRefetchCount.current = 0; return }
-    if (locateRefetchCount.current >= 3) return  // Hard stop — prevent infinite loop
+    if (locateRefetchCount.current >= 5) return  // Hard stop — prevent infinite loop
     const timer = setTimeout(() => {
       locateRefetchCount.current += 1
       loadProfile()
@@ -169,10 +169,13 @@ export default function ProfilePage() {
       const list = res.recommendations || []
       setRecs(list)
       if (list.length === 0) {
-        // 后端推荐还在生成中，无限轮询直到拿到数据
-        recsRetryTimer.current = setTimeout(() => {
-          doFetchRecs(true)
-        }, 6000)
+        // 后端推荐还在生成中，轮询直到拿到数据（最多 10 次）
+        if (recsRefetchCount.current < 10) {
+          recsRefetchCount.current += 1
+          recsRetryTimer.current = setTimeout(() => {
+            doFetchRecs(true)
+          }, 6000)
+        }
       } else {
         recsRefetchCount.current = 0
       }
@@ -507,6 +510,11 @@ export default function ProfilePage() {
             {uploadError && !uploading && (
               <div className="px-3 py-2 bg-red-50 border border-red-200 text-[11px] text-red-700 rounded-xl">
                 {uploadError}
+              </div>
+            )}
+            {actionError && (
+              <div className="px-3 py-2 bg-red-50 border border-red-200 text-[11px] text-red-700 rounded-xl">
+                {actionError}
               </div>
             )}
 

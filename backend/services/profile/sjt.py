@@ -38,38 +38,23 @@ def _load_sjt_templates() -> list[dict]:
     return data["templates"]
 
 
-def generate_sjt_questions(profile_data: dict) -> list[dict]:
-    """Fill SJT templates with personalized context based on user's resume.
+def _fill_batch(
+    templates: list[dict],
+    resume_summary: str,
+    model: str,
+) -> dict[str, dict]:
+    """Call LLM to fill slots for a batch of templates. Returns {id: slots}."""
+    from backend.llm import llm_chat, parse_json_response
 
-    Returns list of questions with filled scenarios/options AND efficacy values
-    (caller must strip efficacy before sending to client).
-    """
-    from backend.llm import llm_chat, parse_json_response, get_model
-
-    templates = _load_sjt_templates()
-
-    # Build resume summary for LLM context
-    skills = [s.get("name", "") for s in profile_data.get("skills", [])[:10]]
-    projects = profile_data.get("projects", [])[:3]
-    education = profile_data.get("education", {})
-    experience_years = profile_data.get("experience_years", 0)
-
-    resume_summary = (
-        f"技能: {', '.join(skills)}\n"
-        f"项目经验: {'; '.join(p if isinstance(p, str) else p.get('description', str(p)) for p in projects)}\n"
-        f"教育: {education.get('degree', '')} {education.get('major', '')} {education.get('school', '')}\n"
-        f"工作年限: {experience_years}"
-    )
-
-    # Build slot fill request
-    slot_request = []
-    for t in templates:
-        slot_request.append({
+    slot_request = [
+        {
             "id": t["id"],
             "dimension": t["dimension"],
             "fill_slots": t["fill_slots"],
             "scenario_hint": t["scenario_template"][:60] + "...",
-        })
+        }
+        for t in templates
+    ]
 
     prompt = f"""你是一个 SJT（情境判断测验）情境个性化助手。
 
@@ -97,12 +82,63 @@ def generate_sjt_questions(profile_data: dict) -> list[dict]:
 
     result = llm_chat(
         [{"role": "user", "content": prompt}],
-        model=get_model("default"),
+        model=model,
         temperature=0.7,
-        timeout=90,
+        timeout=60,
     )
     fills_data = parse_json_response(result)
-    fills_map = {f["id"]: f.get("slots", {}) for f in fills_data.get("fills", [])}
+    return {f["id"]: f.get("slots", {}) for f in fills_data.get("fills", [])}
+
+
+def generate_sjt_questions(profile_data: dict) -> list[dict]:
+    """Fill SJT templates with personalized context based on user's resume.
+
+    Returns list of questions with filled scenarios/options AND efficacy values
+    (caller must strip efficacy before sending to client).
+
+    Splits templates into batches and calls LLM concurrently for speed.
+    """
+    import concurrent.futures
+    from backend.llm import get_model
+
+    templates = _load_sjt_templates()
+
+    # Build resume summary for LLM context
+    skills = [s.get("name", "") for s in profile_data.get("skills", [])[:10]]
+    projects = profile_data.get("projects", [])[:3]
+    education = profile_data.get("education", {})
+    experience_years = profile_data.get("experience_years", 0)
+
+    resume_summary = (
+        f"技能: {', '.join(skills)}\n"
+        f"项目经验: {'; '.join(p if isinstance(p, str) else p.get('description', str(p)) for p in projects)}\n"
+        f"教育: {education.get('degree', '')} {education.get('major', '')} {education.get('school', '')}\n"
+        f"工作年限: {experience_years}"
+    )
+
+    model = get_model("fast")
+
+    # Split into batches of 8 for concurrent LLM calls
+    batch_size = 8
+    batches = [
+        templates[i : i + batch_size]
+        for i in range(0, len(templates), batch_size)
+    ]
+
+    fills_map: dict[str, dict] = {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(batches), 4)) as pool:
+        futures = {
+            pool.submit(_fill_batch, batch, resume_summary, model): batch
+            for batch in batches
+        }
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                batch_fills = future.result()
+                fills_map.update(batch_fills)
+            except Exception as exc:
+                import logging
+                logging.getLogger(__name__).warning("SJT batch fill failed: %s", exc)
+
     if not fills_map:
         raise ValueError("LLM returned empty fills")
 

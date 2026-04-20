@@ -1,4 +1,4 @@
-import { apiFetch, rawFetch } from '@/api/client'
+import { apiFetch } from '@/api/client'
 import type { ProfileData } from '@/types/profile'
 
 /** Fetch the single profile for the current user */
@@ -54,19 +54,21 @@ export interface SjtSubmitResult {
 }
 
 export async function generateSjt(): Promise<SjtGenerateResult> {
-  const res = await rawFetch<SjtGenerateResult>('/profiles/sjt/generate', {
+  const res = await apiFetch<SjtGenerateResult>('/profiles/sjt/generate', {
     method: 'POST',
   })
-  return res
+  if (!res.success || !res.data) throw new Error('题目生成失败：返回数据为空')
+  return res.data
 }
 
 export async function submitSjt(
   sessionId: string,
   answers: SjtAnswer[],
 ): Promise<SjtSubmitResult> {
-  const res = await rawFetch<SjtSubmitResult>('/profiles/sjt/submit', {
+  const res = await apiFetch<SjtSubmitResult>('/profiles/sjt/submit', {
     method: 'POST',
     body: JSON.stringify({ session_id: sessionId, answers }),
   })
-  return res
+  if (!res.success || !res.data) throw new Error('提交失败')
+  return res.data
 }

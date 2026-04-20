@@ -1338,6 +1338,15 @@ def _extract_profile_with_llm(raw_text: str, hint_job_target: str = "") -> dict:
             "knowledge_areas": [],
             "experience_years": 0,
             "raw_text": raw_text[:6000],
+            "projects": [],
+            "internships": [],
+            "certificates": [],
+            "awards": [],
+            "education": {},
+            "job_target": "",
+            "soft_skills": {},
+            "career_signals": {},
+            "primary_domain": "",
         }
 
 

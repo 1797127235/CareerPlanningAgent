@@ -60,7 +60,12 @@ def refine_profile_project(
     相比下标定位，内容匹配不受学生增删/重排项目的影响；
     若匹配失败（例如学生已经手动改过），返回 409，让前端提示"档案已变动，请刷新"。
     """
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    profile = (
+        db.query(Profile)
+        .filter(Profile.user_id == user.id)
+        .with_for_update()
+        .first()
+    )
     if not profile:
         raise HTTPException(404, "未找到画像")
 
@@ -91,7 +96,7 @@ def refine_profile_project(
         projects[matched_idx] = {**current, "description": body.new_description}
 
     data["projects"] = projects
-    profile.profile_json = json.dumps(data, ensure_ascii=False)
+    profile.profile_json = json.dumps(data, ensure_ascii=False, default=str)
     db.commit()
     return {"ok": True}
 
@@ -104,7 +109,12 @@ def update_profile_project(
     db: Session = Depends(get_db),
 ):
     """[遗留] 按下标更新；新代码请用 PATCH /me/projects/refine（按内容匹配）。"""
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    profile = (
+        db.query(Profile)
+        .filter(Profile.user_id == user.id)
+        .with_for_update()
+        .first()
+    )
     if not profile:
         raise HTTPException(404, "未找到画像")
 
@@ -121,7 +131,7 @@ def update_profile_project(
         projects[proj_index] = {**current, "description": body.description}
 
     data["projects"] = projects
-    profile.profile_json = json.dumps(data, ensure_ascii=False)
+    profile.profile_json = json.dumps(data, ensure_ascii=False, default=str)
     db.commit()
 
     return {"ok": True}
@@ -292,11 +302,13 @@ def update_profile(
         _pid, _uid = profile.id, user.id
         _skill_count = len(_final.get("skills", []))
         _source = (_final or {}).get("source", "")
+        # Defensive copy: prevent concurrent mutation of mutable dict reference
+        _final_snapshot = json.loads(json.dumps(_final, default=str))
 
         def _locate_bg():
             _bg_db = _SL()
             try:
-                _auto_locate_on_graph(_pid, _uid, _final, _bg_db)
+                _auto_locate_on_graph(_pid, _uid, _final_snapshot, _bg_db)
             except Exception:
                 logger.exception("Background graph location failed (profile %s)", _pid)
             finally:

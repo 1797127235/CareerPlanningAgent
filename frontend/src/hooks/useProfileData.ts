@@ -18,8 +18,6 @@ interface UseProfileDataReturn {
   handleDelete: () => Promise<void>
 
   /* edit */
-  editingId: number | null
-  setEditingId: (id: number | null) => void
   savingEdit: boolean
   handleSaveEdit: (data: ManualProfilePayload) => Promise<void>
 
@@ -32,7 +30,6 @@ export function useProfileData(token: string | null): UseProfileDataReturn {
   const [loading, setLoading] = useState(true)
   const [reparsing, setReparsing] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const [editingId, setEditingId] = useState<number | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
@@ -108,7 +105,6 @@ export function useProfileData(token: string | null): UseProfileDataReturn {
         },
         quality: null,
       })
-      setEditingId(null)
       await loadProfile()
     } catch (err) {
       setActionError(err instanceof Error ? err.message : '更新失败')
@@ -127,8 +123,6 @@ export function useProfileData(token: string | null): UseProfileDataReturn {
     deleteConfirm,
     setDeleteConfirm,
     handleDelete,
-    editingId,
-    setEditingId,
     savingEdit,
     handleSaveEdit,
     actionError,

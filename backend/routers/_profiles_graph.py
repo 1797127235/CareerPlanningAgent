@@ -1109,7 +1109,6 @@ def _auto_locate_on_graph(
             if profile:
                 p_hash = profile_hash(profile_data)
                 rec_resp = {"recommendations": enriched, "user_skill_count": len(skills)}
-                _save_rec_cache(profile, p_hash, rec_resp, db)
                 logger.info(
                     "[AUTO-LOCATE-SAVED] profile_id=%d top_rec=%r job_target=%r",
                     profile_id,
@@ -1118,6 +1117,10 @@ def _auto_locate_on_graph(
                 )
 
         db.commit()
+        # Cache only after successful commit to avoid inconsistency on rollback
+        if profile:
+            _save_rec_cache(profile, p_hash, rec_resp, db)
+            db.commit()
         return {"node_id": node_id, "label": node_label}
     except Exception as e:
         import traceback
