@@ -20,7 +20,6 @@ from backend.routers._profiles_helpers import (
     _get_or_create_profile,
     _profile_to_dict,
     _merge_profiles,
-    _merge_skills,
     _execute_profile_reset,
 )
 from backend.routers._profiles_parsing import (
@@ -29,7 +28,7 @@ from backend.routers._profiles_parsing import (
     _ocr_pdf_with_vl,
     _lazy_fix_misclassified_internships,
 )
-from backend.routers._profiles_resumesdk import parse_with_resumesdk
+
 from backend.routers._profiles_sjt import router as sjt_router
 from backend.services.profile import ProfileService
 from backend.utils import ok
@@ -179,103 +178,26 @@ async def parse_resume(
     if content_type and content_type not in _ALLOWED_MIMES and content_type != "application/octet-stream":
         raise HTTPException(400, "文件类型不符，请上传简历文档")
 
-    # ── Extract text for self-hosted fallback ──────────────────────────────
-    raw_text = ""
-    if filename.lower().endswith(".pdf"):
-        try:
-            import pdfplumber
-            import io
-            with pdfplumber.open(io.BytesIO(content)) as pdf:
-                raw_text = "\n".join(page.extract_text() or "" for page in pdf.pages)
-        except ImportError:
-            raw_text = content.decode("utf-8", errors="ignore")
-    elif filename.lower().endswith(".docx"):
-        try:
-            import docx
-            import io
-            doc = docx.Document(io.BytesIO(content))
-            raw_text = "\n".join(p.text for p in doc.paragraphs if p.text)
-        except ImportError:
-            raw_text = content.decode("utf-8", errors="ignore")
-    elif filename.lower().endswith(".doc"):
-        # .doc is a binary format; third-party APIs handle the raw bytes.
-        # Skip text extraction so the LLM fallback gets a clean signal.
-        raw_text = ""
-    else:
-        raw_text = content.decode("utf-8", errors="ignore")
+    # ── Extract raw text ───────────────────────────────────────────────────
+    from backend.services.profile.parser.text_extractor import extract_raw_text, is_scanned_pdf
+    raw_text = extract_raw_text(content, filename)
+    scanned = is_scanned_pdf(content, filename, raw_text)
+    logger.info("Resume parser strategy: filename=%s scanned=%s text_len=%d", filename, scanned, len(raw_text))
 
-    is_scanned_pdf = not raw_text.strip() and filename.lower().endswith(".pdf")
-    logger.info("Resume parser strategy: filename=%s is_scanned=%s raw_text_len=%d", filename, is_scanned_pdf, len(raw_text))
-
-    # ── Strategy ──────────────────────────────────────────────────────────
-    # 文字版PDF: ResumeSDK → 自研LLM (fallback)
-    # 扫描版PDF: 直接 OCR → 自研LLM (第三方API对扫描版效果差且耗时长，跳过)
     profile_data: dict | None = None
 
-    if is_scanned_pdf:
+    if scanned:
+        # Scanned PDF: OCR → LLM direct extraction
         logger.info("Scanned PDF detected, using OCR+LLM pipeline")
         raw_text = _ocr_pdf_with_vl(content)
         if not raw_text.strip():
             raise HTTPException(400, "无法提取简历文本，请使用文字版 PDF 或直接粘贴简历文本")
         profile_data = _extract_profile_with_llm(raw_text)
     else:
-        # Text-based PDF / Word / TXT
-        # 1. Try ResumeSDK (commercial parser)
-        logger.info("Trying ResumeSDK first for text-based file")
-        profile_data = parse_with_resumesdk(content, filename)
-
-        # 2. ResumeSDK returned data but projects/skills are poor — supplement with LLM
-        if profile_data and raw_text.strip():
-            sdk_projects = profile_data.get("projects", [])
-            sdk_skills = profile_data.get("skills", [])
-            # Detect "coarse-only" skills: only generic ones like C++/SQL/Linux/GitHub
-            coarse_skill_names = {"c++", "sql", "mysql", "github", "linux", "git"}
-            has_only_coarse = sdk_skills and all(
-                s.get("name", "").lower() in coarse_skill_names for s in sdk_skills
-            )
-            needs_supplement = not sdk_projects or has_only_coarse
-            if needs_supplement:
-                logger.info(
-                    "ResumeSDK projects=%d skills=%d (coarse_only=%s), supplementing with LLM",
-                    len(sdk_projects), len(sdk_skills), has_only_coarse,
-                )
-                llm_profile = _extract_profile_with_llm(raw_text)
-                if llm_profile:
-                    # Merge LLM projects (always take LLM if ResumeSDK has none)
-                    if not sdk_projects and llm_profile.get("projects"):
-                        profile_data["projects"] = llm_profile["projects"]
-                        logger.info("LLM supplemented %d projects", len(llm_profile["projects"]))
-
-                    # Merge LLM skills: union, keep higher level, prefer LLM's granular skills
-                    if llm_profile.get("skills"):
-                        merged_skills = _merge_skills(sdk_skills, llm_profile["skills"])
-                        profile_data["skills"] = merged_skills
-                        logger.info(
-                            "Merged skills: SDK=%d + LLM=%d → %d",
-                            len(sdk_skills),
-                            len(llm_profile["skills"]),
-                            len(merged_skills),
-                        )
-
-                    # Also pull other fields LLM might have extracted better
-                    for field in ["internships", "awards", "certificates", "career_signals", "knowledge_areas"]:
-                        if not profile_data.get(field) and llm_profile.get(field):
-                            profile_data[field] = llm_profile[field]
-                        # For knowledge_areas: always union (LLM may discover domains SDK missed)
-                        if field == "knowledge_areas" and llm_profile.get("knowledge_areas"):
-                            existing_ka = set(profile_data.get("knowledge_areas", []) or [])
-                            incoming_ka = set(llm_profile["knowledge_areas"])
-                            if incoming_ka - existing_ka:
-                                profile_data["knowledge_areas"] = sorted(existing_ka | incoming_ka)
-                                logger.info("Merged knowledge_areas: SDK=%s + LLM=%s → %s",
-                                            sorted(existing_ka), sorted(incoming_ka), profile_data["knowledge_areas"])
-
-        # 3. Fallback: self-hosted LLM parsing (ResumeSDK completely failed)
-        if not profile_data:
-            logger.info("ResumeSDK unavailable/failed, falling back to self-hosted parser")
-            if not raw_text.strip():
-                raise HTTPException(400, "无法提取简历文本，请使用文字版 PDF 或直接粘贴简历文本")
-            profile_data = _extract_profile_with_llm(raw_text)
+        # Text-based: use new parser pipeline (ResumeSDK + LLM adapter + merger)
+        from backend.services.profile.parser import parse_resume_pipeline
+        parsed = parse_resume_pipeline(content, filename)
+        profile_data = parsed.to_dict()
 
     quality_data = ProfileService.compute_quality(profile_data)
     return ok({"profile": profile_data, "quality": quality_data})
