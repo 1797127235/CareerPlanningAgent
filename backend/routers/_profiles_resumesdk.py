@@ -726,14 +726,86 @@ def _map_resumesdk_to_profile(rs_result: dict) -> dict:
     if work_list:
         exp_years = len(work_list)
 
-    # Knowledge areas from supplemented skills
+    # Knowledge areas from supplemented skills — infer from ALL text signals, not just skill names
     knowledge_areas = []
-    if any(k in skill_names for k in ["Python", "C++", "Java", "Go", "Rust"]):
+    skill_text_lower = " ".join(skill_names).lower()
+    all_text = (skill_text_lower + " " + raw_text.lower())[:3000]
+
+    # Programming fundamentals
+    if any(k in skill_names for k in ["Python", "C++", "Java", "Go", "Rust", "C"]):
         knowledge_areas.append("编程开发")
+
+    # AI / ML
     if any(k in skill_names for k in ["PyTorch", "TensorFlow", "深度学习", "机器学习", "神经网络"]):
         knowledge_areas.append("人工智能")
+
+    # Computer Vision
     if any(k in skill_names for k in ["图像分割", "目标检测", "计算机视觉", "OpenCV", "Mamba", "NeRF"]):
         knowledge_areas.append("计算机视觉")
+
+    # Linux / Systems programming
+    linux_sys_signals = ["linux", "epoll", "poll", "select", "reactor", "proactor",
+                         "io多路复用", "系统调用", "posix", "内核", "驱动",
+                         "进程", "线程", "ipc", "mmap", "零拷贝"]
+    if any(k in all_text for k in linux_sys_signals):
+        knowledge_areas.append("Linux系统编程")
+
+    # Network programming / high-performance networking
+    net_signals = ["tcp/ip", "socket", "udp", "http", "网络编程", "网络库",
+                   "muduo", "libevent", "libuv", "nio", "非阻塞", "异步io",
+                   "高并发", "高可用", "负载均衡", "反向代理", "网关"]
+    if any(k in all_text for k in net_signals):
+        knowledge_areas.append("网络编程")
+
+    # C++ systems / infrastructure
+    cpp_sys_signals = ["内存池", "线程池", "对象池", "tcmalloc", "jemalloc",
+                       "allocator", "raii", "智能指针", "右值引用", "移动语义",
+                       "stl", "模板", "元编程", "并发编程"]
+    if any(k in all_text for k in cpp_sys_signals):
+        knowledge_areas.append("C++系统开发")
+
+    # Database
+    db_signals = ["mysql", "redis", "mongodb", "elasticsearch", "sql", "数据库",
+                  "索引", "事务", "b+树", "存储引擎", "分库分表", "主从同步"]
+    if any(k in all_text for k in db_signals):
+        knowledge_areas.append("数据库")
+
+    # Data structures & algorithms
+    algo_signals = ["数据结构", "算法", "leetcode", "动态规划", "图论", "树",
+                    "排序", "哈希", "链表", "栈", "队列", "二叉树"]
+    if any(k in all_text for k in algo_signals):
+        knowledge_areas.append("数据结构与算法")
+
+    # Distributed systems / backend infrastructure
+    dist_signals = ["微服务", "分布式", "grpc", "rpc", "protobuf", "消息队列",
+                    "kafka", "rabbitmq", "rocketmq", "docker", "kubernetes",
+                    "k8s", "容器", "cicd", "devops"]
+    if any(k in all_text for k in dist_signals):
+        knowledge_areas.append("分布式系统")
+
+    # Frontend
+    if any(k in skill_names for k in ["React", "Vue", "Angular", "前端", "JavaScript", "TypeScript", "CSS", "HTML"]):
+        knowledge_areas.append("前端开发")
+
+    # Embedded
+    embedded_signals = ["嵌入式", "单片机", "mcu", "arm", "rtos", "freertos",
+                        "fpga", "verilog", "pcb", "can总线", "串口", "spi"]
+    if any(k in all_text for k in embedded_signals):
+        knowledge_areas.append("嵌入式开发")
+
+    # Security
+    sec_signals = ["安全", "渗透", "密码学", "区块链", "web3", "逆向", "漏洞"]
+    if any(k in all_text for k in sec_signals):
+        knowledge_areas.append("安全")
+
+    # De-duplicate and limit
+    seen = set()
+    deduped = []
+    for ka in knowledge_areas:
+        if ka not in seen:
+            seen.add(ka)
+            deduped.append(ka)
+    knowledge_areas = deduped[:6]  # cap at 6 to avoid UI clutter
 
     profile = {
         "name": basic.get("name", "").strip(),

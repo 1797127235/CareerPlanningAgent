@@ -258,9 +258,17 @@ async def parse_resume(
                         )
 
                     # Also pull other fields LLM might have extracted better
-                    for field in ["internships", "awards", "certificates", "career_signals"]:
+                    for field in ["internships", "awards", "certificates", "career_signals", "knowledge_areas"]:
                         if not profile_data.get(field) and llm_profile.get(field):
                             profile_data[field] = llm_profile[field]
+                        # For knowledge_areas: always union (LLM may discover domains SDK missed)
+                        if field == "knowledge_areas" and llm_profile.get("knowledge_areas"):
+                            existing_ka = set(profile_data.get("knowledge_areas", []) or [])
+                            incoming_ka = set(llm_profile["knowledge_areas"])
+                            if incoming_ka - existing_ka:
+                                profile_data["knowledge_areas"] = sorted(existing_ka | incoming_ka)
+                                logger.info("Merged knowledge_areas: SDK=%s + LLM=%s → %s",
+                                            sorted(existing_ka), sorted(incoming_ka), profile_data["knowledge_areas"])
 
         # 3. Fallback: self-hosted LLM parsing (ResumeSDK completely failed)
         if not profile_data:
