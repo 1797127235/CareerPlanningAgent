@@ -381,11 +381,11 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
             transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
             className="overflow-hidden"
           >
-            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50/60 border-b border-blue-100/50 text-[12px]">
-              <span className="flex-1 text-slate-600 truncate">{pageTip.text}</span>
+            <div className="flex items-center gap-2 px-3 py-2 bg-white/50 border-b border-white/40 text-[12px]">
+              <span className="flex-1 text-slate-500 truncate">{pageTip.text}</span>
               <button
                 onClick={() => { sendMessage(pageTip.prompt); setPageTip(null); dismissedTipRef.current = location.pathname }}
-                className="shrink-0 px-2.5 py-1 rounded-lg bg-[var(--blue)]/10 text-[var(--blue)] font-medium hover:bg-[var(--blue)]/20 transition-colors cursor-pointer"
+                className="shrink-0 px-2.5 py-1 rounded-lg bg-white/60 text-slate-600 font-medium hover:bg-white/80 border border-white/50 transition-colors cursor-pointer"
               >
                 试试
               </button>
@@ -500,7 +500,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
             {isStreaming && !currentStreamText && (
               <div className="mb-4 message-enter">
                 <div className="flex items-center gap-2 mb-1.5">
-                  <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center text-white">
+                  <div className="w-6 h-6 rounded-lg bg-slate-500 flex items-center justify-center text-white">
                     <Bot className="w-3.5 h-3.5" />
                   </div>
                   <span className="text-[12px] font-semibold text-slate-500">思考中</span>
@@ -563,12 +563,12 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
 /* ── Result type labels ── */
 /* ── Agent role display config ── */
 const agentConfig: Record<string, { name: string; color: string }> = {
-  coach_agent:    { name: '智析教练', color: 'bg-blue-600' },
-  navigator:      { name: '方向顾问', color: 'bg-indigo-600' },
-  jd_agent:       { name: '匹配分析师', color: 'bg-amber-600' },
-  profile_agent:  { name: '画像顾问', color: 'bg-teal-600' },
-  growth_agent:   { name: '成长顾问', color: 'bg-emerald-600' },
-  report_agent:   { name: '报告分析师', color: 'bg-slate-600' },
+  coach_agent:    { name: '智析教练', color: 'bg-[var(--blue)]' },
+  navigator:      { name: '方向顾问', color: 'bg-slate-500' },
+  jd_agent:       { name: '匹配分析师', color: 'bg-slate-500' },
+  profile_agent:  { name: '画像顾问', color: 'bg-slate-500' },
+  growth_agent:   { name: '成长顾问', color: 'bg-slate-500' },
+  report_agent:   { name: '报告分析师', color: 'bg-slate-500' },
 }
 
 const resultTypeLabel: Record<string, string> = {
@@ -586,18 +586,18 @@ function ActionCard({ card, onClick }: { card: CardData; onClick: () => void }) 
   return (
     <button
       onClick={onClick}
-      className="w-full mt-2 p-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 text-left cursor-pointer group hover:border-blue-200 hover:shadow-sm transition-all"
+      className="w-full mt-2 p-3 rounded-xl glass-static text-left cursor-pointer group hover:border-white/60 hover:shadow-sm transition-all"
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
+          <span className="text-[11px] font-bold text-[var(--blue)] bg-[var(--blue)]/10 px-2 py-0.5 rounded-full">
             {resultTypeLabel[card.type] ?? card.type}
           </span>
           <span className="text-[12px] font-medium text-slate-700 truncate max-w-[200px]">
             {card.title}
           </span>
         </div>
-        <span className="text-[12px] font-semibold text-blue-500 group-hover:translate-x-0.5 transition-transform">
+        <span className="text-[12px] font-semibold text-[var(--blue)] group-hover:translate-x-0.5 transition-transform">
           查看 →
         </span>
       </div>
@@ -610,11 +610,11 @@ function MarketCards({ cards }: { cards: MarketCardData[] }) {
   const navigate = useNavigate()
 
   const cfg: Record<string, { icon: string; border: string; bg: string; badge: string; text: string }> = {
-    best:    { icon: '✅', border: 'border-emerald-200', bg: 'bg-emerald-50', badge: 'bg-emerald-100 text-emerald-700', text: 'text-emerald-600' },
-    good:    { icon: '✓',  border: 'border-blue-200',   bg: 'bg-blue-50',    badge: 'bg-blue-100 text-blue-700',     text: 'text-blue-600' },
-    neutral: { icon: '→',  border: 'border-slate-200',  bg: 'bg-slate-50',   badge: 'bg-slate-100 text-slate-600',   text: 'text-slate-500' },
-    caution: { icon: '⚠️', border: 'border-amber-200',  bg: 'bg-amber-50',   badge: 'bg-amber-100 text-amber-700',   text: 'text-amber-600' },
-    no_data: { icon: '—',  border: 'border-slate-200',  bg: 'bg-slate-50',   badge: 'bg-slate-100 text-slate-500',   text: 'text-slate-400' },
+    best:    { icon: '✅', border: 'border-slate-200', bg: 'bg-white/60', badge: 'bg-white/80 text-slate-600', text: 'text-slate-500' },
+    good:    { icon: '✓',  border: 'border-slate-200', bg: 'bg-white/60', badge: 'bg-white/80 text-slate-600', text: 'text-slate-500' },
+    neutral: { icon: '→',  border: 'border-slate-200', bg: 'bg-white/60', badge: 'bg-white/80 text-slate-600', text: 'text-slate-500' },
+    caution: { icon: '⚠️', border: 'border-slate-200', bg: 'bg-white/60', badge: 'bg-white/80 text-slate-600', text: 'text-slate-500' },
+    no_data: { icon: '—',  border: 'border-slate-200', bg: 'bg-white/60', badge: 'bg-white/80 text-slate-500', text: 'text-slate-400' },
   }
 
   return (
@@ -642,13 +642,13 @@ function MarketCards({ cards }: { cards: MarketCardData[] }) {
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-slate-400">市场需求</span>
-                  <span className={`font-medium ${card.demand_change_pct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                  <span className={`font-medium ${card.demand_change_pct >= 0 ? 'text-[var(--blue)]' : 'text-red-500'}`}>
                     {demandSign} {Math.abs(card.demand_change_pct).toFixed(0)}%
                   </span>
                 </div>
                 <div className="flex items-center justify-between text-[11px]">
                   <span className="text-slate-400">薪资趋势</span>
-                  <span className={`font-medium ${card.salary_cagr >= 3 ? 'text-emerald-600' : card.salary_cagr >= 0 ? 'text-slate-500' : 'text-red-500'}`}>
+                  <span className={`font-medium ${card.salary_cagr >= 3 ? 'text-[var(--blue)]' : card.salary_cagr >= 0 ? 'text-slate-500' : 'text-red-500'}`}>
                     {salarySign}{card.salary_cagr.toFixed(0)}%/年
                   </span>
                 </div>
@@ -684,7 +684,7 @@ function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose:
       {cards.map((jd) => (
         <div
           key={jd.url}
-          className="p-3 rounded-xl bg-white/50 border border-slate-200/60 hover:border-blue-200 transition-all"
+          className="p-3 rounded-xl bg-white/50 border border-slate-200/60 hover:border-slate-300 transition-all"
         >
           <span className="text-[13px] font-semibold text-slate-800 leading-tight line-clamp-2 block mb-1">
             {jd.title}
@@ -717,7 +717,7 @@ function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose:
           )}
           <button
             onClick={() => onDiagnose(jd)}
-            className="w-full py-1.5 rounded-lg text-[12px] font-semibold text-[var(--blue)] bg-blue-50 hover:bg-blue-100 transition-colors cursor-pointer"
+            className="w-full py-1.5 rounded-lg text-[12px] font-semibold text-[var(--blue)] bg-white/60 hover:bg-white/80 border border-white/50 transition-colors cursor-pointer"
           >
             诊断匹配度
           </button>
@@ -792,7 +792,7 @@ function AddToTrackingButton({ card }: { card: CardData }) {
           setState('idle')        // 重置，允许删掉后再次添加
           navigate('/growth-log?tab=pursuits')
         }}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-600 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 hover:border-emerald-300 transition-colors cursor-pointer"
+        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-600 bg-white/60 hover:bg-white/80 border border-white/50 hover:border-white/70 transition-colors cursor-pointer"
         title="前往成长档案 · 返回后可重新添加"
       >
         <CheckCircle2 className="w-3 h-3" /> 已加入追踪 →
@@ -804,7 +804,7 @@ function AddToTrackingButton({ card }: { card: CardData }) {
     <button
       onClick={handleAdd}
       disabled={state === 'loading'}
-      className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-100 transition-colors cursor-pointer disabled:opacity-60"
+      className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-600 bg-white/60 hover:bg-white/80 border border-white/50 transition-colors cursor-pointer disabled:opacity-60"
     >
       {state === 'loading' ? '添加中...' : state === 'error' ? '添加失败，重试' : '+ 加入实战追踪'}
     </button>
@@ -861,7 +861,7 @@ function PanelBubble({
             onClick={() => onTTSToggle(message.id, message.text)}
             className={`ml-auto p-1 rounded transition-all cursor-pointer ${
               isTTSPlaying
-                ? 'text-blue-500 bg-blue-50'
+                ? 'text-slate-500 bg-white/60'
                 : 'text-slate-300 hover:text-slate-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
             }`}
             title={isTTSPlaying ? '停止朗读' : '朗读'}
@@ -894,7 +894,7 @@ function PanelBubble({
             <button
               key={chip.label}
               onClick={() => onFollowUp(chip.prompt)}
-              className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-100 transition-colors cursor-pointer"
+              className="px-2.5 py-1 rounded-lg text-[11px] font-medium text-slate-600 bg-white/50 hover:bg-white/70 border border-white/40 transition-colors cursor-pointer"
             >
               {chip.label}
             </button>

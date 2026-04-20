@@ -78,7 +78,7 @@ function GeneratingScreen() {
           <LoadingDots />
         </p>
         <p className="mt-4 text-[13px] text-slate-500 max-w-[36ch] mx-auto leading-relaxed">
-          AI 在写这一份，大概 30 到 60 秒。
+          AI 在写这一份，大概需要几分钟。
         </p>
         {idx >= 4 && (
           <p className="mt-2 text-[13px] text-slate-400 max-w-[36ch] mx-auto leading-relaxed">
@@ -435,7 +435,7 @@ export default function ReportPage() {
             这一份还没生成过。
           </p>
           <p className="mt-3 text-[13px] text-slate-500 max-w-[36ch] mx-auto leading-relaxed">
-            基于你的档案和成长记录，写一份关于你是谁、能去哪、差什么的报告。写一次大约 30 到 60 秒。
+            基于你的档案和成长记录，写一份关于你是谁、能去哪、差什么的报告。写一次大约需要几分钟。
           </p>
           <button
             onClick={generate}

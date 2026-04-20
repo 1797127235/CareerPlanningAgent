@@ -2,9 +2,36 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { rawFetch } from '@/api/client'
-import { Plus, X } from 'lucide-react'
+import { Plus, X, Sparkles, Loader2 } from 'lucide-react'
 
 const ease = [0.22, 1, 0.36, 1] as const
+
+/* ── Q/A helpers (mirrored from PursuitDetailPage) ── */
+interface QAPair { q: string; a: string }
+
+interface AISuggestion {
+  score: number
+  strengths: string[]
+  weaknesses: string[]
+  suggested_answer: string
+}
+
+function parseQA(content: string): QAPair[] {
+  const pairs: QAPair[] = []
+  for (const block of content.split(/\n\n+/)) {
+    const qm = block.match(/Q\d+:\s*([\s\S]+?)(?=\nA\d+:|$)/m)
+    const am = block.match(/A\d+:\s*([\s\S]+?)$/m)
+    if (qm) pairs.push({ q: qm[1].trim(), a: am ? am[1].trim() : '' })
+  }
+  return pairs.length > 0 ? pairs : content.trim() ? [{ q: content.trim(), a: '' }] : []
+}
+
+function serializeQA(pairs: QAPair[]): string {
+  return pairs
+    .filter(p => p.q.trim())
+    .map((p, i) => `Q${i + 1}: ${p.q}\nA${i + 1}: ${p.a.trim() || '(未填写)'}`)
+    .join('\n\n')
+}
 
 interface InterviewRecord {
   id: number
@@ -166,8 +193,31 @@ function InterviewDetailModal({
   onRefresh: () => void
 }) {
   const qc = useQueryClient()
-  const [contentSummary, setContentSummary] = useState(interview.content_summary || '')
+  const initialPairs = parseQA(interview.content_summary || '')
+  const [pairs, setPairs] = useState<QAPair[]>(initialPairs.length > 0 ? initialPairs : [{ q: '', a: '' }])
   const [reflection, setReflection] = useState(interview.reflection || '')
+  const [suggestions, setSuggestions] = useState<Record<number, AISuggestion | null>>({})
+  const [suggestLoading, setSuggestLoading] = useState<Record<number, boolean>>({})
+  const [suggestError, setSuggestError] = useState<Record<number, boolean>>({})
+
+  const fetchSuggestion = async (idx: number) => {
+    const pair = pairs[idx]
+    if (!pair.q.trim()) return
+    setSuggestLoading(prev => ({ ...prev, [idx]: true }))
+    try {
+      const data = await rawFetch(`/growth-log/interviews/${interview.id}/suggest-answer`, {
+        method: 'POST',
+        body: JSON.stringify({ question: pair.q, answer: pair.a }),
+      })
+      setSuggestions(prev => ({ ...prev, [idx]: data as AISuggestion }))
+      setSuggestError(prev => ({ ...prev, [idx]: false }))
+    } catch {
+      setSuggestions(prev => ({ ...prev, [idx]: null }))
+      setSuggestError(prev => ({ ...prev, [idx]: true }))
+    } finally {
+      setSuggestLoading(prev => ({ ...prev, [idx]: false }))
+    }
+  }
 
   const updateMut = useMutation({
     mutationFn: (data: Record<string, string>) =>
@@ -191,12 +241,23 @@ function InterviewDetailModal({
     },
   })
 
-  const saveText = () => {
+  const addPair = () => setPairs([...pairs, { q: '', a: '' }])
+  const removePair = (idx: number) => setPairs(pairs.filter((_, i) => i !== idx))
+  const updatePair = (idx: number, field: 'q' | 'a', value: string) => {
+    const next = [...pairs]
+    next[idx][field] = value
+    setPairs(next)
+  }
+
+  const saveAll = () => {
     const updates: Record<string, string> = {}
-    if (contentSummary !== (interview.content_summary || '')) updates.content_summary = contentSummary
+    const serialized = serializeQA(pairs)
+    if (serialized !== (interview.content_summary || '')) updates.content_summary = serialized
     if (reflection !== (interview.reflection || '')) updates.reflection = reflection
     if (Object.keys(updates).length > 0) updateMut.mutate(updates)
   }
+
+  const iCls = "w-full px-3.5 py-2.5 text-[12px] rounded-xl outline-none bg-slate-50 border border-slate-200 focus:border-blue-400 focus:bg-white transition-colors resize-none"
 
   return (
     <motion.div
@@ -225,17 +286,130 @@ function InterviewDetailModal({
           </button>
         </div>
 
-        {/* Editable: content summary */}
-        <div className="mb-4">
-          <p className="text-[12px] font-semibold text-slate-400 mb-1.5">面试内容（问了什么、答了什么）</p>
-          <textarea
-            value={contentSummary}
-            onChange={(e) => setContentSummary(e.target.value)}
-            onBlur={saveText}
-            placeholder="记录面试中的问题和你的回答要点..."
-            rows={3}
-            className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-300 transition-all resize-none leading-relaxed"
-          />
+        {/* Q/A pairs */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[12px] font-semibold text-slate-400">面试内容（问了什么、答了什么）</p>
+            <button
+              onClick={saveAll}
+              disabled={updateMut.isPending}
+              className="text-[11px] font-medium text-blue-600 hover:text-blue-800 cursor-pointer disabled:opacity-40 transition-colors"
+            >
+              {updateMut.isPending ? '保存中...' : '保存'}
+            </button>
+          </div>
+          <div className="space-y-3">
+            {pairs.map((pair, i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-blue-500 w-5 shrink-0">Q{i + 1}</span>
+                  <input
+                    value={pair.q}
+                    onChange={(e) => updatePair(i, 'q', e.target.value)}
+                    placeholder="面试问题"
+                    className={iCls}
+                  />
+                  {pairs.length > 1 && (
+                    <button
+                      onClick={() => removePair(i)}
+                      className="p-1 text-slate-300 hover:text-red-400 cursor-pointer transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <div className="pl-7">
+                  <textarea
+                    value={pair.a}
+                    onChange={(e) => updatePair(i, 'a', e.target.value)}
+                    placeholder="我的回答（可选）"
+                    rows={2}
+                    className={iCls}
+                  />
+                </div>
+                {/* AI suggestion */}
+                <div className="pl-7">
+                  {suggestions[i] ? (
+                    <div className="mt-1.5 p-3 rounded-xl bg-blue-50/60 border border-blue-100/60">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold text-blue-600">AI 建议</span>
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                          (suggestions[i]?.score ?? 0) >= 8 ? 'bg-emerald-100 text-emerald-700'
+                          : (suggestions[i]?.score ?? 0) >= 5 ? 'bg-amber-100 text-amber-700'
+                          : 'bg-red-100 text-red-600'
+                        }`}>
+                          {suggestions[i]?.score ?? 0} / 10
+                        </span>
+                      </div>
+                      {suggestions[i]?.strengths && suggestions[i]!.strengths.length > 0 && (
+                        <div className="mb-1.5">
+                          <span className="text-[10px] font-semibold text-emerald-600">亮点</span>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {suggestions[i]!.strengths.map((s, j) => (
+                              <li key={j} className="text-[11px] text-slate-600 leading-relaxed">• {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {suggestions[i]?.weaknesses && suggestions[i]!.weaknesses.length > 0 && (
+                        <div className="mb-1.5">
+                          <span className="text-[10px] font-semibold text-red-500">不足</span>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {suggestions[i]!.weaknesses.map((s, j) => (
+                              <li key={j} className="text-[11px] text-slate-600 leading-relaxed">• {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {suggestions[i]?.suggested_answer && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-blue-600">示范回答</span>
+                          <p className="mt-0.5 text-[11px] text-slate-600 leading-relaxed whitespace-pre-wrap">
+                            {suggestions[i]!.suggested_answer}
+                          </p>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setSuggestions(prev => { const n = { ...prev }; delete n[i]; return n })}
+                        className="mt-1.5 text-[10px] text-slate-400 hover:text-slate-600 cursor-pointer transition-colors"
+                      >
+                        收起
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 mt-1">
+                      <button
+                        onClick={() => fetchSuggestion(i)}
+                        disabled={suggestLoading[i] || !pair.q.trim()}
+                        className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {suggestLoading[i] ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            分析中...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3" />
+                            AI 建议
+                          </>
+                        )}
+                      </button>
+                      {suggestError[i] && (
+                        <span className="text-[11px] text-red-400">生成失败，请重试</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={addPair}
+            className="flex items-center gap-1 text-[11px] text-blue-500 hover:text-blue-700 cursor-pointer mt-2 transition-colors"
+          >
+            <Plus className="w-3 h-3" /> 加一题
+          </button>
         </div>
 
         {/* Editable: reflection */}
@@ -244,7 +418,7 @@ function InterviewDetailModal({
           <textarea
             value={reflection}
             onChange={(e) => setReflection(e.target.value)}
-            onBlur={saveText}
+            onBlur={saveAll}
             placeholder="这次面试的感受、做得好的和不足的地方..."
             rows={2}
             className="w-full px-3 py-2 rounded-lg border border-slate-200 text-[13px] text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500/15 focus:border-blue-300 transition-all resize-none leading-relaxed"

@@ -732,6 +732,73 @@ def analyze_interview(
     return _serialize_interview(record)
 
 
+class SuggestAnswerRequest(BaseModel):
+    question: str
+    answer: str
+
+
+@router.post("/interviews/{interview_id}/suggest-answer")
+def suggest_answer_for_question(
+    interview_id: int,
+    req: SuggestAnswerRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """对单道面试题的回答给出 AI 改进建议。"""
+    record = db.query(InterviewRecord).filter(
+        InterviewRecord.id == interview_id,
+        InterviewRecord.user_id == user.id,
+    ).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="面试记录不存在")
+
+    if not req.question.strip():
+        raise HTTPException(status_code=400, detail="题目不能为空")
+
+    system_prompt = (
+        "你是一位资深技术面试官与面试教练。"
+        "用户会提供一道面试题和他的回答，你需要给出针对性的改进建议。"
+        "输出结构必须严格遵循以下 JSON 格式，不要添加任何额外字段或 markdown 代码块标记：\n"
+        "{\n"
+        '  "score": <1-10 的整数评分>,\n'
+        '  "strengths": [<回答的亮点，1-2 条>],\n'
+        '  "weaknesses": [<回答的不足，1-3 条>],\n'
+        '  "suggested_answer": <一段优化后的示范回答，100-200 字>\n'
+        "}"
+    )
+
+    user_prompt = (
+        f"面试岗位：{record.position or '未指定'}\n"
+        f"面试轮次：{record.round or '未指定'}\n\n"
+        f"【题目】\n{req.question}\n\n"
+        f"【用户回答】\n{req.answer or '（未填写）'}\n\n"
+        f"请给出 JSON 格式的改进建议。"
+    )
+
+    try:
+        from backend.llm import get_llm_client, get_model
+        resp = get_llm_client(timeout=45).chat.completions.create(
+            model=get_model("fast"),
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=0.5,
+            max_tokens=1200,
+        )
+        raw = resp.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        result = json.loads(raw.strip())
+    except Exception as e:
+        logger.warning("suggest-answer LLM failed: %s", e)
+        raise HTTPException(status_code=500, detail="AI 建议生成失败，请稍后重试")
+
+    return result
+
+
 @router.delete("/interviews/{interview_id}", status_code=204)
 def delete_interview(
     interview_id: int,

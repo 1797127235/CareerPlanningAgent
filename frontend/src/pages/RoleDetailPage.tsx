@@ -376,49 +376,44 @@ export default function RoleDetailPage() {
           {/* Divider */}
           <div className="border-t border-slate-100" />
 
-          {/* 往哪走 (双栏) */}
+          {/* 发展方向 (双栏) */}
           {(data.promotion_path?.length || data.promotion_targets.length > 0 || data.transition_targets.length > 0) && (
             <div>
-              <SectionTitle>往哪走</SectionTitle>
+              <SectionTitle>发展方向</SectionTitle>
               <div className="grid grid-cols-2 gap-6">
-                {/* 晋升阶梯 */}
+                {/* 常见发展路径（参考） */}
                 <div>
                   <h4 className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2">
-                    晋升阶梯
+                    常见发展路径（参考）
                   </h4>
-                  {data.promotion_path && data.promotion_path.length > 0 ? (() => {
-                    const currentLevel = data.user_dynamic_level ?? 1
-                    return (
+                  {data.promotion_path && data.promotion_path.length > 0 ? (
                     <div>
                       {data.promotion_path!.map((step, i) => (
                         <div key={i} className="flex items-center gap-2">
                           <div className="flex flex-col items-center">
                             <div className={`w-2 h-2 rounded-full ${
-                              step.level <= currentLevel ? 'bg-blue-500' : 'bg-slate-200'
+                              step.level <= (data.career_level ?? 2) ? 'bg-blue-500' : 'bg-slate-200'
                             }`} />
                             {i < data.promotion_path!.length - 1 && (
                               <div className={`w-px h-4 ${
-                                step.level < currentLevel ? 'bg-blue-300' : 'bg-slate-200'
+                                step.level < (data.career_level ?? 2) ? 'bg-blue-300' : 'bg-slate-200'
                               }`} />
                             )}
                           </div>
                           <span className={`text-[11px] leading-tight ${
-                            step.level === currentLevel
+                            step.level === (data.career_level ?? 2)
                               ? 'font-bold text-blue-600'
-                              : step.level < currentLevel
+                              : step.level < (data.career_level ?? 2)
                                 ? 'text-slate-400 line-through'
                                 : 'text-slate-600'
                           }`}>
                             {step.title}
-                            {step.level === currentLevel && (
-                              <span className="text-[9px] ml-1 text-blue-400">← 你在这里</span>
-                            )}
                           </span>
                         </div>
                       ))}
+                      <p className="text-[9px] text-slate-300 mt-2">不同公司职级体系差异较大，以上为行业常见路径参考</p>
                     </div>
-                    )
-                  })() : data.promotion_targets.length > 0 ? (
+                  ) : data.promotion_targets.length > 0 ? (
                     <div className="space-y-1.5">
                       {data.promotion_targets.map(t => (
                         <NavLink key={t.node_id} label={t.label} onClick={() => navigate(`/roles/${t.node_id}`)} />
@@ -429,9 +424,9 @@ export default function RoleDetailPage() {
                   )}
                 </div>
 
-                {/* 可转型方向 */}
+                {/* 可探索方向 */}
                 <div>
-                  <h4 className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2">可转型方向</h4>
+                  <h4 className="text-[10px] font-bold text-slate-300 uppercase tracking-wider mb-2">可探索方向</h4>
                   {data.transition_targets.length > 0 ? (
                     <div className="space-y-1.5">
                       {data.transition_targets.slice(0, 5).map(t => (
@@ -452,11 +447,18 @@ export default function RoleDetailPage() {
           )}
 
           {/* ── 市场动态 (来自真实招聘数据) ── */}
-          {data.market_signal && data.market_signal.timing && data.market_signal.timing !== 'no_data' && (
+          {data.market_signal && data.market_signal.timing && data.market_signal.timing !== 'no_data' && (data.career_level ?? 2) < 4 && (
             <>
               <div className="border-t border-slate-100" />
               <div>
-                <SectionTitle>市场动态</SectionTitle>
+                <div className="flex items-center justify-between mb-2">
+                  <SectionTitle>市场动态</SectionTitle>
+                  {data.market_signal!.is_proxy && (
+                    <span className="text-[9px] text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                      基于「{data.market_signal!.proxy_family}」方向估算
+                    </span>
+                  )}
+                </div>
                 {/* Timing banner */}
                 {(() => {
                   const t = data.market_signal!.timing
@@ -473,9 +475,6 @@ export default function RoleDetailPage() {
                       <div>
                         <p className={`text-[13px] font-bold ${s.text}`}>{data.market_signal!.timing_label}</p>
                         <p className={`text-[11px] mt-0.5 ${s.text} opacity-80`}>{data.market_signal!.timing_reason}</p>
-                        {data.market_signal!.is_proxy && (
-                          <p className="text-[10px] text-slate-400 mt-0.5">* 参考「{data.market_signal!.proxy_family}」方向数据</p>
-                        )}
                       </div>
                     </div>
                   )
@@ -497,7 +496,7 @@ export default function RoleDetailPage() {
                         </span>
                       )}
                     </p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{data.market_signal!.baseline_year}→{data.market_signal!.compare_year}</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">近年趋势</p>
                   </div>
                   {/* 薪资动能 */}
                   <div className="rounded-xl bg-slate-50 border border-slate-100 px-3 py-2">
@@ -527,7 +526,7 @@ export default function RoleDetailPage() {
                 {/* Top industries */}
                 {data.market_signal!.top_industries && data.market_signal!.top_industries!.length > 0 && (
                   <div>
-                    <p className="text-[10px] text-slate-400 font-medium mb-1.5">招聘来源行业（2021-2024）</p>
+                    <p className="text-[10px] text-slate-400 font-medium mb-1.5">招聘来源行业</p>
                     <div className="flex flex-wrap gap-1.5">
                       {data.market_signal!.top_industries!.map((ind, i) => (
                         <span key={i} className="text-[11px] text-slate-600 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-lg">

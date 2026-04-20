@@ -748,7 +748,7 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
                 {/* Promo ladder */}
                 <div className="mb-5 mt-1">
                   <div className="text-[13px] font-bold text-slate-500 flex items-center gap-1.5 mb-3">
-                    <ArrowUp className="w-3.5 h-3.5" /> 职级阶梯
+                    <ArrowUp className="w-3.5 h-3.5" /> 常见发展路径（参考）
                   </div>
                   <div className="flex items-center gap-1.5">
                     {Array.from({ length: maxLevel }, (_, lv) => {

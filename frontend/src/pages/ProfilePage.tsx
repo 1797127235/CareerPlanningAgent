@@ -169,15 +169,10 @@ export default function ProfilePage() {
       const list = res.recommendations || []
       setRecs(list)
       if (list.length === 0) {
-        // 空数组可能是后端还在生成，自动重试最多 3 次（18s）
-        if (recsRefetchCount.current < 3) {
-          recsRefetchCount.current += 1
-          recsRetryTimer.current = setTimeout(() => {
-            doFetchRecs(true)
-          }, 6000)
-        } else {
-          setRecsFetchFailed(true)
-        }
+        // 后端推荐还在生成中，无限轮询直到拿到数据
+        recsRetryTimer.current = setTimeout(() => {
+          doFetchRecs(true)
+        }, 6000)
       } else {
         recsRefetchCount.current = 0
       }
@@ -215,7 +210,12 @@ export default function ProfilePage() {
   }, [profileUpdatedAt])
 
   const retryFetchRecs = () => {
+    if (recsRetryTimer.current) {
+      clearTimeout(recsRetryTimer.current)
+      recsRetryTimer.current = null
+    }
     recsRefetchCount.current = 0
+    setRecsFetchFailed(false)
     doFetchRecs()
   }
 
@@ -645,7 +645,7 @@ export default function ProfilePage() {
                     </svg>
                     <div>
                       <p className="text-[13px] font-semibold text-blue-700">AI 正在分析你的技术方向</p>
-                      <p className="text-[11px] text-blue-400 mt-0.5">根据简历技能匹配最适合的职业路径，通常需要 1-3 分钟</p>
+                      <p className="text-[11px] text-blue-400 mt-0.5">根据简历技能匹配最适合的职业路径，请稍候…</p>
                     </div>
                   </div>
                 )}
@@ -667,8 +667,8 @@ export default function ProfilePage() {
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-amber-800">暂时没拿到推荐</p>
-                  <p className="text-[11px] text-amber-600 mt-0.5">AI 服务可能繁忙，过一会儿再试。</p>
+                  <p className="text-[13px] font-semibold text-amber-800">分析暂不可用</p>
+                  <p className="text-[11px] text-amber-600 mt-0.5">网络或服务出现异常，请稍后重试。</p>
                   <button
                     onClick={retryFetchRecs}
                     className="mt-2 text-[12px] font-semibold text-amber-700 border-b border-amber-700 pb-0.5 hover:text-amber-900 hover:border-amber-900 cursor-pointer"
