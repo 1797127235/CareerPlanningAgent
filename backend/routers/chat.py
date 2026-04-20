@@ -299,7 +299,7 @@ def _hydrate_state(user: User, db: Session) -> dict:
             state["recommended_data"] = recs
             state["recommended_labels"] = [
                 r.get("label") or r.get("role_id", "")
-                for r in recs[:4] if r.get("label") or r.get("role_id")
+                for r in recs if r.get("label") or r.get("role_id")
             ]
         except (json.JSONDecodeError, TypeError):
             pass

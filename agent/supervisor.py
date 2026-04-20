@@ -157,9 +157,17 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
         else:
             parts.append("- 画像: 已建立")
             if skills:
-                names = [s.get("name", "") if isinstance(s, dict) else str(s) for s in skills[:8]]
+                # Sort by level (advanced > intermediate > familiar > beginner) and take top 8
+                _LEVEL_RANK = {"advanced": 0, "intermediate": 1, "familiar": 2, "beginner": 3}
+                sorted_skills = sorted(
+                    skills,
+                    key=lambda s: _LEVEL_RANK.get(
+                        s.get("level", "familiar") if isinstance(s, dict) else "familiar", 99
+                    ),
+                )
+                names = [s.get("name", "") if isinstance(s, dict) else str(s) for s in sorted_skills[:8]]
                 parts.append(f"- 用户技能: {', '.join(n for n in names if n)}")
-                parts.append(f"- 技能数量: {len(skills)} 项")
+                parts.append(f"- 技能数量: {len(skills)} 项（以上为按等级排序的前 8 项）")
         edu = profile.get("education", {})
         if edu and edu.get("degree") and not for_triage:
             parts.append(f"- 学历: {edu.get('degree', '')} · {edu.get('major', '')}")

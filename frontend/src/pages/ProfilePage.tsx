@@ -684,7 +684,7 @@ export default function ProfilePage() {
                   <p className="text-[13px] text-slate-500 mb-4 leading-relaxed">
                     基于你的
                     <span className="font-semibold text-slate-700">
-                      {' '}{skills.slice(0, 4).map(s => s.name).join('、')}{' '}
+                      {' '}{skills.slice(0, 6).map(s => s.name).join('、')}{' '}
                     </span>
                     等技能背景，以下方向与你的经历最为契合。点击了解详情，不急着做决定。
                   </p>
