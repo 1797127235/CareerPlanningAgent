@@ -12,6 +12,7 @@ from backend.services.profile.parser.llm_adapter import adapt_resumesdk_to_profi
 from backend.services.profile.parser.merger import merge_profiles
 from backend.services.profile.parser.resumesdk_client import call_resumesdk
 from backend.services.profile.parser.schema import ProfileData
+from backend.services.profile.parser.skill_normalizer import apply_to_profile
 from backend.services.profile.parser.text_extractor import extract_raw_text, is_scanned_pdf
 
 logger = logging.getLogger(__name__)
@@ -71,12 +72,16 @@ def parse_resume_pipeline(file_content: bytes, filename: str) -> ProfileData:
 
     # 5. Merge
     if sdk_profile and llm_profile:
-        return merge_profiles(sdk_profile, llm_profile)
-    if sdk_profile:
-        return sdk_profile
-    if llm_profile:
-        return llm_profile
+        result = merge_profiles(sdk_profile, llm_profile)
+    elif sdk_profile:
+        result = sdk_profile
+    elif llm_profile:
+        result = llm_profile
+    else:
+        # Total failure — return empty profile with raw_text for manual review
+        logger.error("All parsers failed for %s", filename)
+        return ProfileData(raw_text=raw_text[:6000])
 
-    # Total failure — return empty profile with raw_text for manual review
-    logger.error("All parsers failed for %s", filename)
-    return ProfileData(raw_text=raw_text[:6000])
+    # 6. Normalize skill granularity (fold C++11→C++, Vector→STL, etc.)
+    apply_to_profile(result)
+    return result
