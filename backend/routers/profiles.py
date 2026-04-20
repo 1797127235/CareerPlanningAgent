@@ -184,6 +184,10 @@ async def parse_resume(
     scanned = is_scanned_pdf(content, filename, raw_text)
     logger.info("Resume parser strategy: filename=%s scanned=%s text_len=%d", filename, scanned, len(raw_text))
 
+    # Pre-extract job_target via regex — works for both scanned and text-based PDFs
+    from backend.services.profile.parser import _extract_job_target_regex
+    hint_jt = _extract_job_target_regex(raw_text)
+
     profile_data: dict | None = None
 
     if scanned:
@@ -192,12 +196,25 @@ async def parse_resume(
         raw_text = _ocr_pdf_with_vl(content)
         if not raw_text.strip():
             raise HTTPException(400, "无法提取简历文本，请使用文字版 PDF 或直接粘贴简历文本")
-        profile_data = _extract_profile_with_llm(raw_text)
+        # OCR text may have different extraction quality; try regex again
+        ocr_jt = _extract_job_target_regex(raw_text)
+        if ocr_jt and not hint_jt:
+            hint_jt = ocr_jt
+            logger.info("Regex job_target found in OCR text: %r", hint_jt)
+        profile_data = _extract_profile_with_llm(raw_text, hint_job_target=hint_jt)
     else:
         # Text-based: use new parser pipeline (ResumeSDK + LLM adapter + merger)
         from backend.services.profile.parser import parse_resume_pipeline
-        parsed = parse_resume_pipeline(content, filename)
+        parsed = parse_resume_pipeline(content, filename, hint_job_target=hint_jt)
         profile_data = parsed.to_dict()
+
+    logger.info(
+        "[PARSE-RESUME] job_target=%r skills=%d projects=%d raw_text_len=%d",
+        profile_data.get("job_target", ""),
+        len(profile_data.get("skills", [])),
+        len(profile_data.get("projects", [])),
+        len(profile_data.get("raw_text", "")),
+    )
 
     quality_data = ProfileService.compute_quality(profile_data)
     return ok({"profile": profile_data, "quality": quality_data})
@@ -233,11 +250,17 @@ def update_profile(
     profile = _get_or_create_profile(user.id, db)
 
     if req.profile is not None:
+        existing = json.loads(profile.profile_json or "{}")
         if req.merge:
-            existing = json.loads(profile.profile_json or "{}")
             merged = _merge_profiles(existing, req.profile)
         else:
             merged = req.profile
+
+        # Defensive: always preserve raw_text — it's the only way to re-parse later.
+        # If the incoming profile lacks it (frontend bug / old code), keep existing.
+        if not merged.get("raw_text") and existing.get("raw_text"):
+            merged["raw_text"] = existing["raw_text"]
+            logger.info("Preserved existing raw_text (%d chars) during profile update", len(existing["raw_text"]))
 
         profile.profile_json = json.dumps(merged, ensure_ascii=False, default=str)
         # Sync name to DB column only when source is NOT 'resume' (user confirmed)
@@ -254,11 +277,18 @@ def update_profile(
     db.commit()
     db.refresh(profile)
 
+    _final = json.loads(profile.profile_json or "{}")
+    logger.info(
+        "[UPDATE-PROFILE] job_target=%r source=%r merge=%s",
+        _final.get("job_target", ""),
+        (_final or {}).get("source", ""),
+        req.merge,
+    )
+
     # Graph location + growth event run in background threads — don't block the response
     if req.profile is not None:
         import threading as _threading
         from backend.db import SessionLocal as _SL
-        _final = json.loads(profile.profile_json)
         _pid, _uid = profile.id, user.id
         _skill_count = len(_final.get("skills", []))
         _source = (_final or {}).get("source", "")

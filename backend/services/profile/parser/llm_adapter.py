@@ -83,10 +83,16 @@ ResumeSDK 原始 JSON：
 6. 证书：不要遗漏任何证书，包括 CET-4/6、驾驶证、普通话等级、软考等。不要按"与求职相关"过滤。
 7. 知识领域：根据技能深度和项目方向推断，如"Linux系统编程""网络编程""C++系统开发""数据库"等。不要只写"编程开发"。
 8. internships：只放有真实企业实习身份的经历，个人项目/课程设计不要放这里。
+
+【求职意向特别规则】
+- 求职意向（job_target）必须来自简历中明确的"求职意向/期望职位/目标职位"等板块。
+- 项目经历中的角色（如"项目负责人""技术负责人"）是项目内部角色，不是求职意向。
+- 实习经历中的岗位（如"算法实习生"）是过往经历，不是求职意向。
+{hint_job_target_line}
 """
 
 
-def adapt_resumesdk_to_profile(rs_raw_json: dict, raw_text: str) -> ProfileData | None:
+def adapt_resumesdk_to_profile(rs_raw_json: dict, raw_text: str, hint_job_target: str = "") -> ProfileData | None:
     """Use LLM to convert ResumeSDK raw JSON + raw text into a standard ProfileData.
 
     This replaces all hard-coded mapping logic (_map_skills, _map_projects,
@@ -99,7 +105,15 @@ def adapt_resumesdk_to_profile(rs_raw_json: dict, raw_text: str) -> ProfileData 
     rs_json_str = json.dumps(rs_raw_json, ensure_ascii=False, default=str)[:8000]
     raw_text_truncated = raw_text[:4000]
 
-    prompt = _ADAPT_PROMPT.format(rs_json=rs_json_str, raw_text=raw_text_truncated)
+    hint_line = ""
+    if hint_job_target:
+        hint_line = f"- 预处理已从原始文本中提取到疑似求职意向：「{hint_job_target}」。请以此为主要参考，同时核对 ResumeSDK 的 expect_job 字段。如果两者冲突，以原始文本中的板块内容为准。"
+
+    prompt = _ADAPT_PROMPT.format(
+        rs_json=rs_json_str,
+        raw_text=raw_text_truncated,
+        hint_job_target_line=hint_line,
+    )
 
     try:
         result = llm_chat(

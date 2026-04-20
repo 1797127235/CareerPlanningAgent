@@ -82,6 +82,15 @@ _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背
   * 即便应届生技能栈似乎沾边，架构师岗位永远不会招应届生
 - experience_years <= 1 的用户：career_level >= 4 岗位 affinity_pct 必须 ≤ 35
 
+【技能上下文原则（严格执行）】
+技能必须结合使用场景判断，不能只看技能名称：
+- SQL 在"测试数据准备/测试用例"中出现 → 测试方向信号
+- SQL 在"数据分析/报表"中出现 → 数据方向信号
+- Python 在"自动化测试/测试脚本"中出现 → 测试方向信号
+- Python 在"模型训练/数据清洗"中出现 → AI/数据方向信号
+- 通用技能（SQL/Python/HTML）单独出现不能驱动主方向，必须看项目/实习中的具体使用场景
+- **项目/实习经历是判断主攻方向的首要依据，技能列表仅作辅助**。如果用户的项目/实习全部围绕某个方向，即使技能列表里有通用技能，也不得因这些通用技能就推荐其他方向。
+
 【岗位画像对齐（命中 not_this_role_if 则不推）】
 每个岗位的"不适合"条目是主动排除信号。用户情况命中即表明该岗位不合适：
 - "初中级工程师" / "个人贡献者阶段" → 应届生和 experience_years < 3 的用户命中
@@ -130,6 +139,15 @@ _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背
 【用户求职意向（最高优先级）】
 {job_target}
 
+【用户工作内容关键词（从项目/实习文本中提取）】
+{work_content_summary}
+
+【用户项目经历】
+{user_projects}
+
+【用户实习/工作经历】
+{user_internships}
+
 【用户技能（含熟练度）】
 {user_skills}
 
@@ -149,7 +167,8 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     """Call LLM to generate recommendations. Returns response dict or None on failure."""
     from backend.llm import llm_chat, parse_json_response, get_model
     from backend.routers._profiles_graph import (
-        _get_role_list_text, embedding_prefilter, find_role_id_for_job_target,
+        _extract_implied_skills_from_text, _get_role_list_text,
+        embedding_prefilter, find_role_id_for_job_target,
     )
 
     skill_objs = [s for s in profile_data.get("skills", []) if isinstance(s, dict) and s.get("name")]
@@ -168,11 +187,43 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
 
     candidate_ids = embedding_prefilter(profile_data, pin_node_ids=pin_ids)
 
+    # Build project text for LLM context (not just skill names)
+    projects = profile_data.get("projects", [])
+    project_texts = []
+    for p in projects:
+        if isinstance(p, dict):
+            line = p.get("name", "")
+            if p.get("description"):
+                line += f"：{p['description']}"
+            if line:
+                project_texts.append(line)
+        elif isinstance(p, str) and p.strip():
+            project_texts.append(p.strip())
+    user_projects = "\n".join(project_texts[:6]) or "无"
+
+    internships = profile_data.get("internships", [])
+    intern_texts = []
+    for i in internships:
+        if isinstance(i, dict):
+            line = f"{i.get('company', '')} - {i.get('role', '')}"
+            if i.get("highlights"):
+                line += f"：{i['highlights']}"
+            if line.strip(" -"):
+                intern_texts.append(line)
+        elif isinstance(i, str) and i.strip():
+            intern_texts.append(i.strip())
+    user_internships = "\n".join(intern_texts[:4]) or "无"
+
     edu = profile_data.get("education", {})
+    from backend.routers._profiles_graph import _build_work_content_summary
+    work_content_summary = _build_work_content_summary(profile_data)
     prompt = _RECOMMEND_PROMPT.format(
         role_list=_get_role_list_text(candidate_ids),
         job_target=job_target,
         user_skills=skills_with_level,
+        user_projects=user_projects,
+        user_internships=user_internships,
+        work_content_summary=work_content_summary,
         major=edu.get("major", "未知"),
         degree=edu.get("degree", "未知"),
         exp_years=profile_data.get("experience_years", 0),
@@ -261,14 +312,36 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     if dropped:
         logger.info("Seniority filter: dropped %d senior recs for user (exp=%d)", dropped, exp_years)
 
-    # 补齐至 top_k：如果过滤后不足，从 graph 里按技能重合度 + 职级合适回填
+    # 补齐至 top_k：如果过滤后不足，从 graph 里按技能+任务重合度回填
     if len(enriched) < top_k:
         user_skill_set = {
             (s.get("name") or "").lower().strip()
             for s in profile_data.get("skills", [])
             if isinstance(s, dict) and s.get("name")
         }
+        # Augment with text-scanned implied skills so backfill catches nodes
+        # whose must_skills appear in project/internship descriptions.
+        user_skill_set |= _extract_implied_skills_from_text(profile_data)
         existing_ids = {r["role_id"] for r in enriched}
+
+        # Build user text for core_tasks matching
+        text_parts: list[str] = []
+        rt = (profile_data.get("raw_text") or "").lower()
+        if rt:
+            text_parts.append(rt)
+        for p in profile_data.get("projects", []):
+            if isinstance(p, dict):
+                text_parts.append(str(p.get("name", "")).lower())
+                text_parts.append(str(p.get("description", "") or p.get("highlights", "")).lower())
+            elif isinstance(p, str):
+                text_parts.append(p.lower())
+        for i in profile_data.get("internships", []):
+            if isinstance(i, dict):
+                text_parts.append(str(i.get("role", "")).lower())
+                text_parts.append(str(i.get("description", "") or i.get("highlights", "")).lower())
+            elif isinstance(i, str):
+                text_parts.append(i.lower())
+        user_text_combined = " ".join(text_parts)
 
         candidates = []
         for nid, node in graph_nodes.items():
@@ -279,30 +352,42 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
                 continue
             if exp_years <= 1 and cl > 4:
                 continue
-            node_skills = {
+            # Expand node skills with Chinese prefix tokens for robust matching
+            raw_skills = [
                 (s if isinstance(s, str) else s.get("name", "")).lower().strip()
                 for s in (node.get("must_skills") or [])
-            }
-            overlap = len(user_skill_set & node_skills)
-            if overlap == 0:
+            ]
+            expanded_skills = _expand_chinese_tokens(raw_skills)
+            overlap = len(user_skill_set & expanded_skills)
+            core_tasks = [t.strip() for t in node.get("core_tasks", []) if t and len(t.strip()) >= 3]
+            expanded_tasks = _expand_chinese_tokens(core_tasks)
+            task_hits = sum(1 for t in expanded_tasks if len(t) >= 2 and t in user_text_combined) if core_tasks else 0
+            total_score = overlap + task_hits * 2
+            if total_score == 0:
                 continue
-            candidates.append((overlap, nid, node))
+            candidates.append((total_score, overlap, task_hits, nid, node))
         candidates.sort(key=lambda x: -x[0])
 
         backfilled = 0
-        for overlap, nid, node in candidates:
+        for total_score, overlap, task_hits, nid, node in candidates:
             if len(enriched) >= top_k:
                 break
+            base_affinity = min(60 + total_score * 5, 78)
+            reason_parts = []
+            if overlap:
+                reason_parts.append(f"技能画像与该方向有 {overlap} 项重合")
+            if task_hits:
+                reason_parts.append(f"项目/实习经历与该岗位核心任务有 {task_hits} 项匹配")
             enriched.append({
                 "role_id": nid,
                 "label": node.get("label", nid),
-                "affinity_pct": min(60 + overlap * 5, 78),
+                "affinity_pct": base_affinity,
                 "matched_skills": [],
                 "gap_skills": (node.get("must_skills") or [])[:4],
                 "gap_hours": 0,
                 "zone": node.get("zone", "safe"),
                 "salary_p50": node.get("salary_p50", 0),
-                "reason": f"技能画像与该方向有 {overlap} 项重合",
+                "reason": "；".join(reason_parts) or f"技能画像与该方向有 {overlap} 项重合",
                 "channel": "growth",
                 "career_level": node.get("career_level", 0),
                 "replacement_pressure": node.get("replacement_pressure", 50),
@@ -310,9 +395,117 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
             })
             backfilled += 1
         if backfilled:
-            logger.info("Seniority backfill: added %d candidates by skill overlap", backfilled)
+            logger.info("Seniority backfill: added %d candidates (task+skill)", backfilled)
 
     return {"recommendations": enriched[:top_k], "user_skill_count": len(skill_objs)}
+
+
+def _ensure_job_target_first(profile_data: dict, recs: list[dict]) -> tuple[list[dict], str]:
+    """API-layer insurance: ensure job_target role ranks #1 with high affinity.
+
+    Also attempts regex fallback on raw_text if job_target is missing from parsed data.
+    Returns (modified_recs, job_target_source) for diagnostics.
+    """
+    from backend.routers._profiles_graph import find_role_id_for_job_target
+
+    job_target = (profile_data.get("job_target") or "").strip()
+    source = "parsed"
+
+    # Fallback: extract from raw_text if parsed job_target is empty
+    if not job_target:
+        raw_text = (profile_data.get("raw_text") or "").strip()
+        if raw_text:
+            import re as _re
+            for pat in [
+                r'(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s*[：:]\s*([^\n\r]{1,40})',
+                r'(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s+([^\n\r]{1,40})',
+            ]:
+                m = _re.search(pat, raw_text, _re.IGNORECASE)
+                if m:
+                    jt = m.group(1).strip()
+                    jt = _re.sub(r'[\s,，;.；。]+$', '', jt)
+                    if jt and jt not in {"面议", "不限", "待定", "无", "—", "-", "/"}:
+                        job_target = jt
+                        source = "raw_text_fallback"
+                        break
+
+    if not job_target or job_target in {"未指定", "面议", "不限", "待定", "无"}:
+        return recs, f"empty ({source})"
+
+    target_role_id = find_role_id_for_job_target(job_target)
+    if not target_role_id:
+        return recs, f"unmapped: {job_target}"
+
+    # Use absolute path (same resolution strategy as _auto_locate_on_graph)
+    graph_path = Path(__file__).resolve().parent.parent.parent / "data" / "graph.json"
+    graph_nodes = {}
+    try:
+        with open(graph_path, "r", encoding="utf-8") as f:
+            for n in json.load(f).get("nodes", []):
+                graph_nodes[n["node_id"]] = n
+    except Exception:
+        pass
+
+    if target_role_id not in graph_nodes:
+        return recs, f"no_graph_node: {target_role_id}"
+
+    existing_ids = [r["role_id"] for r in recs]
+    if target_role_id in existing_ids:
+        idx = existing_ids.index(target_role_id)
+        rec = recs.pop(idx)
+        top_affinity = max((r.get("affinity_pct", 0) for r in recs), default=60)
+        rec["affinity_pct"] = max(rec.get("affinity_pct", 0), min(99, top_affinity + 5), 88)
+        rec["channel"] = "entry"
+        rec["reason"] = rec.get("reason") or f"与求职意向「{job_target}」高度吻合"
+        recs.insert(0, rec)
+    else:
+        node = graph_nodes[target_role_id]
+        top_affinity = max((r.get("affinity_pct", 0) for r in recs), default=60)
+        recs.insert(0, {
+            "role_id": target_role_id,
+            "label": node.get("label", target_role_id),
+            "affinity_pct": max(min(99, top_affinity + 5), 88),
+            "matched_skills": [],
+            "gap_skills": node.get("must_skills", [])[:4],
+            "gap_hours": 0,
+            "zone": node.get("zone", "safe"),
+            "salary_p50": node.get("salary_p50", 0),
+            "reason": f"与求职意向「{job_target}」高度吻合",
+            "channel": "entry",
+            "career_level": node.get("career_level", 0),
+            "replacement_pressure": node.get("replacement_pressure", 50),
+            "human_ai_leverage": node.get("human_ai_leverage", 50),
+        })
+    return recs, f"boosted: {job_target} -> {target_role_id}"
+
+    existing_ids = [r["role_id"] for r in recs]
+    if target_role_id in existing_ids:
+        idx = existing_ids.index(target_role_id)
+        rec = recs.pop(idx)
+        top_affinity = max((r.get("affinity_pct", 0) for r in recs), default=60)
+        rec["affinity_pct"] = max(rec.get("affinity_pct", 0), min(99, top_affinity + 5), 88)
+        rec["channel"] = "entry"
+        rec["reason"] = rec.get("reason") or f"与求职意向「{job_target}」高度吻合"
+        recs.insert(0, rec)
+    else:
+        node = graph_nodes[target_role_id]
+        top_affinity = max((r.get("affinity_pct", 0) for r in recs), default=60)
+        recs.insert(0, {
+            "role_id": target_role_id,
+            "label": node.get("label", target_role_id),
+            "affinity_pct": max(min(99, top_affinity + 5), 88),
+            "matched_skills": [],
+            "gap_skills": node.get("must_skills", [])[:4],
+            "gap_hours": 0,
+            "zone": node.get("zone", "safe"),
+            "salary_p50": node.get("salary_p50", 0),
+            "reason": f"与求职意向「{job_target}」高度吻合",
+            "channel": "entry",
+            "career_level": node.get("career_level", 0),
+            "replacement_pressure": node.get("replacement_pressure", 50),
+            "human_ai_leverage": node.get("human_ai_leverage", 50),
+        })
+    return recs
 
 
 def _save_rec_cache(profile: Profile, p_hash: str, resp: dict, db: Session):
@@ -357,6 +550,12 @@ def get_recommendations_endpoint(
         cached = json.loads(profile.cached_recs_json or "{}")
         data = cached.get("data")
         if data and data.get("recommendations"):
+            profile_data = json.loads(profile.profile_json or "{}")
+            recs, jt_diag = _ensure_job_target_first(profile_data, data["recommendations"])
+            data["recommendations"] = recs[:top_k]
+            data["_job_target"] = profile_data.get("job_target", "")
+            data["_jt_diag"] = jt_diag  # diagnostic
+            logger.info("[GET-REC] job_target=%r diag=%s top_rec=%r", profile_data.get("job_target"), jt_diag, recs[0]["label"] if recs else "none")
             return data
     except (json.JSONDecodeError, TypeError):
         pass
@@ -383,8 +582,12 @@ def refresh_recommendations(
         raise HTTPException(400, "画像中无技能数据，无法生成推荐")
 
     resp = _generate_recommendations(profile_data, top_k)
+    resp["recommendations"], jt_diag = _ensure_job_target_first(profile_data, resp["recommendations"])
+    resp["_job_target"] = profile_data.get("job_target", "")
+    resp["_jt_diag"] = jt_diag  # diagnostic
     p_hash = profile_hash(profile_data)
     _save_rec_cache(profile, p_hash, resp, db)
+    logger.info("[REFRESH-REC] job_target=%r diag=%s top_rec=%r", profile_data.get("job_target"), jt_diag, resp["recommendations"][0]["label"] if resp["recommendations"] else "none")
     return resp
 
 

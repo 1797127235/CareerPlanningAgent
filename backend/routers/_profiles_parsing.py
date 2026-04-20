@@ -17,7 +17,7 @@ _RESUME_PARSE_PROMPT = """你是一个简历解析 AI。请从以下简历文本
 返回格式（严格 JSON，不要加注释或 markdown）：
 {{
   "name": "姓名（可选）",
-  "job_target": "简历中求职意向/期望职位/求职目标/意向岗位原文。查找规则：1) 优先找'求职意向'、'期望职位'、'求职目标'、'意向岗位'、'期望岗位'、'目标职位'、'应聘职位'等板块的内容；2) 如果简历顶部（姓名下方、联系方式附近）有明确的岗位名称，也视为求职意向；3) 完整保留原文（如'项目管理'、'产品经理实习'、'前端开发工程师'）；4) 只写'面议/不限/待定'等模糊词时填空字符串。警告：'项目负责人''技术负责人'是项目经历中的角色描述，不是求职意向，不要误判。",
+  "job_target": "简历中求职意向/期望职位/求职目标/意向岗位原文。查找规则：1) 优先找'求职意向'、'期望职位'、'求职目标'、'意向岗位'、'期望岗位'、'目标职位'、'应聘职位'等板块的内容；2) 如果简历顶部（姓名下方、联系方式附近）有明确的岗位名称，也视为求职意向；3) 完整保留原文（如'项目管理'、'产品经理实习'、'前端开发工程师'）；4) 只写'面议/不限/待定'等模糊词时填空字符串。警告：'项目负责人''技术负责人'是项目经历中的角色描述，不是求职意向，不要误判。{hint_job_target_line}",
   "primary_domain": "此人最主要的技术/职能方向。判断规则：1) 有图像分割/CNN/Transformer/深度学习/计算机视觉等项目 → 算法研究；2) 有PyTorch/TensorFlow+论文/竞赛 → 算法研究；3) 有LLM/RAG/Agent项目 → AI/LLM开发；4) 有React/Vue/前端项目 → 前端开发；5) 有Java/Spring/后端项目 → 后端开发；6) 有SQL/数据分析/报表项目 → 数据工程；7) 无明确技术信号 → 其他。从以下选一个：AI/LLM开发|后端开发|前端开发|游戏开发|数据工程|系统/基础设施|安全|算法研究|产品设计/PM|其他",
   "career_signals": {{
     "has_publication": true或false（是否有论文发表，包括在投/预印本）,
@@ -533,7 +533,8 @@ def _ocr_single_page(page_idx: int, img_b64: str, client) -> tuple[int, str]:
                     "2. 板块标题（如'专业技能''项目经历''实习经历'）单独一行\n"
                     "3. 列表项保持缩进或用'•'标记\n"
                     "4. 不要添加任何解释，只输出识别的文字\n"
-                    "5. 如果某些文字模糊无法识别，用[模糊]标记，不要猜测"
+                    "5. 如果某些文字模糊无法识别，用[模糊]标记，不要猜测\n"
+                    "6. 特别注意：简历顶部（姓名、联系方式附近）常常有'求职意向''期望职位''意向岗位'等简短信息，必须完整识别并保留，不要遗漏"
                 )},
             ]}],
             max_tokens=4000,
@@ -592,9 +593,50 @@ def _ocr_pdf_with_vl(content: bytes) -> str:
 
         raw_text = "\n\n".join(texts)
         raw_text = _clean_ocr_text(raw_text)
+
+        # ── Secondary extraction: if no job_target signal found, do targeted OCR on page 1 header
+        if texts and not _has_job_target_signal(raw_text):
+            logger.info("Primary OCR missed job_target signal, running targeted header extraction")
+            header_text = _ocr_header_for_job_target(page_images[0][1], client)
+            if header_text:
+                raw_text = header_text + "\n\n" + raw_text
+                logger.info("Header extraction appended: %r", header_text[:120])
+
         return raw_text
     except Exception as e:
         logger.warning("OCR fallback failed: %s", e)
+        return ""
+
+
+def _has_job_target_signal(text: str) -> bool:
+    """Quick check if OCR text already contains job-target related keywords."""
+    import re as _re
+    if not text:
+        return False
+    return bool(_re.search(r'(?:求职意向|期望职位|目标职位|应聘职位|意向岗位|期望岗位)', text, _re.IGNORECASE))
+
+
+def _ocr_header_for_job_target(img_b64: str, client) -> str:
+    """Targeted OCR on page 1 header area to catch job_target that primary OCR missed."""
+    try:
+        resp = client.chat.completions.create(
+            model="qwen-vl-ocr",
+            messages=[{"role": "user", "content": [
+                {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+                {"type": "text", "text": (
+                    "请仔细识别这张简历图片顶部区域（姓名、联系方式附近）的文字。\n"
+                    "特别注意提取以下信息，不要遗漏任何一个字：\n"
+                    "- 求职意向 / 期望职位 / 目标职位 / 意向岗位 / 应聘职位\n"
+                    "- 意向城市 / 工作地点\n"
+                    "- 到岗时间\n"
+                    "只输出识别到的文字，不要解释。"
+                )},
+            ]}],
+            max_tokens=500,
+        )
+        return (resp.choices[0].message.content or "").strip()
+    except Exception as e:
+        logger.warning("Header targeted OCR failed: %s", e)
         return ""
 
 
@@ -1025,6 +1067,25 @@ def _supplement_missing_fields(parsed: dict, raw_text: str) -> dict:
 
     from backend.llm import llm_chat, parse_json_response
 
+    # 0. Job target — if empty, regex fallback (fast & reliable)
+    job_target = (parsed.get("job_target") or "").strip()
+    if not job_target:
+        import re as _re
+        jt_patterns = [
+            r'(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s*[：:]\s*([^\n\r]{1,40})',
+            r'(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s+([^\n\r]{1,40})',
+        ]
+        for pat in jt_patterns:
+            m = _re.search(pat, raw_text, _re.IGNORECASE)
+            if m:
+                jt = m.group(1).strip()
+                # Drop trailing punctuation / noise
+                jt = _re.sub(r'[\s,，;.；。]+$', '', jt)
+                if jt and jt not in {"面议", "不限", "待定", "无", "—", "-", "/"}:
+                    parsed["job_target"] = jt
+                    logger.info("Job target regex fallback: %s", jt)
+                    break
+
     # 1. Skills — already has retry in _extract_profile_with_llm, skip here
 
     # 2. Projects — if empty or suspiciously few
@@ -1150,7 +1211,9 @@ def _smart_truncate_resume(text: str, max_chars: int = 4000) -> str:
             pri = 8
         elif any(k in header for k in ["获奖", "荣誉", "竞赛", "award", "证书", "certificate"]):
             pri = 7
-        elif any(k in header for k in ["求职", "自我评价", "兴趣", "个人简介"]):
+        elif any(k in header for k in ["求职意向", "期望职位", "目标职位", "应聘职位"]):
+            pri = 8  # 求职意向是职业方向的关键信号，必须保留
+        elif any(k in header for k in ["自我评价", "兴趣", "个人简介"]):
             pri = 2
         section_positions.append((start, header, pri))
 
@@ -1209,7 +1272,7 @@ def _smart_truncate_resume(text: str, max_chars: int = 4000) -> str:
     return "".join(result_parts)
 
 
-def _extract_profile_with_llm(raw_text: str) -> dict:
+def _extract_profile_with_llm(raw_text: str, hint_job_target: str = "") -> dict:
     try:
         from backend.llm import llm_chat, parse_json_response
         skill_vocab = _build_skill_vocab()
@@ -1217,9 +1280,14 @@ def _extract_profile_with_llm(raw_text: str) -> dict:
         # Smart truncation: preserve key sections, drop fluff
         truncated = _smart_truncate_resume(raw_text, max_chars=4000)
 
+        hint_line = ""
+        if hint_job_target:
+            hint_line = f'预处理提示：原始文本中疑似包含求职意向「{hint_job_target}」，请重点核对，但不要盲从——如果简历中该词出现在项目经历/实习经历中而非"求职意向"板块，则不要采信。'
+
         prompt = _RESUME_PARSE_PROMPT.format(
             resume_text=truncated,
             skill_vocab=skill_vocab,
+            hint_job_target_line=hint_line,
         )
         result = llm_chat([{"role": "user", "content": prompt}], temperature=0)
         parsed = parse_json_response(result)

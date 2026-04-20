@@ -250,7 +250,7 @@ export default function ProfilePage() {
     if (recsLoading || recs.length === 0) return
     coachTriggered.current = true
     clearJustUploaded()
-    const topLabels = recs.slice(0, 4).map(r => r.label).join('、')
+    const topLabels = recs.map(r => r.label).join('、')
     dispatchCoachTrigger('resume-uploaded', `用户刚上传了简历，画像已生成。系统推荐方向：${topLabels}。`)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [justUploaded, hasProfile, loading, recsLoading, recs])

@@ -35,11 +35,12 @@ def _graph_changed() -> bool:
 
 def _invalidate_graph_cache() -> None:
     """Clear all module-level graph caches (called when graph.json changes)."""
-    global _GRAPH_NODES_CACHE, _ROLE_LIST_CACHE, _skill_vocab_cache, _NODE_EMBEDDINGS
+    global _GRAPH_NODES_CACHE, _ROLE_LIST_CACHE, _skill_vocab_cache, _NODE_EMBEDDINGS, _GRAPH_SKILL_TOKENS_CACHE
     _GRAPH_NODES_CACHE = None
     _ROLE_LIST_CACHE = None
     _skill_vocab_cache = None
     _NODE_EMBEDDINGS = None
+    _GRAPH_SKILL_TOKENS_CACHE = None
     logger.info("Graph caches invalidated due to graph.json update")
 
 
@@ -117,6 +118,177 @@ def find_role_id_for_job_target(job_target: str) -> str | None:
         if any(kw in target_lower for kw in keywords):
             return role_id
     return None
+
+
+# ── Text-scanned skill vocabulary ────────────────────────────────────────────
+
+_GRAPH_SKILL_TOKENS_CACHE: set[str] | None = None
+
+
+def _build_graph_skill_tokens() -> set[str]:
+    """Build tokenized skill vocabulary from all graph node must_skills.
+
+    Returns lowercase tokens/phrases that can be searched for in resume text.
+    Includes both full skill names and individual tokens split by separators,
+    plus 2-character prefixes for pure-Chinese phrases so that e.g.
+    "缺陷管理" produces "缺陷" which can match text mentioning "缺陷".
+    """
+    global _GRAPH_SKILL_TOKENS_CACHE
+    if _GRAPH_SKILL_TOKENS_CACHE is not None:
+        return _GRAPH_SKILL_TOKENS_CACHE
+    graph_nodes = _get_graph_nodes()
+    tokens: set[str] = set()
+    for node in graph_nodes.values():
+        for s in node.get("must_skills", []):
+            if not s or not s.strip():
+                continue
+            sl = s.strip().lower()
+            tokens.add(sl)
+            normalized = sl
+            for sep in ["/", "&", "、", "，", "(", ")", "（", "）", " "]:
+                normalized = normalized.replace(sep, "|")
+            for token in normalized.split("|"):
+                token = token.strip()
+                if token and len(token) >= 2:
+                    tokens.add(token)
+            # For pure Chinese phrases (e.g. "缺陷管理"), also add the
+            # first 2 chars as a prefix token so "缺陷" hits "缺陷管理".
+            if len(sl) >= 4 and all("\u4e00" <= c <= "\u9fff" for c in sl):
+                tokens.add(sl[:2])
+    _GRAPH_SKILL_TOKENS_CACHE = tokens
+    return tokens
+
+
+def _expand_chinese_tokens(phrases: list[str]) -> set[str]:
+    """Expand phrases with Chinese prefix/bigram tokens for robust matching.
+
+    Pure-Chinese phrases (e.g. '缺陷管理', '性能测试') have no separators,
+    so exact substring matching misses them when user text only contains
+    the prefix (e.g. '缺陷' instead of '缺陷管理').
+    """
+    expanded: set[str] = set()
+    for p in phrases:
+        p = p.strip().lower()
+        if not p or len(p) < 2:
+            continue
+        expanded.add(p)
+        # Split by separators (same as _node_skill_set)
+        for sep in ["/", "&", "、", "，", "(", ")", "（", "）", " "]:
+            p = p.replace(sep, "|")
+        for token in p.split("|"):
+            token = token.strip()
+            if token and len(token) >= 2:
+                expanded.add(token)
+        # For pure Chinese phrases, add all prefix n-grams (len>=2)
+        original = p.replace("|", "")
+        if len(original) >= 4 and all("\u4e00" <= c <= "\u9fff" for c in original):
+            for i in range(2, len(original)):
+                expanded.add(original[:i])
+    return expanded
+
+
+def _extract_implied_skills_from_text(profile_data: dict) -> set[str]:
+    """Scan resume text for graph skill vocabulary mentions.
+
+    Dynamically discovers skill signals from raw_text, projects, internships,
+    and work experiences without hard-coding tool→skill mappings.
+    """
+    parts: list[str] = []
+
+    raw_text = (profile_data.get("raw_text") or "").lower()
+    if raw_text:
+        parts.append(raw_text)
+
+    for proj in profile_data.get("projects", []):
+        if isinstance(proj, dict):
+            parts.append(str(proj.get("name", "")).lower())
+            parts.append(str(proj.get("description", "") or proj.get("highlights", "")).lower())
+        elif isinstance(proj, str):
+            parts.append(proj.lower())
+
+    for intern in profile_data.get("internships", []):
+        if isinstance(intern, dict):
+            parts.append(str(intern.get("role", "")).lower())
+            parts.append(str(intern.get("description", "") or intern.get("highlights", "")).lower())
+        elif isinstance(intern, str):
+            parts.append(intern.lower())
+
+    for work in profile_data.get("work_experiences", []):
+        if isinstance(work, dict):
+            parts.append(str(work.get("description", "")).lower())
+        elif isinstance(work, str):
+            parts.append(work.lower())
+
+    combined = " ".join(parts)
+    if not combined.strip():
+        return set()
+
+    tokens = _build_graph_skill_tokens()
+    implied: set[str] = set()
+    for token in tokens:
+        if len(token) < 2:
+            continue
+        if token in combined:
+            implied.add(token)
+    return implied
+
+
+def _build_work_content_summary(profile_data: dict) -> str:
+    """Generate a summary of work-content keywords from user text.
+
+    Scans all graph node core_tasks against user project/internship/raw_text
+    and returns a sentence listing the most frequently matched task tokens.
+    This gives the LLM an objective, data-driven signal of what the user
+    actually does (as opposed to what skills they claim to have).
+    """
+    parts: list[str] = []
+    rt = (profile_data.get("raw_text") or "").lower()
+    if rt:
+        parts.append(rt)
+    for p in profile_data.get("projects", []):
+        if isinstance(p, dict):
+            parts.append(str(p.get("name", "")).lower())
+            parts.append(str(p.get("description", "") or p.get("highlights", "")).lower())
+        elif isinstance(p, str):
+            parts.append(p.lower())
+    for i in profile_data.get("internships", []):
+        if isinstance(i, dict):
+            parts.append(str(i.get("role", "")).lower())
+            parts.append(str(i.get("description", "") or i.get("highlights", "")).lower())
+        elif isinstance(i, str):
+            parts.append(i.lower())
+    user_text = " ".join(parts)
+    if not user_text.strip():
+        return "未提取到工作内容关键词"
+
+    graph_nodes = _get_graph_nodes()
+    # Collect all core_tasks, count hits
+    task_hits: dict[str, int] = {}
+    for node in graph_nodes.values():
+        for t in node.get("core_tasks", []):
+            if not t or len(t.strip()) < 3:
+                continue
+            expanded = _expand_chinese_tokens([t])
+            for token in expanded:
+                if len(token) >= 2 and token in user_text:
+                    task_hits[token] = task_hits.get(token, 0) + 1
+
+    if not task_hits:
+        return "未提取到工作内容关键词"
+
+    # Sort by hit count, keep top unique tokens (prefer longer phrases)
+    sorted_tokens = sorted(task_hits.items(), key=lambda x: (-x[1], -len(x[0])))
+    seen_roots: set[str] = set()
+    unique: list[str] = []
+    for token, count in sorted_tokens:
+        # Skip if a shorter version is already included (e.g. skip "测试" if "测试用例" is in)
+        if any(token in u and token != u for u in unique):
+            continue
+        unique.append(token)
+        if len(unique) >= 8:
+            break
+
+    return "、".join(unique)
 
 
 # ── Embedding pre-filter ─────────────────────────────────────────────────────
@@ -235,6 +407,51 @@ def embedding_prefilter(
             if nid in all_node_ids and nid not in candidates:
                 candidates.append(nid)
 
+    # ── Core-tasks text-match layer (work-content driven, not skill-name driven) ──
+    # Some resumes have rich project/internship descriptions that clearly signal
+    # a direction (e.g. "测试用例/缺陷/功能测试" for QA) but their generic
+    # skill list (Python/SQL) causes embedding similarity to drown the signal.
+    # We scan user text against each node's core_tasks and force-match nodes
+    # with >= 2 task hits into the candidate pool so the LLM sees them.
+    user_text_parts: list[str] = []
+    raw_text = (profile_data.get("raw_text") or "").lower()
+    if raw_text:
+        user_text_parts.append(raw_text)
+    for p in profile_data.get("projects", []):
+        if isinstance(p, dict):
+            user_text_parts.append(str(p.get("name", "")).lower())
+            user_text_parts.append(str(p.get("description", "") or p.get("highlights", "")).lower())
+        elif isinstance(p, str):
+            user_text_parts.append(p.lower())
+    for i in profile_data.get("internships", []):
+        if isinstance(i, dict):
+            user_text_parts.append(str(i.get("role", "")).lower())
+            user_text_parts.append(str(i.get("description", "") or i.get("highlights", "")).lower())
+        elif isinstance(i, str):
+            user_text_parts.append(i.lower())
+    user_text_combined = " ".join(user_text_parts)
+
+    graph_nodes = _get_graph_nodes()
+    task_forced: list[str] = []
+    for nid, node in graph_nodes.items():
+        core_tasks = [t.strip() for t in node.get("core_tasks", []) if t and len(t.strip()) >= 3]
+        if not core_tasks:
+            continue
+        # Use expanded tokens (Chinese prefixes etc.) for robust matching
+        expanded = _expand_chinese_tokens(core_tasks)
+        hits = sum(1 for token in expanded if len(token) >= 2 and token in user_text_combined)
+        # Threshold: >=2 distinct task-token hits, or strong proportional match
+        if hits >= 2 or (len(core_tasks) >= 3 and hits / len(core_tasks) >= 0.3):
+            task_forced.append(nid)
+
+    forced_count = 0
+    for nid in task_forced:
+        if nid not in candidates:
+            candidates.append(nid)
+            forced_count += 1
+    if forced_count:
+        logger.info("Task-match layer forced %d nodes into prefilter candidates", forced_count)
+
     logger.info("Embedding prefilter: %d/%d nodes selected", len(candidates), len(all_node_ids))
     return candidates
 
@@ -248,12 +465,13 @@ _ROLE_MATCH_PROMPT = """你是一个职业匹配 AI。根据用户的完整背�
    - affinity_pct 反映综合契合度（0-100）
 
 【基本原则】
-- 根据用户的技能列表、项目经历、教育背景，判断其最可能的主攻方向
+- **项目/实习经历是判断主攻方向的首要依据，技能列表仅作辅助**。如果一个用户的项目/实习全部围绕某个方向（如测试、数据分析、后端开发），即使技能列表里有 Python/SQL 等通用技能，也不得因这些通用技能就推荐其他方向。
+- **技能必须结合上下文理解**：SQL 在"测试用例编写"中出现 → 测试方向；SQL 在"数据分析报表"中出现 → 数据方向。不要只看技能名称。
 - 有 C/C++ + Linux → 系统开发/基础设施/存储引擎/游戏服务端
 - 有 PyTorch/深度学习/计算机视觉 → AI/算法
 - 有 Java/Spring → 后端开发
 - 有 React/Vue → 前端开发
-- SQL/MySQL 是通用辅助技能，不能单独驱动主方向
+- SQL/MySQL 是通用辅助技能，不能单独驱动主方向，必须看使用场景
 - GitHub/Docker/Git 是通用工具，不能单独驱动主方向
 
 【经验级别约束】
@@ -271,6 +489,15 @@ _ROLE_MATCH_PROMPT = """你是一个职业匹配 AI。根据用户的完整背�
 
 【用户职业信号】
 {career_signals}
+
+【用户工作内容关键词（从项目/实习文本中提取）】
+{work_content_summary}
+
+【用户项目经历】
+{user_projects}
+
+【用户实习/工作经历】
+{user_internships}
 
 【用户技能（含熟练度）】
 {user_skills}
@@ -312,6 +539,33 @@ def _llm_match_role(profile_data: dict) -> dict | None:
         candidate_ids = embedding_prefilter(profile_data, pin_node_ids=pin_ids)
         role_list = _get_role_list_text(candidate_ids)
 
+        # Build project/internship text for LLM context
+        projects = profile_data.get("projects", [])
+        project_texts = []
+        for p in projects:
+            if isinstance(p, dict):
+                line = p.get("name", "")
+                if p.get("description"):
+                    line += f"：{p['description']}"
+                if line:
+                    project_texts.append(line)
+            elif isinstance(p, str) and p.strip():
+                project_texts.append(p.strip())
+        user_projects = "\n".join(project_texts[:6]) or "无"
+
+        internships = profile_data.get("internships", [])
+        intern_texts = []
+        for i in internships:
+            if isinstance(i, dict):
+                line = f"{i.get('company', '')} - {i.get('role', '')}"
+                if i.get("highlights"):
+                    line += f"：{i['highlights']}"
+                if line.strip(" -"):
+                    intern_texts.append(line)
+            elif isinstance(i, str) and i.strip():
+                intern_texts.append(i.strip())
+        user_internships = "\n".join(intern_texts[:4]) or "无"
+
         edu = profile_data.get("education", {})
         primary_domain = profile_data.get("primary_domain", "未知")
         cs = profile_data.get("career_signals", {})
@@ -323,6 +577,7 @@ def _llm_match_role(profile_data: dict) -> dict | None:
             f"开源贡献: {'有' if cs.get('open_source') else '无'}，"
             f"实习公司: {cs.get('internship_company_tier','未知')}"
         ) if cs else "未提取到职业信号"
+        work_content_summary = _build_work_content_summary(profile_data)
         prompt = _ROLE_MATCH_PROMPT.format(
             role_count=len(candidate_ids),
             role_list=role_list,
@@ -330,6 +585,9 @@ def _llm_match_role(profile_data: dict) -> dict | None:
             primary_domain=primary_domain,
             career_signals=career_signals_text,
             user_skills=skills_with_level,
+            user_projects=user_projects,
+            user_internships=user_internships,
+            work_content_summary=work_content_summary,
             major=edu.get("major", "未知"),
             degree=edu.get("degree", "未知"),
             exp_years=profile_data.get("experience_years", 0),
@@ -429,6 +687,10 @@ def _filter_recommendations(
         elif isinstance(s, str):
             user_skills.add(s.lower())
 
+    # Augment with skills implied by text (project/internship/raw_text scanning)
+    implied_skills = _extract_implied_skills_from_text(profile_data)
+    user_skills |= implied_skills
+
     # Project text for broader language/tool detection
     project_text = " ".join(str(p) for p in profile_data.get("projects", []) or []).lower()
 
@@ -475,27 +737,28 @@ def _filter_recommendations(
                 )
                 continue
 
-        # ── Recalculate affinity based on must_skills overlap ──
-        # LLM-generated affinity is unstable; use deterministic skill overlap
-        # so the ranking is transparent and explainable.
+        # ── Sanity-check LLM affinity with must_skills overlap ──
+        # LLM now receives full project/internship text, so its judgment is
+        # more context-aware than raw skill overlap. We only cap obviously
+        # hallucinated scores, not override reasonable ones.
+        # user_skills already includes text-scanned implied skills.
         node = graph_nodes.get(role_id, {})
         node_skills = [
             (s if isinstance(s, str) else s.get("name", "")).lower().strip()
             for s in (node.get("must_skills") or [])
         ]
         if node_skills:
-            # Substring match: 'linux' matches 'linux 网络编程', 'c++' matches 'c/c++'
             overlap = 0
             for ns in node_skills:
                 for us in user_skills:
                     if ns in us or us in ns:
                         overlap += 1
                         break
-            base = int((overlap / len(node_skills)) * 70)  # max 70 from overlap
-            bonus = 10 if overlap >= 2 else 0
-            rec["affinity_pct"] = min(base + bonus + 10, 92)  # +10 baseline
             rec["_overlap"] = overlap
             rec["_total"] = len(node_skills)
+            # Cap LLM affinity if it wildly overestimates (no skill overlap)
+            if overlap == 0 and rec.get("affinity_pct", 0) > 50:
+                rec["affinity_pct"] = min(rec["affinity_pct"], 35)
         else:
             # Nodes with no must_skills get low affinity (they're too vague)
             rec["affinity_pct"] = min(rec.get("affinity_pct", 0), 25)
@@ -571,6 +834,12 @@ def _auto_locate_on_graph(
 
     Returns current position dict and caches recommendations for instant loading.
     """
+    logger.info(
+        "[AUTO-LOCATE-START] profile_id=%d job_target=%r skills=%d",
+        profile_id,
+        profile_data.get("job_target", ""),
+        len(profile_data.get("skills", [])),
+    )
     try:
         from backend.services.graph_service import get_graph_service
 
@@ -648,17 +917,19 @@ def _auto_locate_on_graph(
                     "human_ai_leverage": gn.get("human_ai_leverage", 50),
                 })
 
-            # ── Use locator scores for deterministic ranking ──
+            # ── Locator only for backfill ranking, NOT override LLM ──
+            # LLM now receives full project/internship text; its judgment is
+            # more context-aware than skill-name-only IDF matching.
             from backend.services.profile.locator import locate_on_graph
             try:
                 loc_result = locate_on_graph(profile_data, graph)
                 loc_scores = {nid: s for nid, s in loc_result.get("all_scores", [])}
+                # Store locator scores for backfill use, but keep LLM ranking
                 for rec in enriched:
                     nid = rec["role_id"]
                     if nid in loc_scores:
-                        rec["affinity_pct"] = min(int(loc_scores[nid] * 100), 95)
-                enriched.sort(key=lambda r: r.get("affinity_pct", 0), reverse=True)
-                logger.info("Locator-based ranking applied to %d recommendations", len(enriched))
+                        rec["_loc_score"] = loc_scores[nid]
+                logger.info("Locator scores computed for %d recommendations (not overriding LLM)", len(enriched))
             except Exception as e:
                 logger.warning("Locator ranking failed: %s", e)
 
@@ -670,13 +941,40 @@ def _auto_locate_on_graph(
             elif exp_years <= 1:
                 enriched = [r for r in enriched if (r.get("career_level") or 0) <= 4]
 
-            # ── Backfill: if LLM returns too few, supplement by skill overlap ──
+            # ── Backfill: if LLM returns too few, supplement by skill+task overlap ──
+            # Two-layer scoring:
+            #   1) must_skills overlap (incl. text-scanned implied skills)
+            #   2) core_tasks match against user project/internship text
+            # A node with high task-match but low skill-overlap (e.g. QA where
+            # user has generic Python/SQL but rich test descriptions) can still
+            # rank high and be backfilled.
             user_skill_set = {
                 (s.get("name") or "").lower().strip()
                 for s in profile_data.get("skills", [])
                 if isinstance(s, dict) and s.get("name")
             }
+            user_skill_set |= _extract_implied_skills_from_text(profile_data)
             existing_ids = {r["role_id"] for r in enriched}
+
+            # Build user text for task matching (same logic as prefilter)
+            text_parts: list[str] = []
+            rt = (profile_data.get("raw_text") or "").lower()
+            if rt:
+                text_parts.append(rt)
+            for p in profile_data.get("projects", []):
+                if isinstance(p, dict):
+                    text_parts.append(str(p.get("name", "")).lower())
+                    text_parts.append(str(p.get("description", "") or p.get("highlights", "")).lower())
+                elif isinstance(p, str):
+                    text_parts.append(p.lower())
+            for i in profile_data.get("internships", []):
+                if isinstance(i, dict):
+                    text_parts.append(str(i.get("role", "")).lower())
+                    text_parts.append(str(i.get("description", "") or i.get("highlights", "")).lower())
+                elif isinstance(i, str):
+                    text_parts.append(i.lower())
+            user_text_combined = " ".join(text_parts)
+
             backfill_candidates = []
             for nid, node in graph_nodes.items():
                 if nid in existing_ids:
@@ -686,30 +984,44 @@ def _auto_locate_on_graph(
                     continue
                 if exp_years <= 1 and cl > 4:
                     continue
-                node_skills = {
+                # Expand node skills with Chinese prefix tokens for robust matching
+                raw_skills = [
                     (s if isinstance(s, str) else s.get("name", "")).lower().strip()
                     for s in (node.get("must_skills") or [])
-                }
-                overlap = len(user_skill_set & node_skills)
-                if overlap == 0:
+                ]
+                expanded_skills = _expand_chinese_tokens(raw_skills)
+                overlap = len(user_skill_set & expanded_skills)
+                core_tasks = [t.strip() for t in node.get("core_tasks", []) if t and len(t.strip()) >= 3]
+                expanded_tasks = _expand_chinese_tokens(core_tasks)
+                task_hits = sum(1 for t in expanded_tasks if len(t) >= 2 and t in user_text_combined) if core_tasks else 0
+                # Combined score: task hits weighted 2x, skill overlap 1x
+                total_score = overlap + task_hits * 2
+                if total_score == 0:
                     continue
-                backfill_candidates.append((overlap, nid, node))
+                backfill_candidates.append((total_score, overlap, task_hits, nid, node))
             backfill_candidates.sort(key=lambda x: -x[0])
 
             backfilled = 0
-            for overlap, nid, node in backfill_candidates:
+            for total_score, overlap, task_hits, nid, node in backfill_candidates:
                 if len(enriched) >= 6:
                     break
+                # Higher base affinity when task-matches dominate
+                base_affinity = min(60 + total_score * 5, 78)
+                reason_parts = []
+                if overlap:
+                    reason_parts.append(f"技能画像与该方向有 {overlap} 项重合")
+                if task_hits:
+                    reason_parts.append(f"项目/实习经历与该岗位核心任务有 {task_hits} 项匹配")
                 enriched.append({
                     "role_id": nid,
                     "label": node.get("label", nid),
-                    "affinity_pct": min(60 + overlap * 5, 78),
+                    "affinity_pct": base_affinity,
                     "matched_skills": [],
                     "gap_skills": (node.get("must_skills") or [])[:4],
                     "gap_hours": 0,
                     "zone": node.get("zone", "safe"),
                     "salary_p50": node.get("salary_p50", 0),
-                    "reason": f"技能画像与该方向有 {overlap} 项重合",
+                    "reason": "；".join(reason_parts) or f"技能画像与该方向有 {overlap} 项重合",
                     "channel": "growth",
                     "career_level": node.get("career_level", 0),
                     "replacement_pressure": node.get("replacement_pressure", 50),
@@ -717,7 +1029,7 @@ def _auto_locate_on_graph(
                 })
                 backfilled += 1
             if backfilled:
-                logger.info("Auto-locate backfill: added %d candidates by skill overlap", backfilled)
+                logger.info("Auto-locate backfill: added %d candidates (task+skill)", backfilled)
 
             # ── Add promotion targets（应届生不加，避免混淆）──────────
             if exp_years >= 1:
@@ -757,11 +1069,53 @@ def _auto_locate_on_graph(
                         "human_ai_leverage": pn.get("human_ai_leverage", 50),
                     })
 
+            # ── Programmatic job_target override (triple insurance) ────────────────
+            # Locator re-ranking may have pushed the job_target role down or out.
+            # Force it to rank #1 with affinity >= 88, same as _generate_recommendations.
+            job_target = profile_data.get("job_target", "") or ""
+            target_role_id = find_role_id_for_job_target(job_target)
+            if target_role_id and target_role_id in graph_nodes:
+                existing_ids = [r["role_id"] for r in enriched]
+                if target_role_id in existing_ids:
+                    idx = existing_ids.index(target_role_id)
+                    target_rec = enriched.pop(idx)
+                    target_rec["affinity_pct"] = max(target_rec.get("affinity_pct", 0), 88)
+                    target_rec["channel"] = "entry"
+                    target_rec["reason"] = target_rec.get("reason") or f"与求职意向「{job_target}」高度吻合"
+                    enriched.insert(0, target_rec)
+                else:
+                    node = graph_nodes[target_role_id]
+                    enriched.insert(0, {
+                        "role_id": target_role_id,
+                        "label": node.get("label", target_role_id),
+                        "affinity_pct": 88,
+                        "matched_skills": [],
+                        "gap_skills": node.get("must_skills", [])[:4],
+                        "gap_hours": 0,
+                        "zone": node.get("zone", "safe"),
+                        "salary_p50": node.get("salary_p50", 0),
+                        "reason": f"与求职意向「{job_target}」高度吻合",
+                        "channel": "entry",
+                        "career_level": node.get("career_level", 0),
+                        "replacement_pressure": node.get("replacement_pressure", 50),
+                        "human_ai_leverage": node.get("human_ai_leverage", 50),
+                    })
+                logger.info(
+                    "Auto-locate job_target override: moved %s to rank #1 (job_target=%s)",
+                    target_role_id, job_target,
+                )
+
             profile = db.query(Profile).filter(Profile.id == profile_id).first()
             if profile:
                 p_hash = profile_hash(profile_data)
                 rec_resp = {"recommendations": enriched, "user_skill_count": len(skills)}
                 _save_rec_cache(profile, p_hash, rec_resp, db)
+                logger.info(
+                    "[AUTO-LOCATE-SAVED] profile_id=%d top_rec=%r job_target=%r",
+                    profile_id,
+                    enriched[0]["label"] if enriched else "none",
+                    profile_data.get("job_target", ""),
+                )
 
         db.commit()
         return {"node_id": node_id, "label": node_label}
