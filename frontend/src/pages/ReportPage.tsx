@@ -25,8 +25,6 @@ import {
   type ReportListItem,
 } from '@/api/report'
 import {
-  Prologue,
-  HistoryStrip,
   ChapterI,
   ChapterII,
   ChapterIII,
@@ -454,22 +452,6 @@ export default function ReportPage() {
     <main className="min-h-screen @container">
       <div className="mx-auto px-4 md:px-8 py-5 pb-24 w-full max-w-[780px] @[1080px]:max-w-[1000px] @[1080px]:grid @[1080px]:grid-cols-[minmax(0,780px)_160px] @[1080px]:gap-10 @[1080px]:justify-center">
         <div className="min-w-0">
-          <Prologue
-            target={data.target}
-            generatedAt={data.generated_at}
-            onRegenerate={generate}
-            regenerating={generating}
-            onExport={handleExport}
-            exporting={exporting}
-            exportError={exportError}
-          />
-          <HistoryStrip
-            items={reportList}
-            currentId={currentId}
-            onSwitch={switchReport}
-            onDelete={stageDelete}
-            switchingTo={switchingTo}
-          />
           <ChapterI
             data={data}
             onSave={(t) => saveChapter('narrative', t)}

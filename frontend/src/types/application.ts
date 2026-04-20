@@ -7,37 +7,6 @@ export interface QAItem {
   answer: string
 }
 
-export interface DebriefQuestionReview {
-  question: string
-  your_answer: string
-  score: number
-  strengths: string[]
-  weaknesses: string[]
-  suggested_answer: string
-  skill_tags: string[]
-}
-
-export interface DebriefReport {
-  overall_score: number
-  summary: string
-  question_reviews: DebriefQuestionReview[]
-  gap_skills: Array<{ skill: string; priority: string; advice: string }>
-  overall_tips: string[]
-}
-
-export interface ApplicationDebrief {
-  id: number
-  raw_input: QAItem[]
-  report: DebriefReport | null
-  created_at: string
-}
-
-export interface JdDiagnosisSummary {
-  match_score: number
-  gap_skills: Array<{ skill: string; gap_level?: string }> | string[]
-  matched_skills: string[]
-}
-
 export interface JobApplication {
   id: number
   jd_diagnosis_id: number | null
@@ -54,8 +23,6 @@ export interface JobApplication {
   reminder_sent: boolean
   created_at: string
   updated_at: string
-  debrief: ApplicationDebrief | null
-  jd_diagnosis: JdDiagnosisSummary | null
 }
 
 export interface CreateApplicationRequest {
