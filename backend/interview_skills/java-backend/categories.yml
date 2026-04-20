@@ -1,0 +1,71 @@
+# Java 后端面试分类分配
+# 总题数 = 5，按 weight 比例分配
+
+categories:
+  - key: JAVA_CORE
+    label: Java 核心
+    weight: 2
+    priority: CORE
+    ref: java-core.md
+    shared: true
+    description: 集合、并发、IO/NIO、新特性、JMM
+
+  - key: JVM
+    label: JVM 原理
+    weight: 1
+    priority: CORE
+    ref: java-core.md
+    shared: true
+    description: 内存模型、GC、类加载、调优、OOM 排查
+
+  - key: SPRING
+    label: Spring 生态
+    weight: 1
+    priority: NORMAL
+    ref: java-core.md
+    shared: true
+    description: IoC/AOP、事务、Spring Boot、Spring Cloud
+
+  - key: MYSQL
+    label: MySQL
+    weight: 1
+    priority: NORMAL
+    ref: java-core.md
+    shared: true
+    description: 索引、事务、锁、慢 SQL、分库分表
+
+  - key: REDIS
+    label: Redis
+    weight: 1
+    priority: NORMAL
+    ref: java-core.md
+    shared: true
+    description: 数据结构、持久化、集群、缓存策略、分布式锁
+
+  - key: PROJECT
+    label: 项目经历
+    weight: 0
+    priority: ALWAYS_ONE
+    description: 结合简历中的 Java 项目深挖技术选型和故障处理
+
+follow_up_config:
+  max_per_question: 2
+  depth_chain:
+    - 使用经验
+    - 核心原理
+    - 边界条件
+    - 优化与故障
+
+difficulty_distribution:
+  junior:
+    easy: 0.4
+    medium: 0.5
+    hard: 0.1
+  mid:
+    easy: 0.2
+    medium: 0.5
+    hard: 0.3
+  senior:
+    easy: 0.1
+    medium: 0.4
+    hard: 0.5

@@ -1,0 +1,71 @@
+# 测试开发面试分类分配
+# 总题数 = 5，按 weight 比例分配
+
+categories:
+  - key: TEST_THEORY
+    label: 测试理论
+    weight: 2
+    priority: CORE
+    ref: test-dev.md
+    shared: true
+    description: 测试流程、用例设计、测试类型、覆盖率、测试左移
+
+  - key: AUTO_TEST
+    label: 自动化测试
+    weight: 1
+    priority: CORE
+    ref: test-dev.md
+    shared: true
+    description: Web/API/移动端自动化、ROI、CI/CD集成
+
+  - key: PERFORMANCE_TEST
+    label: 性能测试
+    weight: 1
+    priority: NORMAL
+    ref: test-dev.md
+    shared: true
+    description: 压测类型、工具、指标分析、瓶颈定位
+
+  - key: CICD
+    label: CI/CD与质量门禁
+    weight: 1
+    priority: NORMAL
+    ref: test-dev.md
+    shared: true
+    description: 流水线设计、质量卡点、自动化报告、失败告警
+
+  - key: QUALITY
+    label: 质量保障体系
+    weight: 1
+    priority: NORMAL
+    ref: test-dev.md
+    shared: true
+    description: 质量度量、缺陷管理、风险预警、混沌工程、安全测试
+
+  - key: PROJECT
+    label: 项目经历
+    weight: 0
+    priority: ALWAYS_ONE
+    description: 结合简历中的测试项目深挖测试策略设计和质量度量
+
+follow_up_config:
+  max_per_question: 2
+  depth_chain:
+    - 使用经验
+    - 核心原理
+    - 边界条件
+    - 优化与故障
+
+difficulty_distribution:
+  junior:
+    easy: 0.4
+    medium: 0.5
+    hard: 0.1
+  mid:
+    easy: 0.2
+    medium: 0.5
+    hard: 0.3
+  senior:
+    easy: 0.1
+    medium: 0.4
+    hard: 0.5

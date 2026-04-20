@@ -1,0 +1,71 @@
+# 产品经理面试分类分配
+# 总题数 = 5，按 weight 比例分配
+
+categories:
+  - key: REQUIREMENT
+    label: 需求分析
+    weight: 2
+    priority: CORE
+    ref: product.md
+    shared: true
+    description: 用户痛点识别、需求优先级、PRD、MVP、需求验证
+
+  - key: DATA_ANALYSIS
+    label: 数据分析
+    weight: 1
+    priority: CORE
+    ref: product.md
+    shared: true
+    description: 指标体系、A/B测试、漏斗分析、SQL、数据驱动决策
+
+  - key: USER_RESEARCH
+    label: 用户研究
+    weight: 1
+    priority: NORMAL
+    ref: product.md
+    shared: true
+    description: 用户画像、用户旅程、可用性测试、NPS、定性定量研究
+
+  - key: PROJECT_MANAGEMENT
+    label: 项目管理
+    weight: 1
+    priority: NORMAL
+    ref: product.md
+    shared: true
+    description: 敏捷开发、跨团队协作、风险管理、资源协调
+
+  - key: COMMERCIAL
+    label: 商业化思维
+    weight: 1
+    priority: NORMAL
+    ref: product.md
+    shared: true
+    description: 商业模式、变现策略、定价、增长模型、ROI
+
+  - key: PROJECT
+    label: 项目经历
+    weight: 0
+    priority: ALWAYS_ONE
+    description: 结合简历中的产品项目深挖数据验证和决策逻辑
+
+follow_up_config:
+  max_per_question: 2
+  depth_chain:
+    - 使用经验
+    - 核心原理
+    - 边界条件
+    - 优化与迭代
+
+difficulty_distribution:
+  junior:
+    easy: 0.4
+    medium: 0.5
+    hard: 0.1
+  mid:
+    easy: 0.2
+    medium: 0.5
+    hard: 0.3
+  senior:
+    easy: 0.1
+    medium: 0.4
+    hard: 0.5

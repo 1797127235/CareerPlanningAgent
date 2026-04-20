@@ -1,0 +1,71 @@
+# 算法工程师面试分类分配
+# 总题数 = 5，按 weight 比例分配
+
+categories:
+  - key: DATA_STRUCTURE
+    label: 数据结构
+    weight: 1
+    priority: CORE
+    ref: algorithm.md
+    shared: true
+    description: 数组、链表、树、图、哈希表、堆、并查集等
+
+  - key: ALGORITHM_DESIGN
+    label: 算法设计与分析
+    weight: 1
+    priority: CORE
+    ref: algorithm.md
+    shared: true
+    description: 动态规划、贪心、分治、回溯、图算法、复杂度分析
+
+  - key: MACHINE_LEARNING
+    label: 机器学习基础
+    weight: 1
+    priority: NORMAL
+    ref: algorithm.md
+    shared: true
+    description: 监督/无监督学习、特征工程、模型评估、正则化、集成学习
+
+  - key: DEEP_LEARNING
+    label: 深度学习框架
+    weight: 1
+    priority: NORMAL
+    ref: algorithm.md
+    shared: true
+    description: 神经网络基础、PyTorch/TensorFlow、CNN/RNN/Transformer、分布式训练
+
+  - key: ENGINEERING
+    label: 工程落地
+    weight: 1
+    priority: NORMAL
+    ref: algorithm.md
+    shared: true
+    description: 模型部署、推理优化、A/B测试、特征平台、在线学习、效果归因
+
+  - key: PROJECT
+    label: 项目经历
+    weight: 0
+    priority: ALWAYS_ONE
+    description: 结合简历中的算法项目深挖模型选型、特征工程和效果优化
+
+follow_up_config:
+  max_per_question: 2
+  depth_chain:
+    - 使用经验
+    - 核心原理
+    - 边界条件
+    - 优化与故障
+
+difficulty_distribution:
+  junior:
+    easy: 0.4
+    medium: 0.5
+    hard: 0.1
+  mid:
+    easy: 0.2
+    medium: 0.5
+    hard: 0.3
+  senior:
+    easy: 0.1
+    medium: 0.4
+    hard: 0.5

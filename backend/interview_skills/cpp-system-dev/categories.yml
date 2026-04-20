@@ -1,0 +1,73 @@
+# C++ 系统开发面试分类分配
+# 总题数 = 5，按 weight 比例分配
+
+categories:
+  - key: CPP_CORE
+    label: C++ 语言核心
+    weight: 2
+    priority: CORE
+    ref: cpp-core.md
+    shared: true
+    description: 内存模型、RAII、智能指针、模板元编程、STL 原理
+
+  - key: OS
+    label: 操作系统
+    weight: 1
+    priority: CORE
+    ref: os-network.md
+    shared: true
+    description: 进程/线程调度、内存管理、文件系统、IPC 机制
+
+  - key: NETWORK
+    label: 网络编程
+    weight: 1
+    priority: NORMAL
+    ref: os-network.md
+    shared: true
+    description: TCP/IP 协议栈、socket 编程、epoll/select、网络模型
+
+  - key: CONCURRENCY
+    label: 多线程并发
+    weight: 1
+    priority: NORMAL
+    ref: cpp-core.md
+    shared: true
+    description: 锁粒度、原子操作、线程池、无锁数据结构、内存序
+
+  - key: SYSTEM_DESIGN
+    label: 系统设计
+    weight: 1
+    priority: NORMAL
+    ref: system-design.md
+    shared: true
+    description: 高并发架构、分布式一致性、缓存、消息队列、可观测性
+
+  - key: PROJECT
+    label: 项目经历
+    weight: 0
+    priority: ALWAYS_ONE
+    description: 结合简历中的 C++ 项目深挖技术选型和故障处理
+
+# 追问配置
+follow_up_config:
+  max_per_question: 2
+  depth_chain:
+    - 使用经验
+    - 核心原理
+    - 边界条件
+    - 优化与故障
+
+# 难度分布
+difficulty_distribution:
+  junior:
+    easy: 0.4
+    medium: 0.5
+    hard: 0.1
+  mid:
+    easy: 0.2
+    medium: 0.5
+    hard: 0.3
+  senior:
+    easy: 0.1
+    medium: 0.4
+    hard: 0.5

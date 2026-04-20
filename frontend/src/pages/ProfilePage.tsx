@@ -75,11 +75,6 @@ function RecommendationCard({
           <h3 className="text-[14px] font-bold text-slate-800 leading-tight truncate">
             {rec.label}
           </h3>
-          {rec.affinity_pct > 0 && (
-            <span className="text-[18px] font-black text-blue-600 leading-none shrink-0 ml-2">
-              {Math.round(rec.affinity_pct)}<span className="text-[11px]">%</span>
-            </span>
-          )}
         </div>
         <div className="flex items-center gap-2 mb-1.5">
           <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${zoneStyle}`}>{zoneText}</span>

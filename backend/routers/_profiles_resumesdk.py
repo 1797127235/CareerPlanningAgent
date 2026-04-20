@@ -230,17 +230,9 @@ def _is_management_subsection(name: str, desc: str, tech_stack: list) -> bool:
     combined = (name + " " + desc).lower()
     is_subsection = any(kw in combined for kw in subsection_keywords)
 
-    # If tech_stack exists and has real tech keywords, it's likely a real project
-    tech_keywords = [
-        "python", "pytorch", "tensorflow", "cuda", "c++", "java", "go",
-        "react", "vue", "docker", "kubernetes", "mamba", "nerf",
-        "图像分割", "目标检测", "深度学习", "神经网络", "算法",
-        "opencv", "cnn", "transformer", "model", "训练", "模型",
-    ]
-    has_real_tech = any(
-        t.lower() in " ".join(tech_stack).lower() for t in tech_keywords
-    )
-    if has_real_tech:
+    # If tech_stack exists and is non-empty, it's likely a real project
+    # (management subsections rarely have a technology_stack field)
+    if tech_stack and any(t.strip() for t in tech_stack):
         return False
 
     # If the name itself is a subsection keyword and description is process-oriented
@@ -324,28 +316,14 @@ def _map_projects(rs_projects: list) -> list[str]:
         # Score: higher = more likely to be a real project
         score = 0
 
-        # +3: Has real technology keywords in name or desc
-        tech_keywords = [
-            "python", "pytorch", "tensorflow", "cuda", "c++", "opencv",
-            "mamba", "nerf", "图像分割", "目标检测", "深度学习", "算法",
-            "模型", "训练", "神经网络", "cnn", "transformer", "resnet",
-            "心脏", "医学", "影像", "x光", "mri", "ct",
-        ]
-        combined_lower = (name + " " + desc).lower()
-        if any(kw in combined_lower for kw in tech_keywords):
-            score += 3
-
-        # +2: tech_stack contains real technology (not just "负责人""项目管理")
-        if tech_stack and any(
-            t.lower() in ["python", "pytorch", "tensorflow", "cuda", "c++", "opencv",
-                          "mamba", "nerf", "深度学习", "图像分割", "算法"]
-            for t in tech_stack
-        ):
+        # +2: Has description or duty (real projects usually have details)
+        if (desc and len(desc) > 30) or (duty and len(duty) > 20):
             score += 2
 
-        # +1: Has a concrete project name (not just "实验论证" etc.)
-        subsection_kws = ["实验论证", "质量控制", "迭代过程", "项目进展", "项目建设",
-                          "锻炼", "证明", "资源管理", "运营流程", "规划", "计划"]
+        # +1: Has a concrete project name (not just management subsection titles)
+        subsection_kws = ["实验论证", "实验验证", "质量控制", "质量管理", "迭代过程",
+                          "项目进展", "项目建设", "锻炼", "证明", "资源管理",
+                          "运营流程", "进度控制", "风险管理", "沟通管理", "规划", "计划"]
         if name and not any(kw in name for kw in subsection_kws):
             score += 1
 
@@ -609,20 +587,30 @@ def _supplement_skills_from_resumesdk(
     internships: list[dict],
     raw_text: str,
 ) -> list[dict]:
-    """When ResumeSDK returns too few skills, supplement from project/internship descriptions."""
+    """When ResumeSDK returns too few or too coarse skills, supplement from raw text.
+
+    Always scans raw_text (not just projects) because ResumeSDK often misses
+    fine-grained skills (epoll, Reactor, STL, smart pointers, etc.) even when
+    they appear prominently in the resume.
+    """
     existing = {s["name"].lower() for s in skills}
-    if len(existing) >= 5:
+
+    # Always supplement if we have fewer than 8 skills or the skills look too coarse
+    # (e.g. only generic ones like "C++", "SQL", "Linux" without any framework/lib)
+    coarse_only = all(s["name"].lower() in {"c++", "sql", "mysql", "github", "linux", "git"} for s in skills)
+    if len(existing) >= 8 and not coarse_only:
         return skills
 
     sources: list[str] = []
+    # raw_text is the most reliable source — it contains everything ResumeSDK parsed
+    if raw_text:
+        sources.append(raw_text)
     for p in projects:
         sources.append(str(p))
     for i in internships:
         if isinstance(i, dict):
             sources.append(i.get("highlights", ""))
             sources.append(", ".join(i.get("tech_stack", [])))
-    if raw_text:
-        sources.append(raw_text)
 
     combined = " ".join(str(s) for s in sources if s)
     supplemental = _extract_skills_from_text(combined)
@@ -636,7 +624,7 @@ def _supplement_skills_from_resumesdk(
             added += 1
 
     if added:
-        logger.info("Supplemented %d skills from ResumeSDK project descriptions", added)
+        logger.info("Supplemented %d skills from ResumeSDK raw text", added)
     return skills
 
 

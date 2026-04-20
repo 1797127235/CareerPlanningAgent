@@ -1,0 +1,71 @@
+# 前端开发面试分类分配
+# 总题数 = 5，按 weight 比例分配
+
+categories:
+  - key: BROWSER
+    label: 浏览器原理
+    weight: 1
+    priority: CORE
+    ref: frontend-core.md
+    shared: true
+    description: 渲染流水线、缓存、安全、性能监控
+
+  - key: JS_TS
+    label: JavaScript/TypeScript
+    weight: 2
+    priority: CORE
+    ref: frontend-core.md
+    shared: true
+    description: 类型系统、闭包、原型链、异步模型、事件循环、ES6+特性
+
+  - key: FRAMEWORK
+    label: React/Vue 框架
+    weight: 2
+    priority: CORE
+    ref: frontend-core.md
+    shared: true
+    description: 响应式原理、Hooks/Composition API、状态管理、组件设计、SSR
+
+  - key: ENGINEERING
+    label: 前端工程化
+    weight: 1
+    priority: NORMAL
+    ref: frontend-core.md
+    shared: true
+    description: 构建工具、模块化、代码规范、测试、微前端
+
+  - key: PERFORMANCE
+    label: 性能优化
+    weight: 1
+    priority: NORMAL
+    ref: frontend-core.md
+    shared: true
+    description: Core Web Vitals、代码分割、懒加载、虚拟列表、内存泄漏
+
+  - key: PROJECT
+    label: 项目经历
+    weight: 0
+    priority: ALWAYS_ONE
+    description: 结合简历中的前端项目深挖技术选型和故障处理
+
+follow_up_config:
+  max_per_question: 2
+  depth_chain:
+    - 使用经验
+    - 核心原理
+    - 边界条件
+    - 优化与故障
+
+difficulty_distribution:
+  junior:
+    easy: 0.4
+    medium: 0.5
+    hard: 0.1
+  mid:
+    easy: 0.2
+    medium: 0.5
+    hard: 0.3
+  senior:
+    easy: 0.1
+    medium: 0.4
+    hard: 0.5

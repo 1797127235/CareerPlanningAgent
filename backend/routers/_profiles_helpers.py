@@ -109,6 +109,44 @@ def _profile_to_dict(profile: Profile, db: Session, user_id: int) -> dict:
 _LEVEL_ORDER = {"beginner": 0, "familiar": 1, "intermediate": 2, "advanced": 3}
 
 
+def _merge_skills(sdk_skills: list[dict], llm_skills: list[dict]) -> list[dict]:
+    """Merge two skill lists: SDK (coarse but reliable) + LLM (granular but may hallucinate).
+
+    Rules:
+    1. Union by name (case-insensitive).
+    2. Higher level wins.
+    3. If same level, prefer LLM's entry (more granular / context-aware).
+    4. LLM skills that are sub-skills of SDK skills are kept (e.g. SDK: C++ → LLM: epoll).
+    """
+    skill_map: dict[str, dict] = {}
+
+    # SDK skills first (base layer)
+    for s in sdk_skills:
+        name = s.get("name", "").strip()
+        if name:
+            skill_map[name.lower()] = {"name": name, "level": s.get("level", "familiar")}
+
+    # LLM skills overlay
+    for s in llm_skills:
+        name = s.get("name", "").strip()
+        if not name:
+            continue
+        key = name.lower()
+        llm_level = _LEVEL_ORDER.get(s.get("level", "beginner"), 0)
+
+        if key not in skill_map:
+            skill_map[key] = {"name": name, "level": s.get("level", "familiar")}
+        else:
+            existing_level = _LEVEL_ORDER.get(skill_map[key].get("level", "beginner"), 0)
+            if llm_level > existing_level:
+                skill_map[key] = {"name": name, "level": s.get("level", "familiar")}
+            elif llm_level == existing_level:
+                # Same level: prefer LLM's name casing and context
+                skill_map[key] = {"name": name, "level": s.get("level", "familiar")}
+
+    return list(skill_map.values())
+
+
 def _merge_profiles(existing: dict, incoming: dict) -> dict:
     """Merge incoming profile data into existing.
 

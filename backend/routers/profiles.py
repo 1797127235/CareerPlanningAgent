@@ -20,6 +20,7 @@ from backend.routers._profiles_helpers import (
     _get_or_create_profile,
     _profile_to_dict,
     _merge_profiles,
+    _merge_skills,
     _execute_profile_reset,
 )
 from backend.routers._profiles_parsing import (
@@ -223,7 +224,45 @@ async def parse_resume(
         logger.info("Trying ResumeSDK first for text-based file")
         profile_data = parse_with_resumesdk(content, filename)
 
-        # 2. Fallback: self-hosted LLM parsing
+        # 2. ResumeSDK returned data but projects/skills are poor — supplement with LLM
+        if profile_data and raw_text.strip():
+            sdk_projects = profile_data.get("projects", [])
+            sdk_skills = profile_data.get("skills", [])
+            # Detect "coarse-only" skills: only generic ones like C++/SQL/Linux/GitHub
+            coarse_skill_names = {"c++", "sql", "mysql", "github", "linux", "git"}
+            has_only_coarse = sdk_skills and all(
+                s.get("name", "").lower() in coarse_skill_names for s in sdk_skills
+            )
+            needs_supplement = not sdk_projects or has_only_coarse
+            if needs_supplement:
+                logger.info(
+                    "ResumeSDK projects=%d skills=%d (coarse_only=%s), supplementing with LLM",
+                    len(sdk_projects), len(sdk_skills), has_only_coarse,
+                )
+                llm_profile = _extract_profile_with_llm(raw_text)
+                if llm_profile:
+                    # Merge LLM projects (always take LLM if ResumeSDK has none)
+                    if not sdk_projects and llm_profile.get("projects"):
+                        profile_data["projects"] = llm_profile["projects"]
+                        logger.info("LLM supplemented %d projects", len(llm_profile["projects"]))
+
+                    # Merge LLM skills: union, keep higher level, prefer LLM's granular skills
+                    if llm_profile.get("skills"):
+                        merged_skills = _merge_skills(sdk_skills, llm_profile["skills"])
+                        profile_data["skills"] = merged_skills
+                        logger.info(
+                            "Merged skills: SDK=%d + LLM=%d → %d",
+                            len(sdk_skills),
+                            len(llm_profile["skills"]),
+                            len(merged_skills),
+                        )
+
+                    # Also pull other fields LLM might have extracted better
+                    for field in ["internships", "awards", "certificates", "career_signals"]:
+                        if not profile_data.get(field) and llm_profile.get(field):
+                            profile_data[field] = llm_profile[field]
+
+        # 3. Fallback: self-hosted LLM parsing (ResumeSDK completely failed)
         if not profile_data:
             logger.info("ResumeSDK unavailable/failed, falling back to self-hosted parser")
             if not raw_text.strip():
