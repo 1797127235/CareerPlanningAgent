@@ -32,7 +32,7 @@ _PLACEHOLDER_RE = re.compile(
     r"(?:XX|YY|ZZ|AA|BB|CC|DD|EE|FF|GG|HH|II|JJ|KK|LL|MM|NN|OO|PP|QQ|RR|SS|TT|UU|VV|WW)(?:项目|系统|平台|模块|服务|公司|团队)"
     r"|某项目|某个项目|某系统|某个系统|某平台|某个平台|某模块|某个模块"
     r"|某公司|某个公司|某团队|某个团队|某部门"
-    r"|XXX|YYY|ZZZ|AAA|BBB|CCC|你的项目|该项目|此项目"
+    r"|XXX|YYY|ZZZ|AAA|BBB|CCC|该项目|此项目"
     r"|\b[A-Z]{2,}项目\b"
 )
 
@@ -317,6 +317,37 @@ class StartRequest(BaseModel):
     type_distribution: dict[str, int] | None = None  # {"technical": 3, "scenario": 1, "behavioral": 1}
 
 
+def _normalize_type_distribution(
+    question_count: int,
+    type_distribution: dict[str, int] | None,
+) -> dict[str, int]:
+    """Normalize requested type distribution so it always matches question_count."""
+    normalized = {
+        "technical": max(int((type_distribution or {}).get("technical", 0) or 0), 0),
+        "scenario": max(int((type_distribution or {}).get("scenario", 0) or 0), 0),
+        "behavioral": max(int((type_distribution or {}).get("behavioral", 0) or 0), 0),
+    }
+
+    total = sum(normalized.values())
+    if total <= 0:
+        normalized["technical"] = question_count
+        return normalized
+
+    if total < question_count:
+        normalized["technical"] += question_count - total
+        return normalized
+
+    overflow = total - question_count
+    for key in ("technical", "scenario", "behavioral"):
+        if overflow <= 0:
+            break
+        reducible = min(normalized[key], overflow)
+        normalized[key] -= reducible
+        overflow -= reducible
+
+    return normalized
+
+
 def _fetch_weak_skills(user_id: int, db: Session, skill_id: str | None = None) -> list[str]:
     """Query user's historical interview evaluations to find weak skills."""
     rows = (
@@ -387,8 +418,10 @@ def start_interview(
     weak_skills = _fetch_weak_skills(user.id, db, skill_id)
     logger.info("User %d weak skills: %s", user.id, weak_skills)
 
-    # Validate question count
+    # Validate question count / normalize requested distribution
     question_count = min(max(req.question_count, 3), 15)
+    type_distribution = _normalize_type_distribution(question_count, req.type_distribution)
+    wants_non_technical = any(type_distribution.get(key, 0) > 0 for key in ("scenario", "behavioral"))
 
     def _legacy_generate():
         """Fallback to generic mock-interview-gen skill."""
@@ -396,41 +429,44 @@ def start_interview(
         return invoke_skill(
             "mock-interview-gen",
             target_role=req.target_role,
-            jd_requirements=req.jd_text[:2000] if req.jd_text else "（未提供 JD，请根据岗位名称和候选人画像出题）",
+            jd_requirements=jd_text[:2000] if jd_text else "（未提供 JD，请根据岗位名称和候选人画像出题）",
             profile_summary=profile_summary,
         )
 
     questions = None
     if skill_id:
         # ── Step 1: Try question bank first ──
-        try:
-            from sqlalchemy import func
-            bank_rows = (
-                db.query(InterviewQuestionBank)
-                .filter(InterviewQuestionBank.skill_id == skill_id)
-                .order_by(func.random())
-                .limit(question_count)
-                .all()
-            )
-            if len(bank_rows) >= question_count:
-                logger.info("Using question bank for skill=%s, count=%d", skill_id, len(bank_rows))
-                questions = [
-                    {
-                        "id": f"q{i + 1}",
-                        "type": "technical",
-                        "category": row.category,
-                        "question": row.question,
-                        "focus_area": row.focus_area,
-                        "difficulty": row.difficulty,
-                        "follow_ups": json.loads(row.follow_ups or "[]"),
-                    }
-                    for i, row in enumerate(bank_rows)
-                ]
-            else:
-                logger.info("Question bank has %d items for skill=%s, need LLM supplement", len(bank_rows), skill_id)
-        except Exception as exc:
-            logger.warning("Question bank query failed: %s", exc)
-            bank_rows = []
+        if wants_non_technical:
+            logger.info("Skip question bank for skill=%s because non-technical questions were requested", skill_id)
+        else:
+            try:
+                from sqlalchemy import func
+                bank_rows = (
+                    db.query(InterviewQuestionBank)
+                    .filter(InterviewQuestionBank.skill_id == skill_id)
+                    .order_by(func.random())
+                    .limit(question_count)
+                    .all()
+                )
+                if len(bank_rows) >= question_count:
+                    logger.info("Using question bank for skill=%s, count=%d", skill_id, len(bank_rows))
+                    questions = [
+                        {
+                            "id": f"q{i + 1}",
+                            "type": "technical",
+                            "category": row.category,
+                            "question": row.question,
+                            "focus_area": row.focus_area,
+                            "difficulty": row.difficulty,
+                            "follow_ups": json.loads(row.follow_ups or "[]"),
+                        }
+                        for i, row in enumerate(bank_rows)
+                    ]
+                else:
+                    logger.info("Question bank has %d items for skill=%s, need LLM supplement", len(bank_rows), skill_id)
+            except Exception as exc:
+                logger.warning("Question bank query failed: %s", exc)
+                bank_rows = []
 
         # ── Step 2: If bank insufficient, generate via LLM ──
         if questions is None:
@@ -443,14 +479,14 @@ def start_interview(
                     difficulty=_resolve_difficulty(profile_data),
                     question_count=question_count,
                     follow_up_count=2,
-                    jd_text=req.jd_text,
+                    jd_text=jd_text,
                     profile_data=profile_data,
                     weak_skills=weak_skills,
-                    type_distribution=req.type_distribution,
+                    type_distribution=type_distribution,
                 )
 
                 from backend.llm import get_llm_client, get_model
-                resp = get_llm_client(timeout=60).chat.completions.create(
+                resp = get_llm_client(timeout=120).chat.completions.create(
                     model=get_model("strong"),
                     messages=[
                         {"role": "system", "content": system_prompt},
@@ -529,8 +565,146 @@ def start_interview(
     }
 
 
+class FollowUpTurn(BaseModel):
+    question: str
+    answer: str = ""
+    source: str = "dynamic"
+
+
+class AnswerPayload(BaseModel):
+    question_id: str
+    answer: str = ""
+    follow_ups: list[FollowUpTurn] = []
+
+
+class FollowUpRequest(BaseModel):
+    question_id: str
+    answer: str = ""
+    follow_ups: list[FollowUpTurn] = []
+
+
 class SubmitRequest(BaseModel):
-    answers: list[dict]  # [{question_id: "q1", answer: "..."}]
+    answers: list[AnswerPayload]
+
+
+def _normalize_answer_payload(item: AnswerPayload | dict) -> dict:
+    data = item.model_dump() if isinstance(item, AnswerPayload) else dict(item)
+    follow_ups = []
+    for turn in data.get("follow_ups", []) or []:
+        turn_data = turn.model_dump() if isinstance(turn, FollowUpTurn) else dict(turn)
+        question = str(turn_data.get("question", "") or "").strip()
+        if not question:
+            continue
+        follow_ups.append(
+            {
+                "question": question,
+                "answer": str(turn_data.get("answer", "") or "").strip(),
+                "source": str(turn_data.get("source", "dynamic") or "dynamic"),
+            }
+        )
+    return {
+        "question_id": str(data.get("question_id", "") or "").strip(),
+        "answer": str(data.get("answer", "") or "").strip(),
+        "follow_ups": follow_ups,
+    }
+
+
+@router.post("/{interview_id}/follow-up")
+def generate_follow_up(
+    interview_id: int,
+    req: FollowUpRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Generate the next dynamic follow-up question for one interview question."""
+    row = (
+        db.query(MockInterview)
+        .filter(MockInterview.id == interview_id, MockInterview.user_id == user.id)
+        .first()
+    )
+    if not row:
+        raise HTTPException(404, "面试记录不存在")
+    if row.status == "evaluated":
+        raise HTTPException(400, "该面试已结束，无法继续追问")
+
+    questions = json.loads(row.questions_json or "[]")
+    question = next((q for q in questions if q.get("id") == req.question_id), None)
+    if not question:
+        raise HTTPException(404, "题目不存在")
+
+    main_answer = (req.answer or "").strip()
+    if _is_empty_answer(main_answer):
+        raise HTTPException(400, "请先完成当前主回答，再生成追问")
+
+    existing_follow_ups = _normalize_answer_payload(
+        {"question_id": req.question_id, "follow_ups": req.follow_ups}
+    ).get("follow_ups", [])
+    max_rounds = 2
+    if len(existing_follow_ups) >= max_rounds:
+        return {"done": True, "max_rounds": max_rounds, "round": len(existing_follow_ups)}
+
+    profile_data = _build_enriched_profile(user.id, db)
+    profile_summary = _build_profile_summary(profile_data)
+    preset_follow_ups = question.get("follow_ups", []) or []
+    previous_follow_ups = "\n".join(
+        f"- 第 {idx + 1} 轮追问：{item['question']}\n  回答：{item.get('answer', '') or '（未作答）'}"
+        for idx, item in enumerate(existing_follow_ups)
+    ) or "（暂无）"
+
+    follow_up_text = ""
+    should_stop = False
+    try:
+        from backend.skills import invoke_skill
+
+        result = invoke_skill(
+            "mock-interview-followup",
+            target_role=row.target_role,
+            profile_summary=profile_summary,
+            question=question.get("question", ""),
+            focus_area=question.get("focus_area", ""),
+            main_answer=main_answer,
+            previous_follow_ups=previous_follow_ups,
+            preset_follow_ups="\n".join(f"- {item}" for item in preset_follow_ups) or "（暂无）",
+            follow_up_round=len(existing_follow_ups) + 1,
+            max_rounds=max_rounds,
+        )
+        if isinstance(result, dict):
+            follow_up_text = str(result.get("follow_up", "") or "").strip()
+            should_stop = bool(result.get("should_stop", False))
+    except Exception as exc:
+        logger.warning("Dynamic follow-up generation failed: %s", exc)
+
+    if should_stop:
+        return {"done": True, "max_rounds": max_rounds, "round": len(existing_follow_ups)}
+
+    # If LLM result contains placeholder pattern, discard
+    if follow_up_text and _PLACEHOLDER_RE.search(follow_up_text):
+        logger.warning("Placeholder detected in dynamic follow_up, will try preset: %s", follow_up_text[:80])
+        follow_up_text = ""
+
+    # Dedup: if LLM generated same question as a previous round, discard
+    existing_questions = {item["question"] for item in existing_follow_ups}
+    if follow_up_text and follow_up_text in existing_questions:
+        logger.warning("Duplicate follow_up detected, will try preset")
+        follow_up_text = ""
+
+    # Fallback to preset follow-up if dynamic generation failed/empty
+    if (not follow_up_text) and len(preset_follow_ups) > len(existing_follow_ups):
+        follow_up_text = str(preset_follow_ups[len(existing_follow_ups)] or "").strip()
+        # Preset also needs placeholder check
+        if follow_up_text and _PLACEHOLDER_RE.search(follow_up_text):
+            logger.warning("Placeholder detected in preset follow_up, discarding: %s", follow_up_text[:80])
+            follow_up_text = ""
+
+    if not follow_up_text:
+        raise HTTPException(500, "追问生成失败，请稍后重试")
+
+    return {
+        "follow_up": follow_up_text,
+        "round": len(existing_follow_ups) + 1,
+        "max_rounds": max_rounds,
+        "done": False,
+    }
 
 
 @router.post("/{interview_id}/submit")
@@ -552,19 +726,24 @@ def submit_answers(
         # Return cached evaluation
         return json.loads(row.evaluation_json or "{}")
 
-    row.answers_json = json.dumps(req.answers, ensure_ascii=False)
+    normalized_answers = [_normalize_answer_payload(item) for item in req.answers]
+    row.answers_json = json.dumps(normalized_answers, ensure_ascii=False)
     row.status = "in_progress"
     db.commit()
 
     # Build Q&A pairs for evaluation
     questions = json.loads(row.questions_json or "[]")
-    answer_map = {a["question_id"]: a["answer"] for a in req.answers}
+    answer_map = {a["question_id"]: a for a in normalized_answers}
 
     qa_lines = []
     for q in questions:
         qid = q["id"]
+        answer_item = answer_map.get(qid, {"answer": "", "follow_ups": []})
         qa_lines.append(f"【题目 {qid}】({q.get('type', '')}) {q['question']}")
-        qa_lines.append(f"【回答】{answer_map.get(qid, '（未作答）')}")
+        qa_lines.append(f"【主回答】{answer_item.get('answer') or '（未作答）'}")
+        for idx, fu in enumerate(answer_item.get("follow_ups", []) or [], start=1):
+            qa_lines.append(f"【追问 {qid}-{idx}】{fu.get('question', '')}")
+            qa_lines.append(f"【追问回答 {qid}-{idx}】{fu.get('answer') or '（未作答）'}")
         qa_lines.append("")
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
@@ -583,7 +762,11 @@ def submit_answers(
         raise HTTPException(500, "评估生成失败，请重试")
 
     # Force 0 score for empty/敷衍 answers (backend enforcement, LLM can't be trusted)
-    evaluation = _force_score_empty_answers(evaluation, questions, answer_map)
+    evaluation = _force_score_empty_answers(
+        evaluation,
+        questions,
+        {qid: item.get("answer", "") for qid, item in answer_map.items()},
+    )
 
     row.evaluation_json = json.dumps(evaluation, ensure_ascii=False)
     row.status = "evaluated"

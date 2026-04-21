@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -18,6 +18,7 @@ import {
   Calculator,
   BarChart3,
   ShieldCheck,
+  Bot,
 } from 'lucide-react'
 import { rawFetch } from '@/api/client'
 
@@ -72,11 +73,19 @@ interface Question {
   question: string
   focus_area: string
   difficulty: string
+  follow_ups?: string[]
+}
+
+interface FollowUpTurn {
+  question: string
+  answer: string
+  source?: string
 }
 
 interface Answer {
   question_id: string
   answer: string
+  follow_ups: FollowUpTurn[]
 }
 
 interface PerQuestionEval {
@@ -85,6 +94,7 @@ interface PerQuestionEval {
   strengths: string[]
   improvements: string[]
   suggested_answer: string
+  follow_up_comment?: string
 }
 
 interface Evaluation {
@@ -106,6 +116,77 @@ function normalizeEvaluation(raw: Record<string, unknown>): Evaluation {
   }
 }
 
+function buildAnswersFromQuestions(questions: Question[], existingAnswers: Answer[] = []): Answer[] {
+  const answerMap = new Map(existingAnswers.map((item) => [item.question_id, item]))
+  return questions.map((question) => {
+    const existing = answerMap.get(question.id)
+    return {
+      question_id: question.id,
+      answer: existing?.answer ?? '',
+      follow_ups: (existing?.follow_ups ?? [])
+        .filter((item) => item?.question)
+        .map((item) => ({
+          question: item.question,
+          answer: item.answer ?? '',
+          source: item.source ?? 'dynamic',
+        })),
+    }
+  })
+}
+
+function findResumeIndex(answers: Answer[]) {
+  const nextIndex = answers.findIndex((item) => {
+    if (!item.answer.trim()) return true
+    return (item.follow_ups || []).some((turn) => !turn.answer.trim())
+  })
+  return nextIndex === -1 ? Math.max(answers.length - 1, 0) : nextIndex
+}
+
+function countAnsweredFollowUps(answers: Answer[]) {
+  return answers.reduce(
+    (sum, item) => sum + (item.follow_ups || []).filter((turn) => turn.answer.trim()).length,
+    0,
+  )
+}
+
+function hasInterviewDraftContent(answers: Answer[]) {
+  return answers.some((item) => item.answer.trim() || (item.follow_ups || []).some((turn) => turn.answer.trim()))
+}
+
+function normalizeTypeDistribution(questionCount: number, distribution: Record<string, number>) {
+  const normalized = {
+    technical: Math.max(Math.floor(distribution.technical || 0), 0),
+    scenario: Math.max(Math.floor(distribution.scenario || 0), 0),
+    behavioral: Math.max(Math.floor(distribution.behavioral || 0), 0),
+  }
+
+  let total = TYPE_KEYS.reduce((sum, key) => sum + normalized[key], 0)
+  if (total <= 0) {
+    normalized.technical = questionCount
+    return normalized
+  }
+
+  if (total < questionCount) {
+    normalized.technical += questionCount - total
+    return normalized
+  }
+
+  let overflow = total - questionCount
+  for (const key of TYPE_KEYS) {
+    if (overflow <= 0) break
+    const reducible = Math.min(normalized[key], overflow)
+    normalized[key] -= reducible
+    overflow -= reducible
+  }
+
+  total = TYPE_KEYS.reduce((sum, key) => sum + normalized[key], 0)
+  if (total <= 0) {
+    normalized.technical = questionCount
+  }
+
+  return normalized
+}
+
 interface InterviewHistoryItem {
   id: number
   target_role: string
@@ -113,6 +194,16 @@ interface InterviewHistoryItem {
   score: number | null
   created_at: string
 }
+
+interface SavedInterviewDraft {
+  interviewId: number
+  targetRole: string
+  answers: Answer[]
+  currentIndex: number
+}
+
+const TYPE_KEYS = ['technical', 'scenario', 'behavioral'] as const
+const INTERVIEW_DRAFT_KEY = 'interview_draft'
 
 /* ── Helpers ── */
 
@@ -273,10 +364,16 @@ function useTypingPlaceholder(
    ═══════════════════════════════════════════════ */
 
 export default function InterviewPage() {
-  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const qc = useQueryClient()
   const [phase, setPhase] = useState<'setup' | 'interviewing' | 'evaluating' | 'results'>('setup')
+
+  const clearInterviewSession = useCallback(() => {
+    sessionStorage.removeItem('interview_generating')
+    sessionStorage.removeItem('interview_id')
+    sessionStorage.removeItem('interview_phase')
+    sessionStorage.removeItem(INTERVIEW_DRAFT_KEY)
+  }, [])
 
   // Setup
   const [targetRole, setTargetRole] = useState('')
@@ -300,9 +397,62 @@ export default function InterviewPage() {
   const [answers, setAnswers] = useState<Answer[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [currentAnswer, setCurrentAnswer] = useState('')
+  const [currentFollowUps, setCurrentFollowUps] = useState<FollowUpTurn[]>([])
+  const [followUpError, setFollowUpError] = useState<string | null>(null)
+  const [followUpInfo, setFollowUpInfo] = useState<string | null>(null)
 
   // Results
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+
+  const restoreInterviewState = useCallback((data: {
+    id: number
+    target_role: string
+    status: string
+    questions: Question[]
+    answers?: Answer[]
+    evaluation?: Record<string, unknown> | null
+  }) => {
+    const normalizedAnswers = buildAnswersFromQuestions(data.questions, data.answers || [])
+    let nextAnswers = normalizedAnswers
+    let nextIndex = findResumeIndex(normalizedAnswers)
+
+    const draftRaw = sessionStorage.getItem(INTERVIEW_DRAFT_KEY)
+    if (draftRaw && data.status !== 'evaluated') {
+      try {
+        const draft = JSON.parse(draftRaw) as SavedInterviewDraft
+        if (draft.interviewId === data.id) {
+          nextAnswers = buildAnswersFromQuestions(data.questions, draft.answers || [])
+          nextIndex = Math.min(Math.max(draft.currentIndex || 0, 0), Math.max(data.questions.length - 1, 0))
+        }
+      } catch {
+        sessionStorage.removeItem(INTERVIEW_DRAFT_KEY)
+      }
+    }
+
+    setInterviewId(data.id)
+    setTargetRole(data.target_role)
+    setQuestions(data.questions)
+    setAnswers(nextAnswers)
+    setCurrentIndex(nextIndex)
+    setCurrentAnswer(nextAnswers[nextIndex]?.answer || '')
+    setCurrentFollowUps(nextAnswers[nextIndex]?.follow_ups || [])
+    setSubmitError(null)
+    setFollowUpError(null)
+    setFollowUpInfo(null)
+
+    if (data.status === 'evaluated' && data.evaluation) {
+      setEvaluation(normalizeEvaluation(data.evaluation))
+      setPhase('results')
+      clearInterviewSession()
+      return
+    }
+
+    setEvaluation(null)
+    setPhase('interviewing')
+    sessionStorage.setItem('interview_id', String(data.id))
+    sessionStorage.setItem('interview_phase', 'interviewing')
+  }, [clearInterviewSession])
 
   // History
   const { data: history } = useQuery<InterviewHistoryItem[]>({
@@ -318,17 +468,23 @@ export default function InterviewPage() {
         body: JSON.stringify(body),
       }),
     onMutate: () => {
+      setSubmitError(null)
       sessionStorage.setItem('interview_generating', 'true')
     },
     onSuccess: (data) => {
-      sessionStorage.removeItem('interview_generating')
+      const initialAnswers = buildAnswersFromQuestions(data.questions)
+      clearInterviewSession()
       sessionStorage.setItem('interview_id', String(data.id))
       sessionStorage.setItem('interview_phase', 'interviewing')
       setInterviewId(data.id)
       setQuestions(data.questions)
-      setAnswers(data.questions.map((q) => ({ question_id: q.id, answer: '' })))
+      setAnswers(initialAnswers)
       setCurrentIndex(0)
-      setCurrentAnswer('')
+      setCurrentAnswer(initialAnswers[0]?.answer || '')
+      setCurrentFollowUps(initialAnswers[0]?.follow_ups || [])
+      setFollowUpError(null)
+      setFollowUpInfo(null)
+      setEvaluation(null)
       setPhase('interviewing')
       qc.invalidateQueries({ queryKey: ['interview-history'] })
     },
@@ -343,12 +499,50 @@ export default function InterviewPage() {
         method: 'POST',
         body: JSON.stringify(body),
       }),
+    onMutate: () => {
+      setSubmitError(null)
+    },
     onSuccess: (data) => {
+      clearInterviewSession()
       setEvaluation(normalizeEvaluation(data))
       setPhase('results')
-      sessionStorage.removeItem('interview_id')
-      sessionStorage.removeItem('interview_phase')
       qc.invalidateQueries({ queryKey: ['interview-history'] })
+    },
+    onError: (error) => {
+      setPhase('interviewing')
+      setSubmitError(error instanceof Error ? error.message : '评估失败，请稍后重试')
+    },
+  })
+
+  const followUpMutation = useMutation({
+    mutationFn: (body: { question_id: string; answer: string; follow_ups: FollowUpTurn[] }) =>
+      rawFetch<{ follow_up?: string; round: number; max_rounds: number; done: boolean }>(`/interview/${interviewId}/follow-up`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+    onMutate: () => {
+      setFollowUpError(null)
+      setFollowUpInfo(null)
+    },
+    onSuccess: (data) => {
+      if (data.done || !data.follow_up) {
+        setFollowUpInfo('这一题暂时没有更多值得追问的点了')
+        return
+      }
+      const newTurn = { question: data.follow_up!, answer: '', source: 'dynamic' }
+      setCurrentFollowUps((prev) => {
+        const next = [...prev, newTurn]
+        // Sync into answers so switching questions won't bleed over
+        setAnswers((prevAnswers) =>
+          prevAnswers.map((a, i) =>
+            i === currentIndex ? { ...a, follow_ups: next } : a
+          )
+        )
+        return next
+      })
+    },
+    onError: (error) => {
+      setFollowUpError(error instanceof Error ? error.message : '追问生成失败，请稍后重试')
     },
   })
 
@@ -364,7 +558,7 @@ export default function InterviewPage() {
   // Warn before browser refresh/close when generating or interviewing
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      if (startMutation.isPending || (phase === 'interviewing' && answers.some(a => a.answer.trim()))) {
+      if (startMutation.isPending || (phase === 'interviewing' && hasInterviewDraftContent(answers))) {
         e.preventDefault()
         e.returnValue = ''
       }
@@ -380,50 +574,54 @@ export default function InterviewPage() {
     const isGenerating = sessionStorage.getItem('interview_generating') === 'true'
 
     if (isGenerating && !startMutation.isPending && !interviewId) {
-      // User left during generation and came back - poll for completion
       const checkLatest = async () => {
         try {
-          const history: InterviewHistoryItem[] = await rawFetch('/interview/history')
-          const latest = history[0]
+          const latestHistory: InterviewHistoryItem[] = await rawFetch('/interview/history')
+          const latest = latestHistory[0]
           if (latest && latest.status === 'created') {
-            const data = await rawFetch(`/interview/${latest.id}`)
+            const data = await rawFetch<{
+              id: number
+              target_role: string
+              status: string
+              questions: Question[]
+              answers?: Answer[]
+              evaluation?: Record<string, unknown> | null
+            }>(`/interview/${latest.id}`)
             if (data.questions && data.questions.length > 0) {
-              setInterviewId(data.id)
-              setQuestions(data.questions)
-              setAnswers(data.questions.map((q: Question) => ({ question_id: q.id, answer: '' })))
-              setPhase('interviewing')
-              sessionStorage.removeItem('interview_generating')
+              restoreInterviewState(data)
             }
           }
         } catch {
           // ignore
+        } finally {
+          sessionStorage.removeItem('interview_generating')
         }
       }
       checkLatest()
-    } else if (savedId && savedPhase === 'interviewing' && phase === 'setup') {
-      // Restore ongoing interview
+      return
+    }
+
+    if (savedId && savedPhase === 'interviewing' && phase === 'setup') {
       const restore = async () => {
         try {
-          const data = await rawFetch(`/interview/${savedId}`)
+          const data = await rawFetch<{
+            id: number
+            target_role: string
+            status: string
+            questions: Question[]
+            answers?: Answer[]
+            evaluation?: Record<string, unknown> | null
+          }>(`/interview/${savedId}`)
           if (data.questions && data.questions.length > 0) {
-            setInterviewId(data.id)
-            setQuestions(data.questions)
-            setAnswers(data.answers || data.questions.map((q: Question) => ({ question_id: q.id, answer: '' })))
-            if (data.status === 'evaluated') {
-              setEvaluation(normalizeEvaluation(data.evaluation))
-              setPhase('results')
-            } else {
-              setPhase('interviewing')
-            }
+            restoreInterviewState(data)
           }
         } catch {
-          sessionStorage.removeItem('interview_id')
-          sessionStorage.removeItem('interview_phase')
+          clearInterviewSession()
         }
       }
       restore()
     }
-  }, [])
+  }, [clearInterviewSession, interviewId, phase, restoreInterviewState, startMutation.isPending])
 
   const { isListening, isSupported, start, stop } = useSpeechRecognition(
     useCallback((text: string) => {
@@ -433,41 +631,132 @@ export default function InterviewPage() {
 
   const typingItems = useMemo(() => ['输入你想面试的岗位...', '后端工程师', '产品经理', '算法工程师', '前端开发', '数据分析师'], [])
   const typingPlaceholder = useTypingPlaceholder(typingItems, { typeSpeed: 80, eraseSpeed: 40, pauseMs: 1500 })
+  const assignedCount = useMemo(() => TYPE_KEYS.reduce((sum, key) => sum + (typeDistribution[key] || 0), 0), [typeDistribution])
+  const normalizedTypeDistribution = useMemo(() => normalizeTypeDistribution(questionCount, typeDistribution), [questionCount, typeDistribution])
+  const shouldAutoBalanceDistribution = assignedCount !== questionCount
 
   useEffect(() => {
     if (phase === 'interviewing' && questions.length > 0) {
       setAnswers((prev) => {
         const next = [...prev]
-        next[currentIndex] = { question_id: questions[currentIndex].id, answer: currentAnswer }
+        next[currentIndex] = {
+          question_id: questions[currentIndex].id,
+          answer: currentAnswer,
+          follow_ups: currentFollowUps,
+        }
         return next
       })
     }
-  }, [currentAnswer, currentIndex, phase, questions])
+  }, [currentAnswer, currentFollowUps, currentIndex, phase, questions])
+
+  useEffect(() => {
+    if (phase !== 'interviewing' || !interviewId || questions.length === 0) return
+
+    const persistedAnswers = answers.map((item, index) =>
+      index === currentIndex ? { ...item, answer: currentAnswer, follow_ups: currentFollowUps } : item
+    )
+
+    const draft: SavedInterviewDraft = {
+      interviewId,
+      targetRole,
+      answers: persistedAnswers,
+      currentIndex,
+    }
+
+    sessionStorage.setItem('interview_id', String(interviewId))
+    sessionStorage.setItem('interview_phase', 'interviewing')
+    sessionStorage.setItem(INTERVIEW_DRAFT_KEY, JSON.stringify(draft))
+  }, [answers, currentAnswer, currentFollowUps, currentIndex, interviewId, phase, questions.length, targetRole])
+
+  // Track whether we've already auto-triggered follow-up for this (question, answer) combo
+  const autoFollowUpTriggeredRef = useRef<Set<string>>(new Set())
+
+  const handleGenerateFollowUp = (answer?: string, followUps?: FollowUpTurn[]) => {
+    if (!interviewId || !questions[currentIndex]) return
+    const ans = answer ?? currentAnswer
+    const fus = followUps ?? currentFollowUps
+    followUpMutation.mutate({
+      question_id: questions[currentIndex].id,
+      answer: ans,
+      follow_ups: fus,
+    })
+  }
+
+  // Auto-trigger follow-up when user finishes typing in main answer box (onBlur)
+  const handleMainAnswerBlur = () => {
+    if (!interviewId || !questions[currentIndex]) return
+    const q = questions[currentIndex]
+    const answerTrimmed = currentAnswer.trim()
+
+    // Conditions: answer long enough, haven't reached max follow-ups, not already pending
+    const hasUnfinishedFollowUp = currentFollowUps.length > 0 &&
+      !currentFollowUps[currentFollowUps.length - 1]?.answer.trim()
+    if (
+      answerTrimmed.length < 30 ||
+      currentFollowUps.length >= 2 ||
+      hasUnfinishedFollowUp ||
+      followUpMutation.isPending
+    ) return
+
+    // Deduplicate: don't re-trigger if answer + follow-up count hasn't changed
+    const key = `${q.id}::${answerTrimmed.length}::${currentFollowUps.length}`
+    if (autoFollowUpTriggeredRef.current.has(key)) return
+    autoFollowUpTriggeredRef.current.add(key)
+
+    handleGenerateFollowUp(currentAnswer, currentFollowUps)
+  }
 
   const handleNext = () => {
     if (currentIndex < questions.length - 1) {
-      setCurrentIndex((i) => i + 1)
-      setCurrentAnswer(answers[currentIndex + 1]?.answer || '')
+      autoFollowUpTriggeredRef.current.clear()
+      // Save current question state before switching
+      setAnswers((prev) =>
+        prev.map((a, i) =>
+          i === currentIndex ? { ...a, answer: currentAnswer, follow_ups: currentFollowUps } : a
+        )
+      )
+      const nextIdx = currentIndex + 1
+      setCurrentIndex(nextIdx)
+      setCurrentAnswer(answers[nextIdx]?.answer || '')
+      setCurrentFollowUps(answers[nextIdx]?.follow_ups || [])
+      setFollowUpError(null)
+      setFollowUpInfo(null)
     }
   }
 
   const handlePrev = () => {
     if (currentIndex > 0) {
-      setCurrentIndex((i) => i - 1)
-      setCurrentAnswer(answers[currentIndex - 1]?.answer || '')
+      autoFollowUpTriggeredRef.current.clear()
+      // Save current question state before switching
+      setAnswers((prev) =>
+        prev.map((a, i) =>
+          i === currentIndex ? { ...a, answer: currentAnswer, follow_ups: currentFollowUps } : a
+        )
+      )
+      const prevIdx = currentIndex - 1
+      setCurrentIndex(prevIdx)
+      setCurrentAnswer(answers[prevIdx]?.answer || '')
+      setCurrentFollowUps(answers[prevIdx]?.follow_ups || [])
+      setFollowUpError(null)
+      setFollowUpInfo(null)
     }
   }
 
   const handleSubmit = () => {
+    if (submitMutation.isPending) return
+
     const finalAnswers = answers.map((a, i) =>
-      i === currentIndex ? { ...a, answer: currentAnswer } : a
+      i === currentIndex ? { ...a, answer: currentAnswer, follow_ups: currentFollowUps } : a
     )
+    setSubmitError(null)
     setAnswers(finalAnswers)
     setPhase('evaluating')
     submitMutation.mutate({ answers: finalAnswers })
   }
 
   const handleRestart = () => {
+    stop()
+    clearInterviewSession()
     setPhase('setup')
     setTargetRole('')
     setJdText('')
@@ -478,7 +767,11 @@ export default function InterviewPage() {
     setAnswers([])
     setCurrentIndex(0)
     setCurrentAnswer('')
+    setCurrentFollowUps([])
+    setFollowUpError(null)
+    setFollowUpInfo(null)
     setEvaluation(null)
+    setSubmitError(null)
   }
 
   const handleLoadHistory = async (id: number) => {
@@ -487,25 +780,10 @@ export default function InterviewPage() {
       target_role: string
       status: string
       questions: Question[]
-      answers: Answer[]
+      answers?: Answer[]
       evaluation: Record<string, unknown> | null
     }>(`/interview/${id}`)
-    if (data.status === 'evaluated' && data.evaluation) {
-      setInterviewId(data.id)
-      setTargetRole(data.target_role)
-      setQuestions(data.questions)
-      setAnswers(data.answers)
-      setEvaluation(normalizeEvaluation(data.evaluation as Record<string, unknown>))
-      setPhase('results')
-    } else if (data.status === 'created') {
-      setInterviewId(data.id)
-      setTargetRole(data.target_role)
-      setQuestions(data.questions)
-      setAnswers(data.questions.map((q) => ({ question_id: q.id, answer: '' })))
-      setCurrentIndex(0)
-      setCurrentAnswer('')
-      setPhase('interviewing')
-    }
+    restoreInterviewState(data)
   }
 
   /* ── Phase: Setup ── */
@@ -707,6 +985,22 @@ export default function InterviewPage() {
               </div>
             </div>
 
+            <div className="mt-2 flex items-center justify-between gap-3">
+              <p className={`text-[12px] ${shouldAutoBalanceDistribution ? 'text-amber-600' : 'text-emerald-600'}`}>
+                {shouldAutoBalanceDistribution
+                  ? `当前已分配 ${assignedCount}/${questionCount} 题，开始前会自动补齐为 ${normalizedTypeDistribution.technical} 道技术题`
+                  : `题型分配已完成：${assignedCount}/${questionCount} 题`}
+              </p>
+              {shouldAutoBalanceDistribution && (
+                <button
+                  onClick={() => setTypeDistribution(normalizedTypeDistribution)}
+                  className="text-[12px] text-blue-600 hover:text-blue-700 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  一键补齐
+                </button>
+              )}
+            </div>
+
             <div className="mt-4">
               {!showJd ? (
                 <button
@@ -738,7 +1032,18 @@ export default function InterviewPage() {
 
             <div className="flex justify-end mt-5">
               <button
-                onClick={() => startMutation.mutate({ target_role: targetRole, jd_text: jdText, question_count: questionCount, type_distribution: typeDistribution })}
+                onClick={() => {
+                  const nextDistribution = normalizeTypeDistribution(questionCount, typeDistribution)
+                  if (shouldAutoBalanceDistribution) {
+                    setTypeDistribution(nextDistribution)
+                  }
+                  startMutation.mutate({
+                    target_role: targetRole.trim(),
+                    jd_text: jdText,
+                    question_count: questionCount,
+                    type_distribution: nextDistribution,
+                  })
+                }}
                 disabled={!targetRole.trim() || startMutation.isPending}
                 className={`relative overflow-hidden rounded-lg text-white font-bold transition-all duration-300 cursor-pointer px-6 py-2.5 text-[14px] ${
                   startMutation.isPending
@@ -831,19 +1136,20 @@ export default function InterviewPage() {
 
     return (
       <div className="flex flex-col h-full w-full">
-        {/* Top progress bar */}
-        <div className="w-full h-1.5 bg-slate-200/40">
-          <motion.div
-            initial={{ width: 0 }}
-            animate={{ width: `${pct}%` }}
-            transition={{ duration: 0.4, ease }}
-            className="h-full bg-[var(--blue)]"
-          />
-        </div>
 
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header */}
-          <div className="shrink-0 px-6 pt-5 pb-3 flex items-center justify-between">
+        {/* ── 顶部栏 ── */}
+        <div className="shrink-0 bg-white/70 backdrop-blur-md border-b border-white/30 z-10">
+          {/* 进度条 */}
+          <div className="w-full h-[2px] bg-slate-100">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.4, ease }}
+              className="h-full bg-gradient-to-r from-[var(--blue)] to-blue-400"
+            />
+          </div>
+          {/* 导航行 */}
+          <div className="px-5 h-12 flex items-center justify-between">
             <button
               onClick={handleRestart}
               className="flex items-center gap-1 text-[13px] text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
@@ -851,107 +1157,195 @@ export default function InterviewPage() {
               <ChevronLeft className="w-4 h-4" />
               返回
             </button>
-            <div className="flex items-center gap-3">
-              <span className="text-[12px] text-slate-400 tracking-wide">
-                第 {currentIndex + 1} 题 / 共 {questions.length} 题
-              </span>
-              <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${tc.bg} ${tc.text}`}>
-                {typeLabel(q.type)}
-              </span>
-            </div>
-          </div>
 
-          {/* Main content */}
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
-            <div className="max-w-[680px] mx-auto h-full flex flex-col">
+            {/* 点状进度指示器 */}
+            <div className="flex items-center gap-1.5">
+              {questions.map((_, i) => (
+                <div
+                  key={i}
+                  className={`rounded-full transition-all duration-300 ${
+                    i < currentIndex
+                      ? 'w-1.5 h-1.5 bg-blue-400'
+                      : i === currentIndex
+                      ? 'w-2 h-2 bg-[var(--blue)] ring-2 ring-blue-200'
+                      : 'w-1.5 h-1.5 bg-slate-200'
+                  }`}
+                />
+              ))}
+            </div>
+
+            <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${tc.bg} ${tc.text}`}>
+              {typeLabel(q.type)}
+            </span>
+          </div>
+        </div>
+
+        {/* ── 对话流区域 ── */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-[680px] mx-auto px-4 py-6">
+            <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, ease }}
-                className="flex flex-col h-full gap-4"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.25, ease }}
+                className="flex flex-col gap-5"
               >
-                {/* Question Block */}
-                <div className="rounded-xl glass-static p-5">
-                  <h2 className="text-[17px] font-semibold text-slate-800 leading-[1.75]">
+                {/* 面试官气泡：主题目 */}
+                <InterviewerBubble>
+                  <p className="text-[15px] font-medium text-slate-800 leading-[1.8]">
                     {q.question}
-                  </h2>
-                  <div className="mt-3 flex items-center gap-2">
-                    <span className="text-[11px] uppercase tracking-wider text-slate-400 font-medium">
-                      考察
-                    </span>
-                    <span className="text-[12px] text-slate-600">
-                      {q.focus_area}
-                    </span>
+                  </p>
+                  <div className="mt-2.5 flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-slate-400">考察</span>
+                    <span className="text-[12px] text-slate-600">{q.focus_area}</span>
                     <span className="text-[11px] text-slate-300">·</span>
-                    <span className="text-[12px] text-slate-600">
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                      q.difficulty === 'easy'
+                        ? 'bg-emerald-50 text-emerald-600'
+                        : q.difficulty === 'medium'
+                        ? 'bg-amber-50 text-amber-600'
+                        : 'bg-red-50 text-red-500'
+                    }`}>
                       {q.difficulty === 'easy' ? '基础' : q.difficulty === 'medium' ? '进阶' : '专家'}
                     </span>
                   </div>
-                </div>
+                </InterviewerBubble>
 
-                {/* Answer Block */}
-                <div className="flex-1 flex flex-col rounded-xl glass-static overflow-hidden min-h-[200px]">
-                  <textarea
-                    value={currentAnswer}
-                    onChange={(e) => setCurrentAnswer(e.target.value)}
-                    placeholder="在这里写下你的回答..."
-                    className="flex-1 w-full p-5 bg-transparent text-[15px] text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-0 resize-none leading-[1.8]"
-                    style={{ minHeight: '160px' }}
-                  />
-                  <div className="shrink-0 px-5 py-3 border-t border-white/30 flex items-center justify-between">
-                    {isSupported && (
-                      <button
-                        onClick={isListening ? stop : start}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium transition-all cursor-pointer ${
-                          isListening
-                            ? 'bg-red-50 text-red-600'
-                            : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100/50'
-                        }`}
-                      >
-                        <Mic className={`w-3.5 h-3.5 ${isListening ? 'animate-pulse' : ''}`} />
-                        {isListening ? '停止录音' : '语音输入'}
-                      </button>
-                    )}
-                    <p className="text-[12px] text-slate-300 ml-auto tabular-nums">
-                      {currentAnswer.length} 字
-                    </p>
-                  </div>
-                </div>
+                {/* 用户主回答气泡 */}
+                <UserAnswerBubble
+                  value={currentAnswer}
+                  onChange={setCurrentAnswer}
+                  onBlur={handleMainAnswerBlur}
+                  placeholder="在这里写下你的回答..."
+                  minHint={30}
+                />
 
-                {/* Navigation */}
-                <div className="shrink-0 flex items-center justify-between pt-1">
-                  <button
-                    onClick={handlePrev}
-                    disabled={currentIndex === 0}
-                    className="flex items-center gap-1 px-4 py-2 text-[13px] font-medium text-slate-400 hover:text-slate-800 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                {/* 追问对话流 */}
+                {currentFollowUps.map((turn, idx) => (
+                  <motion.div
+                    key={`followup-${idx}`}
+                    initial={{ opacity: 0, x: -12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3, ease }}
+                    className="flex flex-col gap-5"
                   >
-                    <ChevronLeft className="w-4 h-4" />
-                    上一题
-                  </button>
+                    {/* 面试官追问气泡 */}
+                    <InterviewerBubble isFollowUp>
+                      <div className="flex items-center gap-1.5 mb-1.5">
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                          追问 {idx + 1}
+                        </span>
+                      </div>
+                      <p className="text-[14px] font-medium text-slate-800 leading-[1.8]">
+                        {turn.question}
+                      </p>
+                    </InterviewerBubble>
 
-                  {isLast ? (
-                    <button
-                      onClick={handleSubmit}
-                      className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-[var(--blue)] text-white text-[14px] font-semibold hover:bg-[var(--blue-deep)] active:scale-[0.98] transition-all cursor-pointer shadow-sm shadow-blue-500/20"
-                    >
-                      提交全部答案
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handleNext}
-                      className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-[var(--blue)] text-white text-[14px] font-semibold hover:bg-[var(--blue-deep)] active:scale-[0.98] transition-all cursor-pointer shadow-sm shadow-blue-500/20"
-                    >
-                      下一题
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+                    {/* 用户追问回答气泡 */}
+                    <UserAnswerBubble
+                      value={turn.answer}
+                      onChange={(val) => {
+                        const next = currentFollowUps.map((item, turnIndex) =>
+                          turnIndex === idx ? { ...item, answer: val } : item
+                        )
+                        setCurrentFollowUps(next)
+                      }}
+                      onBlur={() => {
+                        if (idx === currentFollowUps.length - 1 && turn.answer.trim().length >= 10) {
+                          handleMainAnswerBlur()
+                        }
+                      }}
+                      placeholder="补充这轮追问的回答..."
+                      isFollowUp
+                      minHint={10}
+                    />
+                  </motion.div>
+                ))}
+
+                {/* AI 思考中气泡 */}
+                {followUpMutation.isPending && <ThinkingBubble />}
+
+                {/* 追问完毕提示 */}
+                {followUpInfo && !followUpMutation.isPending && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="flex justify-center"
+                  >
+                    <span className="text-[12px] text-slate-400 bg-white/70 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/40">
+                      {followUpInfo}
+                    </span>
+                  </motion.div>
+                )}
+
+                {/* 追问错误提示 */}
+                {followUpError && (
+                  <p className="text-[12px] text-red-500 text-center">{followUpError}</p>
+                )}
+
               </motion.div>
-            </div>
+            </AnimatePresence>
           </div>
         </div>
+
+        {/* ── 底部操作栏 ── */}
+        <div className="shrink-0 bg-white/70 backdrop-blur-md border-t border-white/30 px-5 h-16 flex items-center justify-between gap-4 z-10">
+          {/* 语音输入 */}
+          {isSupported && (
+            <button
+              onClick={isListening ? stop : start}
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-all cursor-pointer ${
+                isListening
+                  ? 'bg-red-50 text-red-600 border border-red-200'
+                  : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100/60 border border-transparent'
+              }`}
+            >
+              <Mic className={`w-4 h-4 ${isListening ? 'animate-pulse' : ''}`} />
+              {isListening ? '停止录音' : '语音输入'}
+            </button>
+          )}
+          {!isSupported && <div />}
+
+          {/* 导航按钮 */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handlePrev}
+              disabled={currentIndex === 0}
+              className="flex items-center gap-1 px-3 py-2 text-[13px] font-medium text-slate-400 hover:text-slate-700 transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              上一题
+            </button>
+
+            {isLast ? (
+              <button
+                onClick={handleSubmit}
+                disabled={submitMutation.isPending}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[var(--blue)] text-white text-[13px] font-semibold hover:bg-[var(--blue-deep)] active:scale-[0.98] transition-all cursor-pointer shadow-sm shadow-blue-500/20 disabled:opacity-60 disabled:cursor-wait"
+              >
+                提交全部答案
+                <CheckCircle2 className="w-4 h-4" />
+              </button>
+            ) : (
+              <button
+                onClick={handleNext}
+                className="flex items-center gap-2 px-5 py-2 rounded-xl bg-[var(--blue)] text-white text-[13px] font-semibold hover:bg-[var(--blue-deep)] active:scale-[0.98] transition-all cursor-pointer shadow-sm shadow-blue-500/20"
+              >
+                下一题
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 提交错误提示 */}
+        {submitError && (
+          <div className="shrink-0 px-5 pb-3 text-center">
+            <p className="text-[12px] text-red-500">{submitError}</p>
+          </div>
+        )}
       </div>
     )
   }
@@ -1021,6 +1415,8 @@ export default function InterviewPage() {
 
   /* ── Phase: Results ── */
   if (phase === 'results' && evaluation) {
+    const answeredFollowUpCount = countAnsweredFollowUps(answers)
+
     return (
       <div className="flex flex-col h-full w-full overflow-y-auto pb-12">
         <div className="max-w-[720px] mx-auto px-6 py-8 w-full">
@@ -1074,6 +1470,15 @@ export default function InterviewPage() {
             )
           })()}
 
+          {answeredFollowUpCount > 0 && (
+            <div className="mb-8 rounded-xl border border-blue-100/70 bg-blue-50/60 px-5 py-4">
+              <p className="text-[13px] font-semibold text-blue-800">本场共完成 {answeredFollowUpCount} 轮 AI 追问</p>
+              <p className="mt-1 text-[12px] text-blue-700/80 leading-relaxed">
+                评分已把你在深挖问题中的补充细节、稳定性和自洽程度一起算进去。
+              </p>
+            </div>
+          )}
+
           {/* Per-question evaluations */}
           <div className="mb-8">
             <h3 className="text-[14px] font-semibold text-slate-700 mb-4">
@@ -1085,7 +1490,7 @@ export default function InterviewPage() {
                   key={pq.question_id}
                   eval={pq}
                   question={questions[idx] || { id: pq.question_id, type: 'technical', question: '', focus_area: '', difficulty: '' }}
-                  answer={answers[idx]?.answer || ''}
+                  answer={answers[idx] || { question_id: pq.question_id, answer: '', follow_ups: [] }}
                   index={idx}
                 />
               ))}
@@ -1259,12 +1664,13 @@ function QuestionEvalRow({
 }: {
   eval: PerQuestionEval
   question: Question
-  answer: string
+  answer: Answer
   index: number
 }) {
   const [showSuggested, setShowSuggested] = useState(false)
   const [showMyAnswer, setShowMyAnswer] = useState(false)
   const tc = typeColors[question.type] || { bg: 'bg-slate-50', text: 'text-slate-600' }
+  const answeredFollowUps = (answer.follow_ups || []).filter((item) => item.question)
 
   // 分数色条颜色
   const barColor = ev.score >= 80
@@ -1296,7 +1702,7 @@ function QuestionEvalRow({
         {/* Header line */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className="text-[12px] font-bold text-slate-300 tabular-nums">
                 {String(index + 1).padStart(2, '0')}
               </span>
@@ -1306,6 +1712,11 @@ function QuestionEvalRow({
               <span className="text-[11px] text-slate-400">
                 {question.focus_area}
               </span>
+              {answeredFollowUps.length > 0 && (
+                <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">
+                  追问 {answeredFollowUps.length} 轮
+                </span>
+              )}
             </div>
             <p className="text-[13px] text-slate-600 leading-relaxed line-clamp-2">
               {question.question}
@@ -1342,8 +1753,15 @@ function QuestionEvalRow({
           </div>
         )}
 
+        {ev.follow_up_comment && (
+          <div className="mt-4 rounded-lg border border-blue-100/70 bg-blue-50/60 px-4 py-3">
+            <p className="text-[12px] font-semibold text-blue-800">追问表现</p>
+            <p className="mt-1 text-[13px] text-blue-900/80 leading-relaxed">{ev.follow_up_comment}</p>
+          </div>
+        )}
+
         {/* My answer toggle */}
-        {answer && (
+        {(answer.answer || answeredFollowUps.length > 0) && (
           <>
             <button
               onClick={() => setShowMyAnswer((v) => !v)}
@@ -1361,8 +1779,21 @@ function QuestionEvalRow({
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-2 p-4 rounded-lg bg-blue-50/50 border border-blue-100/60 text-[13px] text-slate-600 leading-[1.8] whitespace-pre-wrap">
-                    {answer}
+                  <div className="mt-2 space-y-3">
+                    {answer.answer && (
+                      <div className="p-4 rounded-lg bg-blue-50/50 border border-blue-100/60 text-[13px] text-slate-600 leading-[1.8] whitespace-pre-wrap">
+                        {answer.answer}
+                      </div>
+                    )}
+                    {answeredFollowUps.map((turn, idx) => (
+                      <div key={`${turn.question}-${idx}`} className="rounded-lg border border-slate-200/70 bg-slate-50/70 p-4">
+                        <p className="text-[12px] font-semibold text-slate-500">追问 {idx + 1}</p>
+                        <p className="mt-1 text-[13px] text-slate-700 leading-relaxed">{turn.question}</p>
+                        <p className="mt-2 text-[13px] text-slate-600 leading-[1.8] whitespace-pre-wrap">
+                          {turn.answer || '（未作答）'}
+                        </p>
+                      </div>
+                    ))}
                   </div>
                 </motion.div>
               )}
@@ -1393,6 +1824,164 @@ function QuestionEvalRow({
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+    </motion.div>
+  )
+}
+
+/* ── Sub-component: InterviewerBubble ── */
+
+function InterviewerBubble({
+  children,
+  isFollowUp = false,
+}: {
+  children: ReactNode
+  isFollowUp?: boolean
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+      className="flex items-start gap-3"
+    >
+      <motion.div
+        initial={{ scale: 0.8 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.05 }}
+        className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center shadow-md ${
+          isFollowUp ? 'bg-amber-700' : 'bg-slate-800'
+        }`}
+      >
+        <Bot className="w-[18px] h-[18px] text-white" />
+      </motion.div>
+      <div className={`flex-1 rounded-2xl rounded-tl-sm px-4 py-3.5 shadow-sm border-[1.5px] backdrop-blur-sm transition-all duration-200 ${
+        isFollowUp
+          ? 'bg-white/70 border-amber-300/60 hover:border-amber-400/80 hover:shadow-md'
+          : 'bg-white/70 border-slate-200/60 hover:border-slate-300/80 hover:shadow-md'
+      }`}>
+        {children}
+      </div>
+    </motion.div>
+  )
+}
+
+/* ── Sub-component: UserAnswerBubble ── */
+
+function UserAnswerBubble({
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  isFollowUp = false,
+  minHint = 30,
+}: {
+  value: string
+  onChange: (val: string) => void
+  onBlur?: () => void
+  placeholder: string
+  isFollowUp?: boolean
+  minHint?: number
+}) {
+  const len = value.length
+  const lenColor =
+    len === 0 ? 'text-slate-300'
+    : len < minHint ? 'text-amber-500'
+    : len <= 300 ? 'text-emerald-500'
+    : 'text-slate-400'
+
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    const ta = taRef.current
+    if (!ta) return
+    ta.style.height = 'auto'
+    ta.style.height = `${ta.scrollHeight}px`
+  }, [value])
+
+  const [isFocused, setIsFocused] = useState(false)
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+      className="flex items-start gap-3 flex-row-reverse"
+    >
+      <motion.div
+        initial={{ scale: 0.8 }}
+        animate={{ scale: 1 }}
+        transition={{ type: 'spring', stiffness: 400, damping: 20, delay: 0.05 }}
+        className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center shadow-md text-white text-[12px] font-bold ${
+          isFollowUp ? 'bg-slate-500' : 'bg-[var(--blue)]'
+        }`}
+      >
+        你
+      </motion.div>
+      <div
+        className={`flex-1 rounded-2xl rounded-tr-sm shadow-sm border-[1.5px] overflow-hidden backdrop-blur-sm transition-all duration-200 ${
+          isFollowUp
+            ? isFocused
+              ? 'bg-slate-50/80 border-slate-400/70 ring-2 ring-slate-400/15 shadow-md'
+              : 'bg-slate-50/60 border-slate-300/60 hover:border-slate-400/80'
+            : isFocused
+              ? 'bg-blue-50/80 border-blue-400/70 ring-2 ring-blue-400/20 shadow-md'
+              : 'bg-blue-50/60 border-blue-300/60 hover:border-blue-400/80'
+        }`}
+      >
+        <textarea
+          ref={taRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setIsFocused(true)}
+          onBlur={() => { setIsFocused(false); onBlur?.() }}
+          placeholder={placeholder}
+          rows={isFollowUp ? 2 : 4}
+          className="w-full px-4 py-3.5 bg-transparent text-[14px] text-slate-800 placeholder:text-slate-300 focus:outline-none resize-none leading-[1.8]"
+          style={{ minHeight: isFollowUp ? '72px' : '120px', maxHeight: '320px' }}
+        />
+        <div className="px-4 pb-2.5 flex justify-end">
+          <span className={`text-[11px] tabular-nums transition-colors ${lenColor}`}>
+            {len} 字{len < minHint && len > 0 ? `（建议至少 ${minHint} 字）` : ''}
+          </span>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+/* ── Sub-component: ThinkingBubble ── */
+
+function ThinkingBubble() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: 'spring', stiffness: 350, damping: 26 }}
+      className="flex items-start gap-3"
+    >
+      <motion.div
+        animate={{ scale: [1, 1.05, 1] }}
+        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+        className="shrink-0 w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center shadow-md"
+      >
+        <Bot className="w-[18px] h-[18px] text-white" />
+      </motion.div>
+      <div className="bg-white/70 backdrop-blur-sm border-[1.5px] border-slate-200/60 rounded-2xl rounded-tl-sm px-5 py-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          {[0, 1, 2].map((i) => (
+            <motion.div
+              key={i}
+              className="w-2 h-2 rounded-full bg-blue-400"
+              animate={{ y: [0, -6, 0], opacity: [0.5, 1, 0.5] }}
+              transition={{
+                duration: 0.9,
+                repeat: Infinity,
+                delay: i * 0.18,
+                ease: 'easeInOut',
+              }}
+            />
+          ))}
+        </div>
       </div>
     </motion.div>
   )

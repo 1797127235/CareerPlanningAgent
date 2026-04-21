@@ -1,0 +1,43 @@
+{
+  "completeness": 85,
+  "competitiveness": 78,
+  "confidence": 82,
+  "overall_score": 80,
+  "industry_avg": 72,
+  "dimensions": [
+    {"key": "technical_depth", "label": "技术深度", "score": 82},
+    {"key": "technical_breadth", "label": "技术广度", "score": 75},
+    {"key": "project_quality", "label": "项目质量", "score": 78},
+    {"key": "experience", "label": "经验积累", "score": 70},
+    {"key": "education", "label": "教育背景", "score": 72},
+    {"key": "soft_skills", "label": "软实力", "score": 77}
+  ],
+  "skill_gaps": [
+    {
+      "skill": "Kubernetes",
+      "importance": "high",
+      "recommendation": "建议学习K8s基础，掌握容器编排能力"
+    },
+    {
+      "skill": "性能调优",
+      "importance": "medium",
+      "recommendation": "深入学习JVM调优和SQL优化"
+    },
+    {
+      "skill": "系统设计",
+      "importance": "high",
+      "recommendation": "学习大型分布式系统设计模式"
+    }
+  ],
+  "strengths": [
+    "Java基础扎实，Spring生态熟练使用",
+    "有实际微服务项目经验",
+    "具备数据库设计和优化能力",
+    "良好的代码规范和测试意识"
+  ],
+  "weaknesses": [
+    "云原生技术栈经验不足",
+    "缺乏大规模系统实战经验",
+    "算法竞赛成绩一般"
+  ]
+}

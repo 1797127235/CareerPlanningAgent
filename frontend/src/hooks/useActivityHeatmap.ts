@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { rawFetch } from '@/api/client'
 
 interface HeatmapDay {
@@ -13,15 +13,9 @@ interface HeatmapData {
 }
 
 export function useActivityHeatmap(weeks = 16) {
-  const [data, setData] = useState<HeatmapData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    rawFetch<HeatmapData>(`/dashboard/activity-heatmap?weeks=${weeks}`)
-      .then(setData)
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
-  }, [weeks])
-
-  return { data, loading }
+  return useQuery<HeatmapData>({
+    queryKey: ['activity-heatmap', weeks],
+    queryFn: () => rawFetch<HeatmapData>(`/dashboard/activity-heatmap?weeks=${weeks}`),
+    staleTime: 60_000,
+  })
 }

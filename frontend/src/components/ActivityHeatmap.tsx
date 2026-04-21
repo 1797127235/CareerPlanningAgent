@@ -25,6 +25,13 @@ function getLevel(count: number) {
   return 3
 }
 
+function formatDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 function formatTooltipDate(dateStr: string) {
   const d = new Date(dateStr + 'T00:00:00')
   const weekdays = ['日', '一', '二', '三', '四', '五', '六']
@@ -59,7 +66,7 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
     while (current <= today) {
       const week: typeof columns[0] = []
       for (let d = 0; d < 7; d++) {
-        const dateStr = current.toISOString().slice(0, 10)
+        const dateStr = formatDate(current)
         const data = dayMap.get(dateStr)
         week.push({
           date: dateStr,

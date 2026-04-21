@@ -1,0 +1,45 @@
+{
+  "career_goals": [
+    {
+      "id": 1,
+      "target_node_id": "senior-java-engineer",
+      "target_label": "高级Java工程师",
+      "target_zone": "safe",
+      "from_node_id": "java-engineer",
+      "from_node_label": "Java工程师",
+      "gap_skills": ["Kubernetes", "系统架构设计", "性能调优", "技术方案设计"],
+      "total_hours": 480,
+      "safety_gain": 0.75,
+      "salary_p50": 25000,
+      "is_primary": true,
+      "set_at": "2025-01-15T10:30:00Z",
+      "tag": "短期目标"
+    },
+    {
+      "id": 2,
+      "target_node_id": "architect",
+      "target_label": "架构师",
+      "target_zone": "growth",
+      "from_node_id": "java-engineer",
+      "from_node_label": "Java工程师",
+      "gap_skills": ["系统架构设计", "技术选型", "团队管理", "业务理解", "云原生架构"],
+      "total_hours": 1200,
+      "safety_gain": 0.60,
+      "salary_p50": 40000,
+      "is_primary": false,
+      "set_at": "2025-01-15T10:30:00Z",
+      "tag": "长期目标"
+    }
+  ],
+  "graph_position": {
+    "from_node_id": "java-engineer",
+    "from_node_label": "Java工程师",
+    "target_node_id": "senior-java-engineer",
+    "target_label": "高级Java工程师",
+    "target_zone": "safe",
+    "gap_skills": ["Kubernetes", "系统架构设计", "性能调优", "技术方案设计"],
+    "total_hours": 480,
+    "safety_gain": 0.75,
+    "salary_p50": 25000
+  }
+}

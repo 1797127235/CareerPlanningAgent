@@ -50,8 +50,10 @@ export default function HomePage() {
     || !!profile?.profile?.raw_text
   const graphPos = profile?.graph_position
 
-  // 有手动设目标时 target_node_id != from_node_id
+  // 有手动设目标时 target_node_id != from_node_id，或 career_goals 中有记录
+  const primaryGoal = profile?.career_goals?.find((g: any) => g && g.is_primary) || profile?.career_goals?.[0]
   const hasGoal = !!(graphPos && graphPos.target_node_id && graphPos.target_node_id !== graphPos.from_node_id)
+    || !!(primaryGoal && primaryGoal.target_node_id)
   const zone = graphPos?.target_zone ? zoneLabel[graphPos.target_zone] : null
   const skillCount = profile?.profile?.skills?.length ?? 0
 

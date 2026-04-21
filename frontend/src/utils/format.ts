@@ -23,3 +23,13 @@ export function formatDate(dateStr: string): string {
     return dateStr
   }
 }
+
+/** Date string → YYYY-MM-DD, safe for undefined */
+export function formatDateShort(dateStr: string | undefined): string {
+  if (!dateStr) return ''
+  try {
+    return dateStr.slice(0, 10)
+  } catch {
+    return ''
+  }
+}

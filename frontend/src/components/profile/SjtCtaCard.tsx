@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ClipboardCheck, ChevronRight, Loader2, X } from 'lucide-react'
+import { ClipboardCheck, ChevronRight, Loader2, X, ChevronDown, ChevronUp } from 'lucide-react'
 import { generateSjt, submitSjt } from '@/api/profiles'
 import type { SjtQuestion, SjtAnswer, SjtDimensionResult } from '@/api/profiles'
 
@@ -36,6 +36,7 @@ export default function SjtCtaCard({ onComplete }: Props) {
   const [results, setResults] = useState<SjtDimensionResult[]>([])
   const [overallLevel, setOverallLevel] = useState('')
   const [error, setError] = useState('')
+  const [expandedDims, setExpandedDims] = useState<Record<string, boolean>>({})
 
   const handleStart = useCallback(async () => {
     setError('')
@@ -257,27 +258,47 @@ export default function SjtCtaCard({ onComplete }: Props) {
       </div>
 
       <AnimatePresence>
-        <div className="space-y-3">
+        <div className="space-y-2">
           {results.map((dim, i) => {
             const style = LEVEL_STYLE[dim.level] || LEVEL_STYLE['待发展']
+            const isExpanded = expandedDims[dim.key]
+            const hasAdvice = dim.advice && dim.advice.length > 0
             return (
               <motion.div
                 key={dim.key}
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.1 }}
-                className="rounded-xl border border-slate-150 bg-white/60 p-4"
+                className="rounded-xl border border-slate-150 bg-white/60 p-3"
               >
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[14px] font-semibold text-slate-700">
-                    {DIM_LABEL[dim.key] || dim.key}
-                  </span>
-                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg ${style.bg} ${style.text}`}>
-                    {dim.level}
-                  </span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[13px] font-semibold text-slate-700">
+                      {DIM_LABEL[dim.key] || dim.key}
+                    </span>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-lg ${style.bg} ${style.text}`}>
+                      {dim.level}
+                    </span>
+                  </div>
+                  {hasAdvice && (
+                    <button
+                      onClick={() => setExpandedDims(prev => ({ ...prev, [dim.key]: !prev[dim.key] }))}
+                      className="flex items-center gap-0.5 text-[11px] text-slate-400 hover:text-[var(--blue)] transition-colors cursor-pointer"
+                    >
+                      {isExpanded ? '收起' : '详情'}
+                      {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                    </button>
+                  )}
                 </div>
-                {dim.advice && (
-                  <p className="text-[13px] text-slate-500 leading-relaxed">{dim.advice}</p>
+                {hasAdvice && isExpanded && (
+                  <motion.p
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="text-[12px] text-slate-500 leading-relaxed mt-2"
+                  >
+                    {dim.advice}
+                  </motion.p>
                 )}
               </motion.div>
             )

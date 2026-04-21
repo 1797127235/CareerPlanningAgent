@@ -1,0 +1,93 @@
+{
+  "name": "张明远",
+  "job_target": "Java后端开发工程师",
+  "primary_domain": "后端开发",
+  "career_signals": {
+    "has_publication": false,
+    "publication_level": "无",
+    "competition_awards": ["2023年校级程序设计竞赛二等奖", "2024年蓝桥杯省赛三等奖"],
+    "domain_specialization": "企业级Java应用开发",
+    "research_vs_engineering": "engineering",
+    "open_source": true,
+    "internship_company_tier": "B轮创业公司"
+  },
+  "experience_years": 2,
+  "education": {
+    "degree": "本科",
+    "major": "计算机科学与技术",
+    "school": "华东理工大学",
+    "graduation_year": 2025
+  },
+  "skills": [
+    {"name": "Java", "level": "advanced"},
+    {"name": "Spring Boot", "level": "advanced"},
+    {"name": "Spring Cloud", "level": "intermediate"},
+    {"name": "MySQL", "level": "advanced"},
+    {"name": "Redis", "level": "intermediate"},
+    {"name": "MyBatis", "level": "advanced"},
+    {"name": "Maven", "level": "advanced"},
+    {"name": "Git", "level": "advanced"},
+    {"name": "Docker", "level": "intermediate"},
+    {"name": "Linux", "level": "intermediate"},
+    {"name": "Kafka", "level": "familiar"},
+    {"name": "Elasticsearch", "level": "familiar"},
+    {"name": "JUnit", "level": "intermediate"},
+    {"name": "RESTful API设计", "level": "advanced"},
+    {"name": "微服务架构", "level": "intermediate"}
+  ],
+  "knowledge_areas": [
+    "面向对象编程",
+    "数据结构与算法",
+    "设计模式",
+    "JVM原理与调优",
+    "数据库设计与优化",
+    "并发编程",
+    "分布式系统基础",
+    "网络编程"
+  ],
+  "internships": [
+    {
+      "company": "云智科技有限公司",
+      "role": "Java后端开发实习生",
+      "duration": "2024.03-2024.09",
+      "tech_stack": ["Spring Boot", "MySQL", "Redis", "RocketMQ", "Docker"],
+      "highlights": "负责订单管理系统的开发与优化，实现订单状态机重构，将订单处理效率提升40%；参与微服务拆分，将单体应用拆分为5个独立服务；编写单元测试，核心模块覆盖率达到85%"
+    },
+    {
+      "company": "数创科技",
+      "role": "软件开发实习生",
+      "duration": "2023.07-2023.12",
+      "tech_stack": ["Java", "Spring MVC", "MyBatis", "Oracle"],
+      "highlights": "参与内部OA系统的功能开发，负责审批流程模块；优化SQL查询，将报表生成时间从30秒缩短到5秒"
+    }
+  ],
+  "projects": [
+    "校园二手交易平台：基于Spring Boot + Vue的全栈项目，实现用户认证、商品发布、即时通讯功能，采用Redis实现分布式锁防止超卖，使用WebSocket实现实时消息推送",
+    "分布式任务调度系统：基于Quartz实现的任务调度中心，支持动态添加/删除任务，提供Web管理界面，实现任务执行日志收集与告警",
+    "API网关中间件：仿照Spring Cloud Gateway实现的简易网关，支持路由转发、限流、鉴权功能，使用责任链模式实现过滤器链"
+  ],
+  "awards": [
+    "2023年校级程序设计竞赛二等奖",
+    "2024年蓝桥杯省赛三等奖",
+    "2024年优秀学生奖学金三等奖"
+  ],
+  "certificates": [
+    "Oracle Certified Professional: Java SE 11 Developer",
+    "阿里云云计算专业认证（ACP）"
+  ],
+  "soft_skills": {
+    "_version": 2,
+    "communication": {"score": 75, "level": "medium", "evidence": "在实习期间与产品经理、前端同事有效沟通需求，能清晰表达技术方案"},
+    "learning": {"score": 85, "level": "high", "evidence": "自学Spring Cloud微服务架构，3周内完成从入门到项目实践"},
+    "collaboration": {"score": 80, "level": "high", "evidence": "积极参与Code Review，主动帮助同事解决技术问题"},
+    "innovation": {"score": 70, "level": "medium", "evidence": "在项目中提出并实现了多个性能优化方案"},
+    "resilience": {"score": 78, "level": "medium", "evidence": "面对线上问题能快速定位并解决，保持冷静应对压力"}
+  },
+  "preferences": {
+    "work_style": "团队协作",
+    "company_size": "中型企业",
+    "preferred_industries": ["互联网", "金融科技", "企业服务"],
+    "location_preference": ["上海", "杭州", "深圳"]
+  },
+  "_source": "manual"
+}

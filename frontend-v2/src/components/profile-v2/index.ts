@@ -1,6 +1,0 @@
-export { ProfilePrologue } from './ProfilePrologue'
-export { ProfileChapterI } from './ProfileChapterI'
-export { ProfileChapterII } from './ProfileChapterII'
-export { ProfileChapterIII } from './ProfileChapterIII'
-export { ProfileChapterIV } from './ProfileChapterIV'
-export { ProfileEpilogue } from './ProfileEpilogue'

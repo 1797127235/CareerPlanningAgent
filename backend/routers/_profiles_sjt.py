@@ -14,6 +14,7 @@ from backend.db import get_db
 from backend.db_models import SjtSession, User
 from backend.routers._profiles_helpers import _get_or_create_profile
 from backend.services.profile import ProfileService
+from backend.services.profile.sjt import score_to_level
 from backend.utils import ok
 
 router = APIRouter()
@@ -120,7 +121,7 @@ def submit_sjt(
 
     all_scores = [info["score"] for info in dimensions.values()]
     overall_score = round(sum(all_scores) / len(all_scores)) if all_scores else 0
-    overall_level = ProfileService.score_to_level(overall_score)
+    overall_level = score_to_level(overall_score)
 
     return ok({
         "dimensions": [

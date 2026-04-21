@@ -176,9 +176,13 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
   // Zone filter
   const [zoneFilter, setZoneFilter] = useState<string | null>(null)
 
-  // Sort by AI safety (safest first)
+  // Sort: entry-level first (lower career_level), then by AI safety descending
   const sortedNodes = useMemo(() =>
-    [...nodes].sort((a, b) => getSafety(b) - getSafety(a)),
+    [...nodes].sort((a, b) => {
+      const levelDiff = (a.career_level ?? 3) - (b.career_level ?? 3)
+      if (levelDiff !== 0) return levelDiff
+      return getSafety(b) - getSafety(a)
+    }),
     [nodes],
   )
 

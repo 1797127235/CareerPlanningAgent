@@ -14,6 +14,20 @@ from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
+# China timezone for consistent local date rendering
+_CN_TZ = timezone(timedelta(hours=8))
+
+
+def _to_local_date(dt) -> str:
+    """Convert a datetime to YYYY-MM-DD in China timezone."""
+    if dt is None:
+        return ""
+    if not isinstance(dt, datetime):
+        return ""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(_CN_TZ).strftime("%Y-%m-%d")
+
 
 def get_dashboard_stats(profile_id: int, db: Session) -> dict[str, Any]:
     """聚合仪表盘数据 — 仅基于当前真实存在的功能模块。"""
@@ -66,48 +80,50 @@ def _compute_streak(profile_id: int, db: Session) -> int:
     user_id = db.query(Profile.user_id).filter(Profile.id == profile_id).scalar()
 
     active_dates = set()
+    # Streak only needs recent history; 2 years is more than enough
+    _streak_cutoff = datetime.now(timezone.utc) - timedelta(days=730)
 
-    jd_dates = (
-        db.query(func.date(JDDiagnosis.created_at))
-        .filter_by(profile_id=profile_id)
-        .all()
-    )
-    for (d,) in jd_dates:
+    jd_dates = db.query(JDDiagnosis.created_at).filter(
+        JDDiagnosis.profile_id == profile_id,
+        JDDiagnosis.created_at >= _streak_cutoff,
+    ).all()
+    for (dt,) in jd_dates:
+        d = _to_local_date(dt)
         if d:
-            active_dates.add(str(d))
+            active_dates.add(d)
 
-    project_dates = (
-        db.query(func.date(ProjectRecord.created_at))
-        .filter_by(profile_id=profile_id)
-        .all()
-    )
-    for (d,) in project_dates:
+    project_dates = db.query(ProjectRecord.created_at).filter(
+        ProjectRecord.profile_id == profile_id,
+        ProjectRecord.created_at >= _streak_cutoff,
+    ).all()
+    for (dt,) in project_dates:
+        d = _to_local_date(dt)
         if d:
-            active_dates.add(str(d))
+            active_dates.add(d)
 
     if user_id:
-        app_dates = (
-            db.query(func.date(JobApplication.created_at))
-            .filter_by(user_id=user_id)
-            .all()
-        )
-        for (d,) in app_dates:
+        app_dates = db.query(JobApplication.created_at).filter(
+            JobApplication.user_id == user_id,
+            JobApplication.created_at >= _streak_cutoff,
+        ).all()
+        for (dt,) in app_dates:
+            d = _to_local_date(dt)
             if d:
-                active_dates.add(str(d))
+                active_dates.add(d)
 
-        interview_dates = (
-            db.query(func.date(InterviewRecord.created_at))
-            .filter_by(user_id=user_id)
-            .all()
-        )
-        for (d,) in interview_dates:
+        interview_dates = db.query(InterviewRecord.created_at).filter(
+            InterviewRecord.user_id == user_id,
+            InterviewRecord.created_at >= _streak_cutoff,
+        ).all()
+        for (dt,) in interview_dates:
+            d = _to_local_date(dt)
             if d:
-                active_dates.add(str(d))
+                active_dates.add(d)
 
     if not active_dates:
         return 0
 
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(_CN_TZ).date()
     streak = 0
     current = today
     while str(current) in active_dates:
@@ -293,7 +309,14 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
     def _add(date_str: str, label: str):
         if not date_str:
             return
-        d = date_str[:10]  # YYYY-MM-DD
+        try:
+            dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        except ValueError:
+            logger.warning("Invalid date_str in activity heatmap: %r", date_str)
+            return
+        d = _to_local_date(dt)
+        if not d:
+            return
         if d not in day_data:
             day_data[d] = {"count": 0, "types": set()}
         day_data[d]["count"] += 1
@@ -373,7 +396,7 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
         })
 
     # Compute streak
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(_CN_TZ).date()
     streak = 0
     current = today
     active_dates = set(day_data.keys())

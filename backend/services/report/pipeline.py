@@ -421,7 +421,7 @@ def generate_report(user_id: int, db) -> dict:
                 target_label=goal.target_label,
                 node_requirements_line=_format_node_requirements(node),
                 market_line=narrative._format_market(market_info),
-                summary_json=json.dumps(summary, ensure_ascii=False),
+                summary_json=json.dumps(_slim_summary_for_action_plan(summary), ensure_ascii=False),
                 prev_recommendations_block=_format_prev_recs(summary["prev_report_recommendations"]),
                 completed_block=_format_completed(summary["completed_since_last_report"]),
             )
@@ -503,6 +503,14 @@ def generate_report(user_id: int, db) -> dict:
             summary=summary,
         )
 
+    # chapter4-intro 依赖 action_plan_data，单独在并发后运行
+    def _worker_chapter4_intro(ap_data: dict) -> str:
+        return _build_chapter4_intro(
+            target_label=goal.target_label,
+            action_plan_data=ap_data,
+            summary=summary,
+        )
+
     _parallel_start = time.time()
     with ThreadPoolExecutor(max_workers=6) as executor:
         f_action = executor.submit(_worker_action_plan)
@@ -522,6 +530,9 @@ def generate_report(user_id: int, db) -> dict:
         "[pipeline] 6 parallel LLM tasks finished in %.1fs",
         time.time() - _parallel_start,
     )
+
+    # chapter4-intro：在行动计划生成后串行调用（依赖 stages 内容）
+    chapter4_intro = _worker_chapter4_intro(action_plan_data)
 
     # 10. Delta vs previous report (依赖 action_plan_data，必须在并发之后)
     delta = None
@@ -645,10 +656,74 @@ def generate_report(user_id: int, db) -> dict:
         "project_recommendations": enriched_projects,
         "project_mismatch": project_mismatch,
         "summary": summary,
+        "chapter_narratives": {
+            "chapter-4": chapter4_intro,
+        },
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
     return report_data
+
+
+def _slim_summary_for_action_plan(summary: dict) -> dict:
+    """为 action-plan SKILL 裁剪 summary，只保留 LLM 真正需要的关键字段。
+
+    去掉的：
+    - growth_entries（近30天原文全量，可能几十条，占 context 大头）
+    - skill_deltas.four_dim_trend（历史曲线数组，对行动计划无帮助）
+    - signals 下的 raw 原文字段
+
+    保留的：
+    - profile_core（最重要：项目 / 工作经历 / 教育 / 技能）
+    - milestones（最近5条，提供时间锚）
+    - skill_deltas（去掉 four_dim_trend）
+    - signals（application + interview 信号，裁掉重度嵌套字段）
+    - window / version / completed_since_last_report / prev_report_recommendations
+    """
+    slim: dict[str, Any] = {
+        "version": summary.get("version"),
+        "window": summary.get("window"),
+        "profile_core": summary.get("profile_core"),
+        # 只取最近 5 条里程碑，给时间锚用
+        "milestones": (summary.get("milestones") or [])[:5],
+        # skill_deltas 去掉四维趋势数组（数据量大，对行动计划无意义）
+        "skill_deltas": {
+            k: v for k, v in (summary.get("skill_deltas") or {}).items()
+            if k != "four_dim_trend"
+        },
+        # signals：保留聚合数字，去掉 raw / debriefs 原文
+        "signals": _slim_signals(summary.get("signals") or {}),
+        "completed_since_last_report": summary.get("completed_since_last_report"),
+        "prev_report_recommendations": summary.get("prev_report_recommendations"),
+    }
+    # growth_entries 只保留最近5条，且每条截断原文到 400 字（给更多上下文）
+    entries = (summary.get("growth_entries") or [])[:5]
+    slim["growth_entries"] = [
+        {k: (v[:400] if isinstance(v, str) and k in ("content", "note", "reflection") else v)
+         for k, v in e.items()}
+        for e in entries
+    ]
+    return slim
+
+
+def _slim_signals(signals: dict) -> dict:
+    """保留 signals 里的聚合数字，裁掉原文数组。"""
+    out: dict[str, Any] = {}
+    app = signals.get("application") or {}
+    out["application"] = {
+        k: v for k, v in app.items()
+        if k not in ("recent_companies", "recent_entries")
+    }
+    iv = signals.get("interview") or {}
+    out["interview"] = {
+        k: v for k, v in iv.items()
+        if k not in ("debriefs", "raw_reflections")
+    }
+    # 其余 key 直接透传
+    for k, v in signals.items():
+        if k not in ("application", "interview"):
+            out[k] = v
+    return out
 
 
 def _build_market_narrative(
@@ -887,3 +962,72 @@ def polish_narrative(narrative: str, target_label: str) -> str:
     except Exception as e:
         logger.warning("Polish failed: %s", e)
         return narrative
+
+
+def _build_chapter4_intro(
+    target_label: str,
+    action_plan_data: dict,
+    summary: dict,
+) -> str:
+    """Generate a prose intro paragraph for Chapter IV via the chapter4-intro skill.
+    Falls back to empty string on failure (frontend gracefully hides it)."""
+    try:
+        from backend.skills import invoke_skill
+
+        stages = action_plan_data.get("stages", []) or []
+        stages_summary_lines = []
+        for stg in stages:
+            label = stg.get("label", "")
+            milestone = stg.get("milestone", "")
+            if label:
+                stages_summary_lines.append(
+                    f"- 阶段{stg.get('stage', '')}「{label}」"
+                    + (f"：里程碑 → {milestone}" if milestone else "")
+                )
+        stages_summary = "\n".join(stages_summary_lines) or "（无阶段数据）"
+
+        # 提取处境快照：成长档案活跃度 + 面试信号 + 技能缺口摘要
+        signals = summary.get("signals", {}) or {}
+        app = signals.get("application", {}) or {}
+        iv = signals.get("interview", {}) or {}
+        milestones = (summary.get("milestones") or [])[:3]
+
+        snapshot_parts: list[str] = []
+        app_count = app.get("count_in_window", 0)
+        if app_count:
+            funnel = app.get("funnel", {}) or {}
+            snapshot_parts.append(
+                f"近期投了 {app_count} 家，"
+                f"{funnel.get('interviewed', 0)} 家到面试，"
+                f"{funnel.get('rejected', 0)} 家被拒"
+            )
+        iv_count = iv.get("count_in_window", 0)
+        if iv_count:
+            latest = iv.get("latest") or {}
+            pain = iv.get("pain_points") or []
+            snapshot_parts.append(
+                f"面试 {iv_count} 次，最近在 {latest.get('company', '未知公司')}"
+                + (f"，高频卡点：{'; '.join(pain[:2])}" if pain else "")
+            )
+        for ms in milestones:
+            event = ms.get("event") or ms.get("label") or ""
+            if event:
+                snapshot_parts.append(f"里程碑：{event}")
+        # 成长档案活跃度
+        entries = summary.get("growth_entries") or []
+        if entries:
+            snapshot_parts.append(f"成长档案近期有 {len(entries)} 条记录")
+
+        situation_snapshot = "；".join(snapshot_parts) or "暂无活跃信号"
+
+        result = invoke_skill(
+            "chapter4-intro",
+            target_label=target_label,
+            stages_summary=stages_summary,
+            situation_snapshot=situation_snapshot,
+        )
+        text = result.strip() if isinstance(result, str) else ""
+        return text if len(text) >= 40 else ""
+    except Exception as e:
+        logger.warning("chapter4-intro skill failed: %s", e)
+        return ""
