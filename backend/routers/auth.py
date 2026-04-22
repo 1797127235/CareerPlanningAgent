@@ -12,7 +12,7 @@ from backend.auth import (
     verify_password,
 )
 from backend.db import get_db
-from backend.db_models import User
+from backend.models import User
 
 router = APIRouter()
 

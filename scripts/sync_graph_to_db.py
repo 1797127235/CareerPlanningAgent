@@ -19,7 +19,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from sqlalchemy import text
 
 from backend.db import engine, SessionLocal, Base
-from backend.db_models import JobNode, JobEdge, JobScore
+from backend.models import JobNode, JobEdge, JobScore
 
 GRAPH_PATH = PROJECT_ROOT / "data" / "graph.json"
 
@@ -150,7 +150,7 @@ def main():
             session.commit()
             print(f"Cleared {stale_scores} stale job_scores")
 
-        from backend.db_models import JobNodeIntro
+        from backend.models import JobNodeIntro
         stale = session.query(JobNodeIntro).count()
         if stale:
             session.query(JobNodeIntro).delete()

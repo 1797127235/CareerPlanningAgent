@@ -48,7 +48,7 @@ def get_user_profile(profile_id: int) -> str:
     """查看画像：读取用户保存的能力画像摘要信息。"""
     try:
         from backend.db import SessionLocal
-        from backend.db_models import Profile
+        from backend.models import Profile
 
         db = SessionLocal()
         try:

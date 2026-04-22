@@ -23,7 +23,7 @@ def _save_jd_coach_result(
     """Save JD diagnosis as a CoachResult. Returns the result ID or None."""
     try:
         from backend.db import SessionLocal
-        from backend.db_models import CoachResult, JDDiagnosis
+        from backend.models import CoachResult, JDDiagnosis
 
         db = SessionLocal()
         try:
@@ -81,7 +81,7 @@ def _auto_link_diagnosis_to_application(jd_title: str, user_id: int) -> None:
         return
     try:
         from backend.db import SessionLocal
-        from backend.db_models import JobApplication, JDDiagnosis
+        from backend.models import JobApplication, JDDiagnosis
 
         db = SessionLocal()
         try:
@@ -137,7 +137,7 @@ def diagnose_jd(jd_text: str) -> str:
     if profile is None and user_id:
         try:
             from backend.db import SessionLocal
-            from backend.db_models import Profile as _Profile
+            from backend.models import Profile as _Profile
             db = SessionLocal()
             try:
                 p = (
@@ -171,7 +171,7 @@ def diagnose_jd(jd_text: str) -> str:
     if not user_id:
         try:
             from backend.db import SessionLocal as _SL
-            from backend.db_models import JDDiagnosis as _JD
+            from backend.models import JDDiagnosis as _JD
             _db = _SL()
             _latest = _db.query(_JD).order_by(_JD.created_at.desc()).first()
             if _latest:
@@ -207,7 +207,7 @@ def get_jd_history(profile_id: int) -> str:
     """JD诊断历史：查看用户历史JD诊断记录。"""
     try:
         from backend.db import SessionLocal
-        from backend.db_models import JDDiagnosis
+        from backend.models import JDDiagnosis
 
         db = SessionLocal()
         try:

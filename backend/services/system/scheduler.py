@@ -18,7 +18,7 @@ def _check_reminders() -> None:
     """Hourly job: mark upcoming interviews so guidance can surface a banner."""
     try:
         from backend.db import SessionLocal
-        from backend.db_models import JobApplication
+        from backend.models import JobApplication
 
         db = SessionLocal()
         try:

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from backend.config import JWT_SECRET_KEY as SECRET_KEY
 from backend.db import get_db
-from backend.db_models import User
+from backend.models import User
 
 # ── Config ───────────────────────────────────────────────────────-
 

@@ -15,7 +15,7 @@ from sqlalchemy import func
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import (
+from backend.models import (
     CareerGoal,
     ChatMessage,
     ChatSession,
@@ -348,7 +348,7 @@ def _hydrate_state(user: User, db: Session) -> dict:
     state["action_plan_context"] = None
     if profile:
         try:
-            from backend.db_models import ActionPlanV2, ActionProgress
+            from backend.models import ActionPlanV2, ActionProgress
             latest_plan = (
                 db.query(ActionPlanV2)
                 .filter(ActionPlanV2.profile_id == profile.id)
@@ -819,7 +819,7 @@ def _update_coach_memo(session_id: int, user_id: int) -> None:
     老的 profile.coach_memo 文本在首次调用时一次性迁移进 Mem0。
     """
     from backend.db import SessionLocal
-    from backend.db_models import ChatMessage, Profile
+    from backend.models import ChatMessage, Profile
     from backend.services.coach_memory import add_conversation, migrate_legacy_memo
     from sqlalchemy import func
 

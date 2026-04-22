@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from backend.db_models import (
+from backend.models import (
     GrowthEntry,
     GrowthSnapshot,
     InterviewDebrief,

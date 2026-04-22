@@ -40,7 +40,7 @@ SessionLocal = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
 
 def init_db() -> None:
     """Create all tables if they don't exist."""
-    from backend.db_models import (  # noqa: F401
+    from backend.models import (  # noqa: F401
         User, Report, Profile, CareerGoal,
         Skill, AiToolMapping, JobNode, JobEdge, JobScore,
         OnetJob, OnetTask, TaskAutomation, TaskMatching,
@@ -51,9 +51,8 @@ def init_db() -> None:
         JobApplication, InterviewDebrief,
         JobNodeIntro, InterviewQuestionBank,
         UserNotification, CoachResult, MockInterview, GrowthEntry,
+        MarketSignal, CityMarketSignal,
     )
-    from backend.services.market_signals import MarketSignal  # noqa: F401
-    from backend.services.market_signals import CityMarketSignal  # noqa: F401
     Base.metadata.create_all(bind=engine)
     # Migrate: add routine_score column if missing
     with engine.connect() as conn:

@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from backend.db import SessionLocal
-from backend.db_models import Profile
+from backend.models import Profile
 from backend.services.coach_memory import migrate_legacy_memo
 
 

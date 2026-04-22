@@ -58,7 +58,7 @@ def _compute_readiness_live(profile_id: int, db: Session) -> float | None:
     Called after skill updates so the returned value reflects new skills immediately.
     """
     try:
-        from backend.db_models import CareerGoal, Profile
+        from backend.models import CareerGoal, Profile
         profile = db.query(Profile).filter(Profile.id == profile_id).first()
         if not profile:
             return None
@@ -131,7 +131,7 @@ def get_current_readiness(profile_id: int, db: Session) -> float | None:
     3. 实时从图谱计算（兜底，用 profile skills 匹配 top 推荐，上限 80%）
     """
     try:
-        from backend.db_models import GrowthSnapshot, Profile
+        from backend.models import GrowthSnapshot, Profile
 
         # 1. GrowthSnapshot
         snap = (
@@ -148,7 +148,7 @@ def get_current_readiness(profile_id: int, db: Session) -> float | None:
             return None
 
         # 2. CareerGoal gap analysis (most accurate — tied to user's actual target)
-        from backend.db_models import CareerGoal
+        from backend.models import CareerGoal
         goal = (
             db.query(CareerGoal)
             .filter(CareerGoal.profile_id == profile_id, CareerGoal.is_active == True)

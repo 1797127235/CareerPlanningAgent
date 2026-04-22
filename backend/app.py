@@ -48,7 +48,7 @@ async def lifespan(app: FastAPI):
 
     threading.Thread(target=_prewarm, daemon=True).start()
     # Start interview reminder scheduler
-    from backend.services.reminder_service import start_scheduler, stop_scheduler
+    from backend.services.system.scheduler import start_scheduler, stop_scheduler
     start_scheduler()
     yield
     stop_scheduler()

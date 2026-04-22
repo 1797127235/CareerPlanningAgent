@@ -31,7 +31,7 @@ def _to_local_date(dt) -> str:
 
 def get_dashboard_stats(profile_id: int, db: Session) -> dict[str, Any]:
     """聚合仪表盘数据 — 仅基于当前真实存在的功能模块。"""
-    from backend.db_models import (
+    from backend.models import (
         JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile,
     )
 
@@ -75,7 +75,7 @@ def get_dashboard_stats(profile_id: int, db: Session) -> dict[str, Any]:
 
 def _compute_streak(profile_id: int, db: Session) -> int:
     """计算有效操作天数 streak。有效 = 当天有 ≥1 次诊断、项目、实战或面试记录。"""
-    from backend.db_models import JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile
+    from backend.models import JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile
 
     user_id = db.query(Profile.user_id).filter(Profile.id == profile_id).scalar()
 
@@ -137,7 +137,7 @@ def _get_recent_activities(
     profile_id: int, db: Session, limit: int = 10,
 ) -> list[dict]:
     """获取最近活动列表（诊断 + 项目 + 实战 + 面试合并），按时间倒序。"""
-    from backend.db_models import (
+    from backend.models import (
         JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord, Profile,
     )
 
@@ -221,7 +221,7 @@ def recommend_next_step(profile_id: int, db: Session) -> dict[str, Any]:
     dict with ``stage``, ``stage_label``, ``recommendations`` (list[str]).
     Raises ValueError if profile not found.
     """
-    from backend.db_models import Profile, CareerGoal, JDDiagnosis
+    from backend.models import Profile, CareerGoal, JDDiagnosis
 
     profile = db.query(Profile).filter_by(id=profile_id).first()
     if profile is None:
@@ -293,7 +293,7 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
     Returns:
         { days: [ { date: "2026-04-08", count: 3, activities: ["项目", "JD诊断"] } ], streak: N }
     """
-    from backend.db_models import (
+    from backend.models import (
         JDDiagnosis, JobApplication, InterviewRecord, ProjectRecord,
         Profile, ChatSession, CareerGoal,
     )

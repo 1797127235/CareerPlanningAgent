@@ -258,7 +258,7 @@ def save_profile_from_chat(profile_data: str) -> str:
 
     try:
         from backend.db import SessionLocal
-        from backend.db_models import Profile
+        from backend.models import Profile
         from backend.routers.profiles import _get_or_create_profile
         from backend.services.profile_service import ProfileService
         from backend.routers._profiles_graph import _auto_locate_on_graph

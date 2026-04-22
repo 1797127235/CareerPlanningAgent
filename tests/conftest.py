@@ -54,7 +54,7 @@ def db_engine():
     )
     # Ensure all tables exist
     from backend.db import Base
-    from backend import db_models  # noqa: F401 — registers all ORM models
+    from backend import models  # noqa: F401 — registers all ORM models
     Base.metadata.create_all(bind=engine)
     yield engine
     engine.dispose()

@@ -17,7 +17,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import ActionPlanV2, ActionProgress, Profile, Report, User
+from backend.models import ActionPlanV2, ActionProgress, Profile, Report, User
 
 router = APIRouter()
 

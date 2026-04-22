@@ -7,7 +7,7 @@ Run via:
 from __future__ import annotations
 
 from backend.db import SessionLocal
-from backend.db_models import AiToolMapping
+from backend.models import AiToolMapping
 
 TOOL_MAPPINGS: list[tuple[str, list[str]]] = [
     # Programming languages — GitHub Copilot, Cursor, Claude

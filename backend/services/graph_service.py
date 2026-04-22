@@ -457,7 +457,7 @@ class GraphService:
     def _overlay_db_scores(self, db_session: Session) -> None:
         """Merge terrain scores from job_scores table onto graph nodes."""
         try:
-            from backend.db_models import JobScore
+            from backend.models import JobScore
             for score in db_session.query(JobScore).all():
                 if score.node_id in self._nodes:
                     self._nodes[score.node_id]["zone"] = score.zone
@@ -992,7 +992,7 @@ class GraphService:
         Falls back to graph node JSON fields if no DB record exists.
         """
         try:
-            from backend.db_models import JobScore
+            from backend.models import JobScore
             score = db_session.query(JobScore).filter_by(node_id=node_id).first()
             if score is not None:
                 return {

@@ -13,7 +13,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import (
+from backend.models import (
     ActionPlanV2,
     ActionProgress,
     CareerGoal,
@@ -195,7 +195,7 @@ def get_growth_dashboard(
     db: Session = Depends(get_db),
 ):
     """获取成长看板数据：目标方向 + 分层技能覆盖率 + 匹配度曲线。"""
-    from backend.db_models import CareerGoal, GrowthSnapshot
+    from backend.models import CareerGoal, GrowthSnapshot
     from backend.services.graph_service import GraphService
     from backend.services.growth_log_service import _skill_matches
 
@@ -1151,7 +1151,7 @@ def ai_suggest(
     db: Session = Depends(get_db),
 ):
     from backend.skills import invoke_skill
-    from backend.db_models import CareerGoal
+    from backend.models import CareerGoal
 
     entry = db.query(GrowthEntry).filter(
         GrowthEntry.id == entry_id, GrowthEntry.user_id == user.id

@@ -14,7 +14,7 @@ from sqlalchemy import func
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import (
+from backend.models import (
     InterviewRecord,
     JDDiagnosis,
     JobApplication,
@@ -275,7 +275,7 @@ def get_guidance(
 
 from datetime import datetime, timezone
 from pydantic import BaseModel
-from backend.db_models import UserNotification
+from backend.models import UserNotification
 
 
 class HeartbeatDismissBody(BaseModel):

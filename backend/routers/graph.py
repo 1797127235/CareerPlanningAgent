@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import JobNode, JobNodeIntro, Profile, User
+from backend.models import JobNode, JobNodeIntro, Profile, User
 from backend.llm import get_llm_client, get_model
 from backend.services.graph_service import get_graph_service
 
@@ -188,7 +188,7 @@ def get_node(
                 user_gaps.append(skill)
 
         # Multi-dimensional matching
-        from backend.services.matching_service import compute_match
+        from backend.services.jd.matching import compute_match
         match_result = compute_match(profile_data, node)
 
     # Attach market signal for this node's role_family
@@ -226,7 +226,7 @@ def get_escape_routes(
 ):
     """Compute escape routes from a node, personalized to user's actual skills."""
     import json
-    from backend.db_models import Profile
+    from backend.models import Profile
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     profile_skills: list[str] = []
     if profile:
@@ -270,7 +270,7 @@ def set_career_goal(
     db: Session = Depends(get_db),
 ):
     """Set (or update) the career goal for the current user's profile."""
-    from backend.db_models import CareerGoal, Profile
+    from backend.models import CareerGoal, Profile
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     if not profile:
@@ -348,7 +348,7 @@ def patch_career_goal_gaps(
     Called after JD diagnosis: student elects to 'apply gap skills to learning path'.
     Creates a goal record if one does not yet exist (no target set).
     """
-    from backend.db_models import CareerGoal, Profile
+    from backend.models import CareerGoal, Profile
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     if not profile:
@@ -393,7 +393,7 @@ def list_career_goals(
     db: Session = Depends(get_db),
 ):
     """Return all active career goals for the current user's profile."""
-    from backend.db_models import CareerGoal, Profile, JobNode
+    from backend.models import CareerGoal, Profile, JobNode
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     if not profile:
@@ -453,7 +453,7 @@ def add_career_goal(
     db: Session = Depends(get_db),
 ):
     """Add a new career goal direction. Does NOT overwrite existing goals."""
-    from backend.db_models import CareerGoal, Profile
+    from backend.models import CareerGoal, Profile
     from datetime import datetime, timezone
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
@@ -523,7 +523,7 @@ def remove_career_goal(
     db: Session = Depends(get_db),
 ):
     """Deactivate a career goal direction."""
-    from backend.db_models import CareerGoal
+    from backend.models import CareerGoal
     from datetime import datetime, timezone
 
     goal = db.query(CareerGoal).filter_by(id=goal_id, user_id=user.id, is_active=True).first()
@@ -569,7 +569,7 @@ def set_primary_career_goal(
     db: Session = Depends(get_db),
 ):
     """Set a career goal as the primary direction."""
-    from backend.db_models import CareerGoal
+    from backend.models import CareerGoal
 
     goal = db.query(CareerGoal).filter_by(id=goal_id, user_id=user.id, is_active=True).first()
     if not goal:

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import (
+from backend.models import (
     InterviewDebrief,
     JDDiagnosis,
     JobApplication,
@@ -323,7 +323,7 @@ def delete_application(
     if not app:
         raise HTTPException(404, "投递记录不存在")
     # 级联删除：关联面试记录 + debrief
-    from backend.db_models import InterviewRecord as IR
+    from backend.models import InterviewRecord as IR
     db.query(IR).filter(IR.application_id == app_id).delete()
     db.query(InterviewDebrief).filter(InterviewDebrief.application_id == app_id).delete()
     db.delete(app)

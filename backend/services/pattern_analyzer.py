@@ -21,7 +21,7 @@ def analyze_user(db: Session, user_id: int) -> list[str]:
     - "快速决策" / "反复纠结"
     - "数据不足"（冷启动用户）
     """
-    from backend.db_models import JDDiagnosis, JobApplication, ProjectRecord
+    from backend.models import JDDiagnosis, JobApplication, ProjectRecord
     from sqlalchemy import func
 
     patterns: list[str] = []
@@ -77,7 +77,7 @@ def analyze_user(db: Session, user_id: int) -> list[str]:
 def run_pattern_analysis_all() -> int:
     """扫所有用户，把 pattern 作为结构化记忆写入 Mem0。"""
     from backend.db import SessionLocal
-    from backend.db_models import User
+    from backend.models import User
     from backend.services.coach_memory import get_memory
 
     db = SessionLocal()

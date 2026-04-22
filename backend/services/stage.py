@@ -39,7 +39,7 @@ from typing import Literal
 
 from sqlalchemy.orm import Session
 
-from backend.db_models import Profile, Report
+from backend.models import Profile, Report
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def determine_stage(user_id: int, db: Session) -> Stage:
 
     # 3. interview / offer signals
     try:
-        from backend.db_models import GrowthEntry, JobApplication
+        from backend.models import GrowthEntry, JobApplication
 
         interview_count = (
             db.query(GrowthEntry)

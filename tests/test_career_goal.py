@@ -2,7 +2,7 @@
 """Tests for CareerGoal model and API endpoints."""
 import pytest
 from backend.db import SessionLocal, engine, Base
-from backend.db_models import CareerGoal, User, Profile
+from backend.models import CareerGoal, User, Profile
 from backend.auth import hash_password
 
 

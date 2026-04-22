@@ -6,7 +6,7 @@ import json
 import pytest
 
 from backend.services.report import summarize
-from backend.db_models import Profile, User
+from backend.models import Profile, User
 
 
 @pytest.fixture

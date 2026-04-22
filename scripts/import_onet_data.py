@@ -27,7 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from sqlalchemy import text
 
 from backend.db import engine, init_db, SessionLocal
-from backend.db_models import OnetJob, OnetTask, TaskAutomation, JobNode
+from backend.models import OnetJob, OnetTask, TaskAutomation, JobNode
 
 # ── data file paths ───────────────────────────────────────────
 JOB_EXPOSURE_CSV = (

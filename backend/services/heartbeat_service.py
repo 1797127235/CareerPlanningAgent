@@ -20,7 +20,7 @@ _DEDUP_WINDOW_DAYS = 7
 
 def _recently_sent(db: Session, user_id: int, kind: str) -> bool:
     """检查该 user+kind 是否在去重窗口内已发过。"""
-    from backend.db_models import UserNotification
+    from backend.models import UserNotification
     cutoff = datetime.now(timezone.utc) - timedelta(days=_DEDUP_WINDOW_DAYS)
     exists = (
         db.query(UserNotification.id)
@@ -37,7 +37,7 @@ def _recently_sent(db: Session, user_id: int, kind: str) -> bool:
 def _emit(db: Session, user_id: int, kind: str, title: str, body: str,
           cta_label: str | None = None, cta_route: str | None = None) -> None:
     """写一条 UserNotification，带限频检查。"""
-    from backend.db_models import UserNotification
+    from backend.models import UserNotification
     if _recently_sent(db, user_id, kind):
         return
     db.add(UserNotification(
@@ -53,7 +53,7 @@ def _emit(db: Session, user_id: int, kind: str, title: str, body: str,
 # ── 规则 1：JD 诊断后 3 天没有对应投递 ─────────────────────────────────────
 def _rule_jd_followup(db: Session) -> int:
     """诊断过 JD 但 3 天没建 JobApplication → 提醒。"""
-    from backend.db_models import JDDiagnosis, JobApplication
+    from backend.models import JDDiagnosis, JobApplication
     cutoff_min = datetime.now(timezone.utc) - timedelta(days=7)
     cutoff_max = datetime.now(timezone.utc) - timedelta(days=3)
 
@@ -91,7 +91,7 @@ def _rule_jd_followup(db: Session) -> int:
 # ── 规则 2：一周未活跃 ─────────────────────────────────────────────────────
 def _rule_inactive_nudge(db: Session) -> int:
     """7 天没任何活动（chat/诊断/档案更新）→ 推"你在追踪的公司有新动态"。"""
-    from backend.db_models import User, ChatMessage, ChatSession, JDDiagnosis, JobApplication
+    from backend.models import User, ChatMessage, ChatSession, JDDiagnosis, JobApplication
     cutoff = datetime.now(timezone.utc) - timedelta(days=7)
 
     users = db.query(User).all()

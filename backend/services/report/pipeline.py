@@ -58,7 +58,7 @@ def generate_report(user_id: int, db) -> dict:
         pass
     _report_data._load_static()
 
-    from backend.db_models import (
+    from backend.models import (
         Profile, CareerGoal, GrowthSnapshot, ProjectRecord,
     )
 
@@ -368,7 +368,7 @@ def generate_report(user_id: int, db) -> dict:
     )
 
     # 8b. Load job applications for personalization
-    from backend.db_models import JobApplication as _JobApplication
+    from backend.models import JobApplication as _JobApplication
     applications = (
         db.query(_JobApplication)
         .filter(_JobApplication.user_id == user_id)
@@ -385,7 +385,7 @@ def generate_report(user_id: int, db) -> dict:
                 claimed_skills.append(m["name"])
 
     # ── 新增：构造中间 JSON ─────────────────────────────────────────
-    from backend.db_models import Report
+    from backend.models import Report
     prev_report = (
         db.query(Report)
         .filter(Report.user_id == user_id)
@@ -552,7 +552,7 @@ def generate_report(user_id: int, db) -> dict:
         # Plan progress from ActionPlanV2
         plan_progress = None
         try:
-            from backend.db_models import ActionPlanV2, ActionProgress
+            from backend.models import ActionPlanV2, ActionProgress
             latest_plan = (
                 db.query(ActionPlanV2)
                 .filter(ActionPlanV2.profile_id == profile.id)

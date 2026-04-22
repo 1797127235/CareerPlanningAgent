@@ -7,7 +7,7 @@ import logging
 from sqlalchemy.orm import Session
 
 from backend.config import DASHSCOPE_API_KEY, LLM_BASE_URL
-from backend.db_models import Profile
+from backend.models import Profile
 from backend.routers._profiles_graph import _build_skill_vocab
 
 logger = logging.getLogger(__name__)

@@ -74,7 +74,7 @@ def _load_profile_fallback() -> dict:
         if not user_id:
             return {}
         from backend.db import SessionLocal
-        from backend.db_models import Profile
+        from backend.models import Profile
 
         db = SessionLocal()
         try:
@@ -127,7 +127,7 @@ def _run_diagnosis(state: JDAgentState) -> dict:
     # Persist JDDiagnosis (historic record) — required for history page
     try:
         from backend.db import SessionLocal
-        from backend.db_models import JDDiagnosis, Profile as _Profile
+        from backend.models import JDDiagnosis, Profile as _Profile
 
         db = SessionLocal()
         try:

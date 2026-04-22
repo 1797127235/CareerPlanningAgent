@@ -81,7 +81,7 @@ def get_interview_records(company: str = "") -> str:
 
     try:
         from backend.db import SessionLocal
-        from backend.db_models import InterviewRecord
+        from backend.models import InterviewRecord
 
         db = SessionLocal()
         try:
@@ -135,7 +135,7 @@ def get_project_progress(project_name: str = "") -> str:
 
     try:
         from backend.db import SessionLocal
-        from backend.db_models import ProjectRecord, ProjectLog
+        from backend.models import ProjectRecord, ProjectLog
 
         db = SessionLocal()
         try:

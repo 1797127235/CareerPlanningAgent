@@ -1,4 +1,4 @@
-"""Market signal models — unified role_family and city-level signals."""
+"""Market signal ORM models."""
 from __future__ import annotations
 
 from datetime import date
@@ -11,6 +11,7 @@ from backend.db import Base
 
 class MarketSignal(Base):
     """市场信号表：存储从招聘数据中提取的 role_family 级信号."""
+
     __tablename__ = "market_signals"
     __table_args__ = (
         UniqueConstraint("role_family", "batch_date", name="uq_family_batch"),
@@ -37,6 +38,7 @@ class MarketSignal(Base):
 
 class CityMarketSignal(Base):
     """城市级市场信号表：存储从招聘数据中提取的 (role_family, city) 级信号."""
+
     __tablename__ = "city_market_signals"
     __table_args__ = (
         UniqueConstraint("role_family", "city", "batch_date", name="uq_family_city_batch"),

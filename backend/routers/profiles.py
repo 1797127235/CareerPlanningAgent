@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.db import get_db
-from backend.db_models import Profile, User
+from backend.models import Profile, User
 from backend.routers._profiles_graph import _auto_locate_on_graph
 from backend.routers._profiles_helpers import (
     _get_or_create_profile,
@@ -419,7 +419,7 @@ def reset_profile(
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from backend.db_models import SjtSession
+from backend.models import SjtSession
 
 
 @router.post("/sjt/generate")

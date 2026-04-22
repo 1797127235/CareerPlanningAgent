@@ -5,7 +5,7 @@ import json
 
 from sqlalchemy.orm import Session
 
-from backend.db_models import CareerGoal, JobNode, Profile
+from backend.models import CareerGoal, JobNode, Profile
 
 
 def _get_or_create_profile(user_id: int, db: Session) -> Profile:
@@ -239,7 +239,7 @@ def _merge_profiles(existing: dict, incoming: dict) -> dict:
 
 def _execute_profile_reset(user_id: int, profile: Profile, db: Session) -> None:
     """Wipe all profile-derived artifacts for the given user."""
-    from backend.db_models import (
+    from backend.models import (
         CareerGoal,
         CoachResult,
         InterviewDebrief,

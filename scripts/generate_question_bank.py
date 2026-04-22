@@ -19,7 +19,7 @@ from datetime import datetime
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from backend.db import SessionLocal
-from backend.db_models import InterviewQuestionBank
+from backend.models import InterviewQuestionBank
 from backend.services.interview_skill_loader import build_prompt, load_skill_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

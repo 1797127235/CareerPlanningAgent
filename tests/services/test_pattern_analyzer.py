@@ -8,7 +8,7 @@ import pytest
 
 import json
 
-from backend.db_models import User, JDDiagnosis, Profile, ProjectRecord
+from backend.models import User, JDDiagnosis, Profile, ProjectRecord
 from backend.services.pattern_analyzer import analyze_user, run_pattern_analysis_all
 
 

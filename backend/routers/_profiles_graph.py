@@ -8,7 +8,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from backend.config import DASHSCOPE_API_KEY, LLM_BASE_URL
-from backend.db_models import CareerGoal, Profile
+from backend.models import CareerGoal, Profile
 
 logger = logging.getLogger(__name__)
 

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from backend.db_models import UserNotification, User
+from backend.models import UserNotification, User
 from backend.services.heartbeat_service import _recently_sent, run_heartbeat
 
 

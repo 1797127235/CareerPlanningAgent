@@ -137,7 +137,7 @@ def _diagnose_profile(
     for it in items_to_check:
         if it["source_type"] == "growth_log":
             try:
-                from backend.db_models import ProjectLog as _ProjectLog
+                from backend.models import ProjectLog as _ProjectLog
                 logs = db.query(_ProjectLog).filter(
                     _ProjectLog.project_id == it["source_id"]
                 ).order_by(_ProjectLog.created_at.desc()).limit(3).all()
