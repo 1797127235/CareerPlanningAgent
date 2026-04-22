@@ -26,7 +26,10 @@ from backend.models import (
     ProjectRecord,
     User,
 )
+from backend.services.growth.dashboard import build_growth_dashboard
+from backend.services.growth.insights import build_growth_insights_with_profile
 from backend.services.growth.service import (
+    auto_complete_plan_tasks,
     generate_interview_analysis,
 )
 
@@ -54,88 +57,6 @@ def _get_profile_skills(profile_id: int | None, db: Session) -> list[str]:
         return [s for s in skills if isinstance(s, str)]
     except Exception:
         return []
-
-
-def _auto_complete_plan_tasks(
-    db: Session,
-    user_id: int,
-    project_name: str | None = None,
-    skills: list[str] | None = None,
-    record_type: str = "project",
-) -> None:
-    """Scan active ActionPlanV2 tasks and auto-check matching ones."""
-    try:
-        profile = db.query(Profile).filter(Profile.user_id == user_id).first()
-        if not profile:
-            return
-
-        # Find the latest report_key with ActionPlanV2 data
-        latest_plan = (
-            db.query(ActionPlanV2)
-            .filter(ActionPlanV2.profile_id == profile.id)
-            .order_by(ActionPlanV2.generated_at.desc())
-            .first()
-        )
-        if not latest_plan:
-            return
-
-        report_key = latest_plan.report_key
-        plans = (
-            db.query(ActionPlanV2)
-            .filter(
-                ActionPlanV2.profile_id == profile.id,
-                ActionPlanV2.report_key == report_key,
-            )
-            .all()
-        )
-
-        progress = (
-            db.query(ActionProgress)
-            .filter(
-                ActionProgress.profile_id == profile.id,
-                ActionProgress.report_key == report_key,
-            )
-            .first()
-        )
-        if not progress:
-            progress = ActionProgress(
-                profile_id=profile.id,
-                report_key=report_key,
-                checked={},
-            )
-            db.add(progress)
-            db.flush()
-
-        changed = False
-        for plan in plans:
-            content = plan.content if isinstance(plan.content, dict) else json.loads(plan.content or "{}")
-            for item in content.get("items", []):
-                item_id = item.get("id", "")
-                if progress.checked.get(item_id):
-                    continue  # already done
-
-                # Match by type
-                if record_type == "project" and item.get("type") == "project":
-                    progress.checked[item_id] = True
-                    changed = True
-                elif record_type == "learning" and item.get("type") == "skill" and item.get("sub_type") == "learn":
-                    # Check if skill name matches
-                    skill_name = item.get("skill_name", "").lower()
-                    if skills and any(
-                        s.lower() in skill_name or skill_name in s.lower()
-                        for s in skills
-                    ):
-                        progress.checked[item_id] = True
-                        changed = True
-                elif record_type == "application" and item.get("id", "").startswith("prep_apply"):
-                    progress.checked[item_id] = True
-                    changed = True
-
-        if changed:
-            flag_modified(progress, "checked")
-            db.commit()
-    except Exception as e:
-        logger.warning("_auto_complete_plan_tasks failed: %s", e)
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -190,311 +111,27 @@ class UpdateInterviewRequest(BaseModel):
 # ── Timeline ──────────────────────────────────────────────────────────────────
 
 @router.get("/dashboard")
+@router.get("/dashboard")
 def get_growth_dashboard(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """获取成长看板数据：目标方向 + 分层技能覆盖率 + 匹配度曲线。"""
-    from backend.models import CareerGoal, GrowthSnapshot
-    from backend.services.graph import GraphService
-    from backend.services.growth.service import _skill_matches
-
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    if not profile:
-        return {"has_goal": False, "has_profile": False}
-
-    goal = (
-        db.query(CareerGoal)
-        .filter(
-            CareerGoal.user_id == user.id,
-            CareerGoal.profile_id == profile.id,
-            CareerGoal.is_active == True,
-        )
-        .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
-        .first()
-    )
-
-    if not goal or not goal.target_node_id:
-        return {"has_goal": False, "has_profile": True}
-
-    svc = GraphService()
-    svc.load()
-    node = svc.get_node(goal.target_node_id)
-    if not node:
-        return {"has_goal": False, "has_profile": True}
-
-    # Build user skill set
-    try:
-        profile_data = json.loads(profile.profile_json or "{}")
-    except Exception:
-        profile_data = {}
-    raw_skills = profile_data.get("skills", [])
-    if raw_skills and isinstance(raw_skills[0], dict):
-        user_skills = {s.get("name", "").lower().strip() for s in raw_skills if s.get("name")}
-    else:
-        user_skills = {s.lower().strip() for s in raw_skills if isinstance(s, str) and s.strip()}
-
-    # Tiered skill coverage
-    tiers = node.get("skill_tiers", {}) or {}
-    core_list = tiers.get("core", []) or []
-    imp_list = tiers.get("important", []) or []
-    bonus_list = tiers.get("bonus", []) or []
-
-    def _count_matched(skills_list):
-        matched_items = [s for s in skills_list if _skill_matches(s.get("name", ""), user_skills)]
-        return len(matched_items), [s.get("name") for s in matched_items]
-
-    core_cnt, core_matched = _count_matched(core_list)
-    imp_cnt, imp_matched = _count_matched(imp_list)
-    bonus_cnt, bonus_matched = _count_matched(bonus_list)
-
-    def _pct(cnt: int, total: int) -> int:
-        return int(round(cnt / total * 100)) if total > 0 else 0
-
-    # Missing (gap) skills for each tier — for project form selector
-    core_missing = [s.get("name") for s in core_list if not _skill_matches(s.get("name", ""), user_skills)]
-    imp_missing = [s.get("name") for s in imp_list if not _skill_matches(s.get("name", ""), user_skills)]
-
-    # Readiness curve from GrowthSnapshot (up to last 12 points)
-    snapshots = (
-        db.query(GrowthSnapshot)
-        .filter(GrowthSnapshot.profile_id == profile.id)
-        .order_by(GrowthSnapshot.created_at.asc())
-        .limit(12)
-        .all()
-    )
-    curve = [
-        {
-            "date": s.created_at.strftime("%m/%d") if s.created_at else "",
-            "score": round(s.readiness_score or 0, 1),
-        }
-        for s in snapshots
-    ]
-
-    # Days since journey started (profile creation date)
-    start_date = profile.created_at
-    days_since_start = (datetime.now(timezone.utc) - start_date.replace(tzinfo=timezone.utc)).days if start_date else 0
-
-    return {
-        "has_goal": True,
-        "has_profile": True,
-        "goal": {
-            "target_node_id": goal.target_node_id,
-            "target_label": goal.target_label,
-        },
-        "days_since_start": days_since_start,
-        "skill_coverage": {
-            "core": {
-                "covered": core_cnt,
-                "total": len(core_list),
-                "pct": _pct(core_cnt, len(core_list)),
-                "matched": core_matched,
-                "missing": core_missing,
-            },
-            "important": {
-                "covered": imp_cnt,
-                "total": len(imp_list),
-                "pct": _pct(imp_cnt, len(imp_list)),
-                "matched": imp_matched,
-                "missing": imp_missing,
-            },
-            "bonus": {
-                "covered": bonus_cnt,
-                "total": len(bonus_list),
-                "pct": _pct(bonus_cnt, len(bonus_list)),
-            },
-        },
-        "gap_skills": goal.gap_skills or [],  # For project form selector
-        "readiness_curve": curve,
-    }
+    return build_growth_dashboard(user, db)
 
 
 # ── Insights ──────────────────────────────────────────────────────────────────
 
+@router.get("/insights")
 @router.get("/insights")
 def get_growth_insights(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """聚合成长洞察卡片数据 — 从各业务表自动拉取，不依赖手动输入。"""
-    from sqlalchemy import func
-
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     profile_id = profile.id if profile else None
-
-    now = datetime.now(timezone.utc)
-    week_ago = now - timedelta(days=7)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    insights: list[dict] = []
-
-    # ── 1. 近期活跃度 ──
-    activity_counts: dict[str, int] = {}
-    if profile_id:
-        activity_counts["jd"] = (
-            db.query(func.count(JDDiagnosis.id))
-            .filter(JDDiagnosis.profile_id == profile_id, JDDiagnosis.created_at >= week_ago)
-            .scalar() or 0
-        )
-        activity_counts["project"] = (
-            db.query(func.count(ProjectRecord.id))
-            .filter(ProjectRecord.profile_id == profile_id, ProjectRecord.created_at >= week_ago)
-            .scalar() or 0
-        )
-        activity_counts["entry"] = (
-            db.query(func.count(GrowthEntry.id))
-            .filter(GrowthEntry.user_id == user.id, GrowthEntry.created_at >= week_ago)
-            .scalar() or 0
-        )
-    activity_counts["application"] = (
-        db.query(func.count(JobApplication.id))
-        .filter(JobApplication.user_id == user.id, JobApplication.created_at >= week_ago)
-        .scalar() or 0
-    )
-    activity_counts["interview"] = (
-        db.query(func.count(InterviewRecord.id))
-        .filter(InterviewRecord.user_id == user.id, InterviewRecord.created_at >= week_ago)
-        .scalar() or 0
-    )
-
-    total_activity = sum(activity_counts.values())
-    if total_activity > 0:
-        parts = []
-        if activity_counts.get("jd", 0) > 0:
-            parts.append(f"{activity_counts['jd']} 次诊断")
-        if activity_counts.get("project", 0) > 0:
-            parts.append(f"{activity_counts['project']} 个项目")
-        if activity_counts.get("application", 0) > 0:
-            parts.append(f"{activity_counts['application']} 次投递")
-        if activity_counts.get("interview", 0) > 0:
-            parts.append(f"{activity_counts['interview']} 场面试")
-        if activity_counts.get("entry", 0) > 0:
-            parts.append(f"{activity_counts['entry']} 条记录")
-        headline = f"最近 7 天：{', '.join(parts)}"
-        level = "normal"
-    else:
-        headline = "最近 7 天没有活动记录"
-        level = "warning"
-
-    insights.append({
-        "type": "activity",
-        "level": level,
-        "icon": "activity",
-        "headline": headline,
-        "detail": "",
-        "link": "/growth-log",
-    })
-
-    # ── 2. 求职管道 ──
-    if user.id:
-        interviewing_count = (
-            db.query(func.count(JobApplication.id))
-            .filter(
-                JobApplication.user_id == user.id,
-                JobApplication.status.in_(["screening", "scheduled", "interviewed"]),
-            )
-            .scalar() or 0
-        )
-        pending_debrief = (
-            db.query(func.count(InterviewRecord.id))
-            .filter(
-                InterviewRecord.user_id == user.id,
-                InterviewRecord.result == "pending",
-            )
-            .scalar() or 0
-        )
-        if interviewing_count > 0 or pending_debrief > 0:
-            parts = []
-            if interviewing_count > 0:
-                parts.append(f"{interviewing_count} 家在流程中")
-            if pending_debrief > 0:
-                parts.append(f"{pending_debrief} 场待复盘")
-            insights.append({
-                "type": "pipeline",
-                "level": "highlight" if interviewing_count > 0 else "normal",
-                "icon": "briefcase",
-                "headline": "求职进展：" + "，".join(parts),
-                "detail": "",
-                "link": "/pursuits",
-            })
-
-    # ── 3. 计划状态 ──
-    pending_plans = (
-        db.query(GrowthEntry)
-        .filter(
-            GrowthEntry.user_id == user.id,
-            GrowthEntry.is_plan == True,
-            GrowthEntry.status == "pending",
-        )
-        .all()
-    )
-    if pending_plans:
-        overdue = [p for p in pending_plans if p.due_at and p.due_at < now]
-        headline = f"{len(pending_plans)} 条待完成计划"
-        detail = f"其中 {len(overdue)} 条已逾期" if overdue else ""
-        insights.append({
-            "type": "plan",
-            "level": "warning" if overdue else "normal",
-            "icon": "check-circle",
-            "headline": headline,
-            "detail": detail,
-            "link": "/growth-log?filter=plan",
-        })
-
-    # ── 4. 最近诊断 ──
-    if profile_id:
-        latest_jd = (
-            db.query(JDDiagnosis)
-            .filter(JDDiagnosis.profile_id == profile_id)
-            .order_by(JDDiagnosis.created_at.desc())
-            .first()
-        )
-        if latest_jd:
-            match = latest_jd.match_score or 0
-            try:
-                result = json.loads(latest_jd.result_json or "{}")
-                gap_skills = result.get("gap_skills", [])[:3]
-            except Exception:
-                gap_skills = []
-            detail = f"缺口：{', '.join(gap_skills)}" if gap_skills else ""
-            insights.append({
-                "type": "diagnosis",
-                "level": "normal",
-                "icon": "target",
-                "headline": f"最近诊断：{latest_jd.jd_title or '未命名岗位'} · 匹配度 {match}%",
-                "detail": detail,
-                "link": "/jd-diagnosis",
-            })
-
-    # ── 5. 最近面试 ──
-    latest_interview = (
-        db.query(InterviewRecord)
-        .filter(InterviewRecord.user_id == user.id)
-        .order_by(InterviewRecord.interview_at.desc())
-        .first()
-    )
-    if latest_interview:
-        rating_map = {"good": "发挥好", "medium": "一般", "bad": "发挥差"}
-        rating = rating_map.get(latest_interview.self_rating or "", "")
-        headline = f"最近面试：{latest_interview.company or '未知公司'} {latest_interview.round or ''}"
-        if rating:
-            headline += f" · {rating}"
-        # AI 分析中的第一条建议
-        detail = ""
-        if latest_interview.ai_analysis:
-            actions = latest_interview.ai_analysis.get("action_items", [])
-            if actions:
-                detail = f"Coach 建议：{actions[0]}"
-        insights.append({
-            "type": "interview",
-            "level": "highlight" if latest_interview.self_rating == "good" else "normal",
-            "icon": "mic",
-            "headline": headline,
-            "detail": detail,
-            "link": "/growth-log",
-        })
-
-    return {"insights": insights}
+    return build_growth_insights_with_profile(user, db, profile_id)
 
 
 # ── Projects ──────────────────────────────────────────────────────────────────

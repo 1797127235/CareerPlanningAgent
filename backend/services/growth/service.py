@@ -263,4 +263,87 @@ def generate_interview_analysis(
         })
 
 
+def auto_complete_plan_tasks(
+    db: Session,
+    user_id: int,
+    project_name: str | None = None,
+    skills: list[str] | None = None,
+    record_type: str = "project",
+) -> None:
+    """Scan active ActionPlanV2 tasks and auto-check matching ones."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from backend.models import ActionPlanV2, ActionProgress, Profile
+
+    try:
+        profile = db.query(Profile).filter(Profile.user_id == user_id).first()
+        if not profile:
+            return
+
+        latest_plan = (
+            db.query(ActionPlanV2)
+            .filter(ActionPlanV2.profile_id == profile.id)
+            .order_by(ActionPlanV2.generated_at.desc())
+            .first()
+        )
+        if not latest_plan:
+            return
+
+        report_key = latest_plan.report_key
+        plans = (
+            db.query(ActionPlanV2)
+            .filter(
+                ActionPlanV2.profile_id == profile.id,
+                ActionPlanV2.report_key == report_key,
+            )
+            .all()
+        )
+
+        progress = (
+            db.query(ActionProgress)
+            .filter(
+                ActionProgress.profile_id == profile.id,
+                ActionProgress.report_key == report_key,
+            )
+            .first()
+        )
+        if not progress:
+            progress = ActionProgress(
+                profile_id=profile.id,
+                report_key=report_key,
+                checked={},
+            )
+            db.add(progress)
+            db.flush()
+
+        changed = False
+        for plan in plans:
+            content = plan.content if isinstance(plan.content, dict) else json.loads(plan.content or "{}")
+            for item in content.get("items", []):
+                item_id = item.get("id", "")
+                if progress.checked.get(item_id):
+                    continue
+
+                if record_type == "project" and item.get("type") == "project":
+                    progress.checked[item_id] = True
+                    changed = True
+                elif record_type == "learning" and item.get("type") == "skill" and item.get("sub_type") == "learn":
+                    skill_name = item.get("skill_name", "").lower()
+                    if skills and any(
+                        s.lower() in skill_name or skill_name in s.lower()
+                        for s in skills
+                    ):
+                        progress.checked[item_id] = True
+                        changed = True
+                elif record_type == "application" and item.get("id", "").startswith("prep_apply"):
+                    progress.checked[item_id] = True
+                    changed = True
+
+        if changed:
+            flag_modified(progress, "checked")
+            db.commit()
+    except Exception as e:
+        logger.warning("auto_complete_plan_tasks failed: %s", e)
+
+
 
