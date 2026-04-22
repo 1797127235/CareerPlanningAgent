@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from backend.services.report.shared import (
+from backend.services.report.data import (
     _user_skill_set,
     _skill_proficiency,
     _PROFICIENCY_MULTIPLIER,

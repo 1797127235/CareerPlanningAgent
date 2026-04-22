@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { cn } from '@/utils/cn'
 import { motion } from 'framer-motion'
 import { ArrowRight, Upload, PenLine, MapPin, Target, User, Flame, BookOpen, FileSearch, Zap, MessageSquare, Crosshair, Mic } from 'lucide-react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { UploadProgress } from '@/components/profile'
 import { useGuidance } from '@/hooks/useGuidance'
 import { useAuth } from '@/hooks/useAuth'
@@ -13,7 +12,6 @@ import { useActivityHeatmap } from '@/hooks/useActivityHeatmap'
 
 import { SignatureHero } from '@/components/SignatureHero'
 import { ActivityHeatmap } from '@/components/ActivityHeatmap'
-import { rawFetch } from '@/api/client'
 import { sendToCoach } from '@/hooks/useCoachTrigger'
 
 const ease = [0.23, 1, 0.32, 1] as const
@@ -56,49 +54,6 @@ export default function HomePage() {
     || !!(primaryGoal && primaryGoal.target_node_id)
   const zone = graphPos?.target_zone ? zoneLabel[graphPos.target_zone] : null
   const skillCount = profile?.profile?.skills?.length ?? 0
-
-  function HeartbeatBanners() {
-    const qc = useQueryClient()
-    const { data } = useQuery({
-      queryKey: ['heartbeat'],
-      queryFn: async () => rawFetch<{ notifications: any[] }>('/guidance/heartbeat'),
-      staleTime: 60_000,
-    })
-
-    const dismiss = useMutation({
-      mutationFn: async (id: number) =>
-        rawFetch('/guidance/heartbeat/dismiss', { method: 'POST', body: JSON.stringify({ notification_id: id }) }),
-      onSuccess: () => qc.invalidateQueries({ queryKey: ['heartbeat'] }),
-    })
-
-    const notes = data?.notifications ?? []
-    if (notes.length === 0) return null
-
-    return (
-      <div className="mb-4 space-y-2 w-full">
-        {notes.map((n: any) => (
-          <div key={n.id} className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex items-start justify-between">
-            <div>
-              <div className="font-medium text-amber-900">{n.title}</div>
-              <div className="text-sm text-amber-700 mt-1">{n.body}</div>
-              {n.cta_label && n.cta_route && (
-                <a href={n.cta_route} className="text-sm text-amber-800 underline mt-2 inline-block">
-                  {n.cta_label} →
-                </a>
-              )}
-            </div>
-            <button
-              onClick={() => dismiss.mutate(n.id)}
-              className="text-amber-600 hover:text-amber-800 ml-3 shrink-0"
-              aria-label="关闭"
-            >
-              ×
-            </button>
-          </div>
-        ))}
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col items-center h-full w-full px-4 sm:px-6 overflow-y-auto">
@@ -176,8 +131,6 @@ export default function HomePage() {
       ) : (
         /* ── Returning user: hero + dashboard content ── */
         <div className="flex flex-col items-center w-full max-w-[860px] pb-12">
-          <HeartbeatBanners />
-
           {/* ── Hero section ── */}
           <div className="relative w-full flex flex-col items-center justify-center min-h-[40dvh] pt-8 pb-10">
             <SignatureHero />
@@ -444,10 +397,10 @@ export default function HomePage() {
                             <Flame className="w-4 h-4" /> 连续 {heatmapData.streak} 天
                           </span>
                         )}
-                        <span className="text-[12px] text-slate-400">最近一年</span>
+                        <span className="text-[12px] text-slate-400">最近三月</span>
                       </div>
                     </div>
-                    <ActivityHeatmap days={heatmapData?.days ?? []} weeks={52} />
+                    <ActivityHeatmap days={heatmapData?.days ?? []} weeks={12} />
                   </div>
 
                 </div>

@@ -1,5 +1,5 @@
 import { rawFetch } from '@/api/client'
-import type { DiagnoseRequest, DiagnoseResult } from '@/types/jd'
+import type { DiagnoseRequest, DiagnoseResult, CoachInsight } from '@/types/jd'
 
 export async function diagnoseJd(req: DiagnoseRequest): Promise<DiagnoseResult> {
   return rawFetch<DiagnoseResult>('/jd/diagnose', {
@@ -35,6 +35,7 @@ export interface JDDiagnosisDetail {
   extracted_skills?: string[]
   resume_tips?: string[]
   graph_context?: GraphContext | null
+  coach_insight?: CoachInsight | null
 }
 
 export async function getJDDiagnosis(id: number): Promise<JDDiagnosisDetail> {

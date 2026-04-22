@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from backend.services.report.shared import (
+from backend.services.report.data import (
     _user_skill_set,
     _skill_proficiency,
     _skill_matches,
@@ -14,7 +14,7 @@ from backend.services.report.shared import (
     _cosine_sim,
     _batch_embed,
 )
-from backend.services.report.loaders import _classify_fill_path
+from backend.services.report.data import _classify_fill_path
 
 logger = logging.getLogger(__name__)
 

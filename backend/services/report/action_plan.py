@@ -2,7 +2,7 @@
 """Action plan builder for career development reports."""
 from __future__ import annotations
 
-from backend.services.report.shared import (
+from backend.services.report.data import (
     _user_skill_set,
     _PROJECT_SKILL_HINTS,
     _skill_matches,
@@ -184,33 +184,33 @@ def _build_action_plan(
         stage_items[t["phase"]].append(t)
 
     missing_skill_names = [s["name"] for s in skill_pool[:2]]
-    milestone_1 = "整理简历，确保技术关键词与目标岗位对齐"
+    milestone_1 = "完成简历重塑与诊断，启动第一批核心技能补缺"
     milestone_2 = (
-        f"补齐 {'、'.join(missing_skill_names)} 等核心技能缺口，建立可验证的学习或实践证据"
+        f"补齐 {'、'.join(missing_skill_names)} 等核心技能缺口，建立可验证的项目或学习成果"
         if missing_skill_names
-        else "补齐核心技能缺口，建立可验证的学习或实践证据"
+        else "补齐核心技能缺口，建立可验证的项目或学习成果"
     )
-    milestone_3 = "完善项目展示资料，开始目标岗位投递"
+    milestone_3 = "完善项目展示与面试准备，达成目标岗位投递或获得 offer"
 
     stages = [
         {
             "stage": 1,
-            "label": "立即整理",
-            "duration": "0-2周",
+            "label": "短期夯实",
+            "duration": "1-3个月",
             "milestone": milestone_1,
             "items": stage_items[1],
         },
         {
             "stage": 2,
-            "label": "技能补强",
-            "duration": "2-6周",
+            "label": "中期实战",
+            "duration": "3-6个月",
             "milestone": milestone_2,
             "items": stage_items[2],
         },
         {
             "stage": 3,
-            "label": "项目冲刺+求职",
-            "duration": "6-12周",
+            "label": "长期冲刺",
+            "duration": "6-12个月",
             "milestone": milestone_3,
             "items": stage_items[3],
         },

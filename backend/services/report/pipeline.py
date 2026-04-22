@@ -13,8 +13,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
-from backend.services.report import shared
-from backend.services.report import loaders
+from backend.services.report import data as _report_data
+
 from backend.services.report import scoring
 from backend.services.report import skill_gap
 from backend.services.report import action_plan
@@ -56,7 +56,7 @@ def generate_report(user_id: int, db) -> dict:
         loaders._LEVEL_SKILLS = json.loads((loaders._DATA_DIR / "level_skills.json").read_text(encoding="utf-8"))
     except Exception:
         pass
-    loaders._load_static()
+    _report_data._load_static()
 
     from backend.db_models import (
         Profile, CareerGoal, GrowthSnapshot, ProjectRecord,
@@ -86,7 +86,7 @@ def generate_report(user_id: int, db) -> dict:
         raise ValueError("no_goal")
 
     node_id = goal.target_node_id
-    node = loaders.get_graph_nodes().get(node_id)
+    node = _report_data.get_graph_nodes().get(node_id)
     if not node:
         raise ValueError(f"unknown_node:{node_id}")
 
@@ -172,7 +172,7 @@ def generate_report(user_id: int, db) -> dict:
     #     Scan each description for the user's own resume skills — if a skill name
     #     appears in the description text, it is considered "practiced" (no LLM needed,
     #     no timeout risk). LLM is used as an optional enrichment afterward.
-    user_skills_raw = shared._user_skill_set(profile_data)  # normalized lowercase set
+    user_skills_raw = _report_data._user_skill_set(profile_data)  # normalized lowercase set
 
     def _matches_in_text(skill_norm: str, text_norm: str) -> bool:
         """Exact substring match, plus 2-char semantic-head match for Chinese compounds.
@@ -225,7 +225,7 @@ def generate_report(user_id: int, db) -> dict:
     # - merged skill-inference：同时做开放提取 + 已声明技能校验（双任务单次调用）
     # - embedding pre-pass：语义相似度匹配 uncovered claimed 技能到项目
     # 两者互不依赖，结果取并集加入 practiced 集合。
-    _user_skills_all = list(shared._user_skill_set(profile_data))
+    _user_skills_all = list(_report_data._user_skill_set(profile_data))
     _texts_to_infer = profile_projects_raw[:4] + [p.name for p in projects if not p.skills_used and p.name]
     _uncovered = [s for s in _user_skills_all if not shared._skill_in_set(s, practiced)]
 
@@ -337,8 +337,8 @@ def generate_report(user_id: int, db) -> dict:
     match_score = scoring._weighted_match_score(four_dim)
 
     # 7. Market signals
-    family_name = loaders.get_node_to_family().get(node_id)
-    market_info: dict | None = loaders.get_market().get(family_name) if family_name else None
+    family_name = _report_data.get_node_to_family().get(node_id)
+    market_info: dict | None = _report_data.get_market().get(family_name) if family_name else None
 
     # 8. Skill gap analysis
     all_node_skills = []

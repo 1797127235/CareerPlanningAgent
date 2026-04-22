@@ -27,15 +27,16 @@ export function ConfirmDialog({
         style={{ backdropFilter: 'blur(4px)' }}
         onClick={onCancel}
       />
-      <div className="relative z-10 w-full max-w-[400px] bg-white rounded-xl shadow-xl p-5">
-        <h3 className="text-[15px] font-bold text-slate-900">{title}</h3>
+      <div className="relative z-10 w-full max-w-[400px] glass-static p-5">
+        <div className="g-inner">
+        <h3 className="text-[15px] font-bold text-[var(--text-1)]">{title}</h3>
         {message && (
-          <p className="mt-2 text-[13px] text-slate-600 leading-relaxed">{message}</p>
+          <p className="mt-2 text-[13px] text-[var(--text-2)] leading-relaxed">{message}</p>
         )}
         <div className="mt-5 flex items-center justify-end gap-2">
           <button
             onClick={onCancel}
-            className="px-3 py-1.5 text-[13px] font-medium text-slate-600 hover:text-slate-900 cursor-pointer"
+            className="px-3 py-1.5 text-[13px] font-medium text-[var(--text-2)] hover:text-[var(--text-1)] cursor-pointer"
           >
             {cancelLabel}
           </button>
@@ -44,12 +45,13 @@ export function ConfirmDialog({
             className={[
               'px-3 py-1.5 text-[13px] font-semibold text-white rounded-md transition-colors cursor-pointer',
               danger
-                ? 'bg-red-600 hover:bg-red-700'
-                : 'bg-slate-900 hover:bg-blue-700',
+                ? 'bg-red-500 hover:bg-red-600'
+                : 'bg-[var(--text-1)] hover:bg-[var(--blue)]',
             ].join(' ')}
           >
             {confirmLabel}
           </button>
+        </div>
         </div>
       </div>
     </div>

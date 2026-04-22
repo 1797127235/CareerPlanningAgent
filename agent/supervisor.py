@@ -362,7 +362,7 @@ def _make_handoff_tool(agent_name: str, description: str, label: str):
 
 # Agent registry: (name, handoff description for triage LLM, Chinese label)
 _AGENT_REGISTRY = [
-    ("coach_agent", "当用户闲聊、问候、情绪倾诉、职业方向讨论、决策纠结时，转交给成长教练。", "成长教练"),
+    ("coach_agent", "当用户闲聊、问候、情绪倾诉、职业方向讨论、决策纠结时，转交给智析教练。", "智析教练"),
     ("profile_agent", "当用户需要：简历解析、能力画像查看、技能评分、图谱定位时，转交给画像分析师。", "画像分析师"),
     ("navigator", "当用户需要：岗位图谱方向分析、逃生路线、AI冲击分析、转型路径规划时，转交给方向顾问。", "方向顾问"),
     ("search_agent", "当用户需要：搜索真实招聘 JD、找校招信息、按公司/技术方向搜岗位时，转交给岗位搜索员。", "岗位搜索员"),
@@ -561,6 +561,111 @@ def _make_triage_node():
     return triage_node
 
 
+def _prepare_agent_input(agent_name: str, state: CareerState):
+    """Build (input_messages, ctx_resets) for agent invocation.
+
+    Extracts and centralizes the message construction logic from _make_agent_node
+    so it can be reused by both the graph node path and the direct streaming path.
+    """
+    context = build_context_summary(state, agent_name=agent_name)
+    recent = state.get("messages", [])[-20:]
+
+    # Clean: only pass user messages and AI messages with real content
+    clean = []
+    for m in recent:
+        if isinstance(m, HumanMessage):
+            clean.append(m)
+        elif isinstance(m, AIMessage) and m.content and not getattr(m, "tool_calls", None):
+            clean.append(m)
+
+    # Extract handoff context
+    handoff_context = ""
+    if len(clean) >= 2:
+        last_human = None
+        last_ai_before_human = None
+        for i in range(len(clean) - 1, -1, -1):
+            if isinstance(clean[i], HumanMessage) and last_human is None:
+                last_human = clean[i].content
+            elif isinstance(clean[i], AIMessage) and last_human is not None:
+                last_ai_before_human = clean[i].content
+                break
+        if last_human and len(last_human) <= 20 and last_ai_before_human:
+            handoff_context = (
+                f"\n\n[调用背景] 教练在上一轮对用户说了：「{last_ai_before_human[:200]}」，"
+                f"用户回复了「{last_human}」。"
+                f"判断规则：如果你上一轮提出了明确的选择问题（'要不要/是否/帮你...'），现在执行对应动作；"
+                f"如果上一轮只是开放建议或总结，'{last_human}' 只表示用户收到了，不要调工具，"
+                f"回 1-2 句话继续用问题推进对话即可。"
+            )
+
+    # Tool hint
+    tool_hint = state.get("tool_hint", "")
+    if tool_hint:
+        hint_instructions = {
+            "search_real_jd": "用户要求搜索互联网真实招聘信息。你必须使用 search_real_jd 工具搜索，不要用 recommend_jobs 或 search_jobs。如果用户没指定搜什么，根据对话上下文和用户画像中的目标岗位/技能方向来构造搜索关键词（如'C++ 后端开发 招聘'）。",
+        }
+        hint_text = hint_instructions.get(tool_hint, "")
+        if hint_text:
+            context += f"\n\n[工具指令] {hint_text}"
+
+    # System prompt
+    if agent_name == "coach_agent":
+        from agent.agents.coach_agent import BASE_IDENTITY
+        from agent.skills.loader import format_skills_for_prompt
+        available_skills = format_skills_for_prompt()
+        sys_prompt = BASE_IDENTITY.replace(
+            "{AVAILABLE_SKILLS}", available_skills
+        ).replace(
+            "{CONTEXT}", context
+        )
+        if handoff_context:
+            sys_prompt += handoff_context
+    else:
+        sys_prompt = context + handoff_context
+
+    input_msgs = [SystemMessage(content=sys_prompt)] + clean
+
+    # ContextVar injection
+    ctx_resets: list[tuple] = []
+
+    if agent_name == "coach_agent":
+        from agent.tools.coach_context_tools import (
+            _ctx_profile, _ctx_goal, _ctx_user_id, _ctx_recommended,
+        )
+        tok_p = _ctx_profile.set(state.get("user_profile"))
+        tok_g = _ctx_goal.set(state.get("career_goal"))
+        tok_u = _ctx_user_id.set(state.get("user_id"))
+        tok_r = _ctx_recommended.set(state.get("recommended_data"))
+        ctx_resets = [
+            (_ctx_profile, tok_p),
+            (_ctx_goal, tok_g),
+            (_ctx_user_id, tok_u),
+            (_ctx_recommended, tok_r),
+        ]
+    elif agent_name == "growth_agent":
+        from agent.tools.growth_tools import _injected_user_id as _growth_uid
+        tok_gu = _growth_uid.set(state.get("user_id"))
+        ctx_resets = [(_growth_uid, tok_gu)]
+    elif agent_name == "jd_agent":
+        from agent.tools.jd_tools import _injected_profile, _injected_user_id
+        tok1 = _injected_profile.set(state.get("user_profile"))
+        tok2 = _injected_user_id.set(state.get("user_id"))
+        ctx_resets = [(_injected_profile, tok1), (_injected_user_id, tok2)]
+
+    if agent_name in ("navigator", "coach_agent", "search_agent"):
+        from agent.tools.search_tools import (
+            _injected_profile_for_search, _injected_goal_for_search,
+        )
+        tok_sp = _injected_profile_for_search.set(state.get("user_profile"))
+        tok_sg = _injected_goal_for_search.set(state.get("career_goal"))
+        ctx_resets.extend([
+            (_injected_profile_for_search, tok_sp),
+            (_injected_goal_for_search, tok_sg),
+        ])
+
+    return input_msgs, ctx_resets
+
+
 def _make_agent_node(agent, agent_name: str):
     """Create a graph node that wraps a sub-agent with error handling.
 
@@ -569,110 +674,7 @@ def _make_agent_node(agent, agent_name: str):
     conversation: user messages + actual AI responses.
     """
     def node(state: CareerState) -> dict:
-        context = build_context_summary(state, agent_name=agent_name)
-        recent = state["messages"][-20:]
-
-        # Clean: only pass user messages and AI messages with real content
-        clean = []
-        for m in recent:
-            if isinstance(m, HumanMessage):
-                clean.append(m)
-            elif isinstance(m, AIMessage) and m.content and not getattr(m, "tool_calls", None):
-                clean.append(m)
-            # Skip ToolMessages, empty AIMessages, SystemMessages — these are routing artifacts
-
-        # Extract handoff context: what did triage say before handing off?
-        # This helps the sub-agent understand WHY it was called.
-        handoff_context = ""
-        if len(clean) >= 2:
-            last_human = None
-            last_ai_before_human = None
-            for i in range(len(clean) - 1, -1, -1):
-                if isinstance(clean[i], HumanMessage) and last_human is None:
-                    last_human = clean[i].content
-                elif isinstance(clean[i], AIMessage) and last_human is not None:
-                    last_ai_before_human = clean[i].content
-                    break
-            # If last user message is short (confirmation/follow-up), inject the AI context
-            if last_human and len(last_human) <= 20 and last_ai_before_human:
-                handoff_context = (
-                    f"\n\n[调用背景] 教练在上一轮对用户说了：「{last_ai_before_human[:200]}」，"
-                    f"用户回复了「{last_human}」。"
-                    f"判断规则：如果你上一轮提出了明确的选择问题（'要不要/是否/帮你...'），现在执行对应动作；"
-                    f"如果上一轮只是开放建议或总结，'{last_human}' 只表示用户收到了，不要调工具，"
-                    f"回 1-2 句话继续用问题推进对话即可。"
-                )
-
-        # Inject tool hint if present
-        tool_hint = state.get("tool_hint", "")
-        if tool_hint:
-            hint_instructions = {
-                "search_real_jd": "用户要求搜索互联网真实招聘信息。你必须使用 search_real_jd 工具搜索，不要用 recommend_jobs 或 search_jobs。如果用户没指定搜什么，根据对话上下文和用户画像中的目标岗位/技能方向来构造搜索关键词（如'C++ 后端开发 招聘'）。",
-            }
-            hint_text = hint_instructions.get(tool_hint, "")
-            if hint_text:
-                context += f"\n\n[工具指令] {hint_text}"
-
-        # ── 构造 SystemMessage（coach 分支特殊处理）─────────────────
-        if agent_name == "coach_agent":
-            from agent.agents.coach_agent import BASE_IDENTITY
-            from agent.skills.loader import format_skills_for_prompt
-
-            available_skills = format_skills_for_prompt()
-            sys_prompt = BASE_IDENTITY.replace(
-                "{AVAILABLE_SKILLS}", available_skills
-            ).replace(
-                "{CONTEXT}", context
-            )
-            if handoff_context:
-                sys_prompt += handoff_context
-        else:
-            # 其他 5 agent：原逻辑（保留原来 context + handoff_context 的拼接方式）
-            sys_prompt = context + handoff_context
-
-        input_msgs = [SystemMessage(content=sys_prompt)] + clean
-
-        # ── ContextVar 注入 ─────────────────────────────────────────
-        _ctx_resets: list[tuple] = []
-
-        # Coach 专属：pull tool 的 ContextVar
-        if agent_name == "coach_agent":
-            from agent.tools.coach_context_tools import (
-                _ctx_profile, _ctx_goal, _ctx_user_id, _ctx_recommended,
-            )
-            tok_p = _ctx_profile.set(state.get("user_profile"))
-            tok_g = _ctx_goal.set(state.get("career_goal"))
-            tok_u = _ctx_user_id.set(state.get("user_id"))
-            tok_r = _ctx_recommended.set(state.get("recommended_data"))
-            _ctx_resets.extend([
-                (_ctx_profile, tok_p),
-                (_ctx_goal, tok_g),
-                (_ctx_user_id, tok_u),
-                (_ctx_recommended, tok_r),
-            ])
-
-        # 其他 agent 的原有 ContextVar 注入（growth/jd/search/navigator）保持不变
-        if agent_name == "growth_agent":
-            from agent.tools.growth_tools import _injected_user_id as _growth_uid
-            tok_gu = _growth_uid.set(state.get("user_id"))
-            _ctx_resets = [(_growth_uid, tok_gu)]
-        if agent_name == "jd_agent":
-            from agent.tools.jd_tools import _injected_profile, _injected_user_id
-            tok1 = _injected_profile.set(state.get("user_profile"))
-            tok2 = _injected_user_id.set(state.get("user_id"))
-            _ctx_resets = [(_injected_profile, tok1), (_injected_user_id, tok2)]
-
-        # Inject profile/goal for search_real_jd (used by navigator + coach + search_agent)
-        if agent_name in ("navigator", "coach_agent", "search_agent"):
-            from agent.tools.search_tools import (
-                _injected_profile_for_search, _injected_goal_for_search,
-            )
-            tok_sp = _injected_profile_for_search.set(state.get("user_profile"))
-            tok_sg = _injected_goal_for_search.set(state.get("career_goal"))
-            _ctx_resets.extend([
-                (_injected_profile_for_search, tok_sp),
-                (_injected_goal_for_search, tok_sg),
-            ])
+        input_msgs, ctx_resets = _prepare_agent_input(agent_name, state)
 
         try:
             # Guard: cap message history to prevent memory blow-up and infinite loops
@@ -683,7 +685,7 @@ def _make_agent_node(agent, agent_name: str):
                     agent_name, len(input_msgs), _MAX_MSGS,
                 )
                 # Keep system message + last (_MAX_MSGS - 1) messages
-                input_msgs = input_msgs[:1] + input_msgs[-(  _MAX_MSGS - 1):]
+                input_msgs = input_msgs[:1] + input_msgs[-(_MAX_MSGS - 1):]
 
             result = agent.invoke({"messages": input_msgs})
             # Only return NEW messages generated by this agent, not the input messages
@@ -707,7 +709,7 @@ def _make_agent_node(agent, agent_name: str):
             }
         finally:
             # 记得 reset ContextVar
-            for var, tok in _ctx_resets:
+            for var, tok in ctx_resets:
                 try:
                     var.reset(tok)
                 except Exception:
@@ -763,3 +765,74 @@ def build_supervisor() -> StateGraph:
         graph.add_edge(name, END)
 
     return graph.compile()
+
+
+# ── Streaming entry point (decoupled from graph nodes) ───────────────────────
+
+_cached_supervisor: StateGraph | None = None
+
+
+def _get_cached_supervisor() -> StateGraph:
+    """Return a cached, compiled supervisor graph."""
+    global _cached_supervisor
+    if _cached_supervisor is None:
+        _cached_supervisor = build_supervisor()
+    return _cached_supervisor
+
+
+async def stream_chat_response(state: CareerState):
+    """Yield (msg_chunk, metadata) compatible with supervisor.astream(..., stream_mode='messages').
+
+    For coach_agent: streams token-by-token via the agent's native astream().
+    For other agents: falls back to the compiled supervisor graph (complete messages).
+    """
+    # Determine target agent using the same logic as triage
+    last_user_msg = ""
+    for msg in reversed(state.get("messages", [])):
+        if isinstance(msg, HumanMessage):
+            last_user_msg = msg.content
+            break
+
+    matched_agent, tool_hint = _detect_intent(last_user_msg)
+    target = matched_agent if matched_agent and matched_agent in _VALID_AGENTS else "coach_agent"
+    state["tool_hint"] = tool_hint
+    logger.info("Stream router: '%s' → %s (hint=%s)", last_user_msg[:50], target, tool_hint)
+
+    if target == "coach_agent":
+        from agent.agents.coach_agent import create_coach_agent
+
+        input_msgs, ctx_resets = _prepare_agent_input("coach_agent", state)
+        agent = create_coach_agent()
+
+        try:
+            _MAX_MSGS = 60
+            if len(input_msgs) > _MAX_MSGS:
+                input_msgs = input_msgs[:1] + input_msgs[-(_MAX_MSGS - 1):]
+
+            async for chunk, _metadata in agent.astream(
+                {"messages": input_msgs},
+                stream_mode="messages",
+            ):
+                # Filter routing artifacts
+                if isinstance(chunk, (ToolMessage, HumanMessage)):
+                    continue
+                if isinstance(chunk, AIMessage):
+                    if getattr(chunk, "tool_calls", None):
+                        continue
+                    if not chunk.content:
+                        continue
+                yield chunk, {"langgraph_node": "coach_agent", "streaming": True}
+        except Exception as e:
+            logger.error("Coach agent streaming failed: %s", e)
+            yield AIMessage(content="抱歉，处理你的请求时遇到了问题。你可以换个方式描述，或稍后再试。"), {"langgraph_node": "coach_agent", "streaming": True}
+        finally:
+            for var, tok in ctx_resets:
+                try:
+                    var.reset(tok)
+                except Exception:
+                    pass
+    else:
+        # Non-streaming path: use the compiled supervisor graph
+        graph = _get_cached_supervisor()
+        async for chunk, metadata in graph.astream(state, stream_mode="messages"):
+            yield chunk, metadata

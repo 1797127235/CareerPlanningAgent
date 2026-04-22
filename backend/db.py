@@ -50,9 +50,10 @@ def init_db() -> None:
         ChatSession, ChatMessage,
         JobApplication, InterviewDebrief,
         JobNodeIntro, InterviewQuestionBank,
+        UserNotification, CoachResult, MockInterview, GrowthEntry,
     )
-    from backend.market_signal_model import MarketSignal  # noqa: F401
-    from backend.city_market_signal_model import CityMarketSignal  # noqa: F401
+    from backend.services.market_signals import MarketSignal  # noqa: F401
+    from backend.services.market_signals import CityMarketSignal  # noqa: F401
     Base.metadata.create_all(bind=engine)
     # Migrate: add routine_score column if missing
     with engine.connect() as conn:
@@ -148,6 +149,16 @@ def init_db() -> None:
             pass  # column already exists
         try:
             conn.execute(text("ALTER TABLE interview_records ADD COLUMN stage VARCHAR(32) NOT NULL DEFAULT 'applied'"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+        try:
+            conn.execute(text("ALTER TABLE user_notifications ADD COLUMN trigger_type VARCHAR(32) NOT NULL DEFAULT ''"))
+            conn.commit()
+        except Exception:
+            pass  # column already exists
+        try:
+            conn.execute(text("ALTER TABLE user_notifications ADD COLUMN expires_at DATETIME"))
             conn.commit()
         except Exception:
             pass  # column already exists

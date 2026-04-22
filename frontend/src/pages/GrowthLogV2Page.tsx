@@ -1,8 +1,9 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useLocation } from 'react-router-dom'
 import { GoalBar } from '@/components/growth-log/GoalBar'
+import { InsightCards } from '@/components/growth-log-v2/InsightCards'
 import { QuickInput } from '@/components/growth-log-v2/QuickInput'
 import { EntryCard } from '@/components/growth-log-v2/EntryCard'
 import { PlanRow } from '@/components/growth-log-v2/PlanRow'
@@ -16,7 +17,7 @@ import { listApplications } from '@/api/applications'
 import { rawFetch } from '@/api/client'
 import type { ProjectRecord } from '@/api/growthLog'
 import type { JobApplication } from '@/types/application'
-import { LayoutList, Kanban } from 'lucide-react'
+import { LayoutList, Kanban, BookOpen, FolderGit2, Mic } from 'lucide-react'
 
 interface InterviewRecordData {
   id: number
@@ -109,7 +110,7 @@ function mergeLegacyRecords(
 
 function FilterChips({ value, onChange }: { value: FilterKey; onChange: (v: FilterKey) => void }) {
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-2">
       {FILTERS.map((f) => {
         const active = value === f.key
         return (
@@ -117,20 +118,72 @@ function FilterChips({ value, onChange }: { value: FilterKey; onChange: (v: Filt
             key={f.key}
             onClick={() => onChange(f.key)}
             className={[
-              'relative text-[13px] font-medium cursor-pointer pb-1 hover:bg-slate-50 active:scale-[0.97] transition-all duration-200',
-              active ? 'text-slate-900 scale-[1.02]' : 'text-slate-500 hover:text-slate-900',
+              'pill-tab text-[13px] font-medium',
+              active ? 'active text-[var(--text-1)]' : 'text-[var(--text-2)]',
             ].join(' ')}
           >
             {f.label}
-            <span
-              className={[
-                'absolute left-0 right-0 -bottom-0 h-[2px] bg-slate-900 transition-opacity',
-                active ? 'opacity-100' : 'opacity-0',
-              ].join(' ')}
-            />
           </button>
         )
       })}
+    </div>
+  )
+}
+
+/* ── Empty state with quick-start cards ── */
+function EmptyState({
+  onFocusInput,
+  onSetFilter,
+}: {
+  onFocusInput: () => void
+  onSetFilter: (f: FilterKey) => void
+}) {
+  const cards = [
+    {
+      icon: BookOpen,
+      title: '记录学习',
+      desc: '学了新技术、读了文章、完成了课程',
+      action: () => {
+        onSetFilter('learning')
+        onFocusInput()
+      },
+    },
+    {
+      icon: FolderGit2,
+      title: '创建项目',
+      desc: '开始一个新项目或记录已有进展',
+      action: () => onSetFilter('project'),
+    },
+    {
+      icon: Mic,
+      title: '添加面试',
+      desc: '记录面试问题和自己的回答',
+      action: () => onSetFilter('interview'),
+    },
+  ]
+
+  return (
+    <div className="glass-static p-8">
+      <div className="g-inner text-center">
+        <p className="text-[14px] text-[var(--text-2)] mb-6">
+          还没有任何记录 — 成长从第一笔开始
+        </p>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+          {cards.map((card) => (
+            <button
+              key={card.title}
+              onClick={card.action}
+              className="glass p-4 text-left cursor-pointer"
+            >
+              <div className="g-inner">
+                <card.icon className="w-5 h-5 text-[var(--blue)] mb-3" />
+                <h3 className="text-[14px] font-semibold text-[var(--text-1)] mb-1">{card.title}</h3>
+                <p className="text-[12px] text-[var(--text-2)] leading-relaxed">{card.desc}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }
@@ -163,6 +216,12 @@ export default function GrowthLogV2Page() {
   const [interviewView, setInterviewView] = useState<'list' | 'kanban'>('kanban')
   const [projectView, setProjectView] = useState<'list' | 'kanban'>('kanban')
   const qc = useQueryClient()
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const focusInput = () => {
+    textareaRef.current?.focus()
+    textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   const { data: interviewsData, refetch: refetchInterviews } = useQuery({
     queryKey: ['growth-interviews'],
@@ -244,18 +303,22 @@ export default function GrowthLogV2Page() {
       </section>
 
       <section className="mb-6">
-        <QuickInput onSent={() => {}} onAddEntry={addEntry} initialText={prefillText} />
+        <InsightCards />
+      </section>
+
+      <section className="mb-6">
+        <QuickInput onSent={() => {}} onAddEntry={addEntry} initialText={prefillText} textareaRef={textareaRef} />
       </section>
 
       <section className="mb-6">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <FilterChips value={filter} onChange={setFilter} />
           {filter === 'interview' && (
-            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+            <div className="flex items-center gap-1 glass-static rounded-lg p-0.5">
               <button
                 onClick={() => setInterviewView('list')}
                 className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-                  interviewView === 'list' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                  interviewView === 'list' ? 'bg-white/80 shadow-sm text-[var(--text-1)]' : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                 }`}
               >
                 <LayoutList className="w-3.5 h-3.5" />
@@ -263,7 +326,7 @@ export default function GrowthLogV2Page() {
               <button
                 onClick={() => setInterviewView('kanban')}
                 className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-                  interviewView === 'kanban' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                  interviewView === 'kanban' ? 'bg-white/80 shadow-sm text-[var(--text-1)]' : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                 }`}
               >
                 <Kanban className="w-3.5 h-3.5" />
@@ -271,11 +334,11 @@ export default function GrowthLogV2Page() {
             </div>
           )}
           {filter === 'project' && (
-            <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+            <div className="flex items-center gap-1 glass-static rounded-lg p-0.5">
               <button
                 onClick={() => setProjectView('list')}
                 className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-                  projectView === 'list' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                  projectView === 'list' ? 'bg-white/80 shadow-sm text-[var(--text-1)]' : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                 }`}
               >
                 <LayoutList className="w-3.5 h-3.5" />
@@ -283,7 +346,7 @@ export default function GrowthLogV2Page() {
               <button
                 onClick={() => setProjectView('kanban')}
                 className={`p-1.5 rounded-md transition-all duration-200 cursor-pointer ${
-                  projectView === 'kanban' ? 'bg-white shadow-sm text-slate-700' : 'text-slate-400 hover:text-slate-600'
+                  projectView === 'kanban' ? 'bg-white/80 shadow-sm text-[var(--text-1)]' : 'text-[var(--text-3)] hover:text-[var(--text-1)]'
                 }`}
               >
                 <Kanban className="w-3.5 h-3.5" />
@@ -296,14 +359,16 @@ export default function GrowthLogV2Page() {
       {filter !== 'plan' && plans.length > 0 && (
         <section className="mb-8">
           <div className="flex items-center gap-4 pt-2 pb-4">
-            <div className="flex-1 h-px bg-slate-300" />
-            <span className="text-[11px] font-bold text-slate-500 tracking-[0.2em]">待完成的计划</span>
-            <div className="flex-1 h-px bg-slate-300" />
+            <div className="flex-1 h-px bg-black/[0.06]" />
+            <span className="text-[11px] font-bold text-[var(--text-3)] tracking-[0.2em]">待完成的计划</span>
+            <div className="flex-1 h-px bg-black/[0.06]" />
           </div>
-          <div className="bg-white border border-slate-200 rounded-xl px-4">
+          <div className="glass-static px-4">
+            <div className="g-inner">
             {plans.map((plan) => (
               <PlanRow key={plan.id} entry={plan} onToggle={handleTogglePlan} onDrop={handleDropPlan} onUpdate={updateEntry} />
             ))}
+            </div>
           </div>
         </section>
       )}
@@ -311,14 +376,16 @@ export default function GrowthLogV2Page() {
       {filter === 'plan' && plans.length > 0 && (
         <section className="mb-8">
           <div className="flex items-center gap-4 pt-2 pb-4">
-            <div className="flex-1 h-px bg-slate-300" />
-            <span className="text-[11px] font-bold text-slate-500 tracking-[0.2em]">计划</span>
-            <div className="flex-1 h-px bg-slate-300" />
+            <div className="flex-1 h-px bg-black/[0.06]" />
+            <span className="text-[11px] font-bold text-[var(--text-3)] tracking-[0.2em]">计划</span>
+            <div className="flex-1 h-px bg-black/[0.06]" />
           </div>
-          <div className="bg-white border border-slate-200 rounded-xl px-4">
+          <div className="glass-static px-4">
+            <div className="g-inner">
             {plans.map((plan) => (
               <PlanRow key={plan.id} entry={plan} onToggle={handleTogglePlan} onDrop={handleDropPlan} onUpdate={updateEntry} />
             ))}
+            </div>
           </div>
         </section>
       )}
@@ -336,9 +403,9 @@ export default function GrowthLogV2Page() {
       ) : (
         <div>
           {entriesLoading ? (
-            <div className="pt-12 text-slate-400 text-[13px] text-center">加载中…</div>
+            <div className="pt-12 text-[var(--text-3)] text-[13px] text-center">加载中…</div>
           ) : groups.length === 0 ? (
-            <div className="pt-12 text-slate-400 text-[13px] text-center">没有符合条件的记录</div>
+            <EmptyState onFocusInput={focusInput} onSetFilter={setFilter} />
           ) : (
             groups.map((group, idx) => (
               <div key={group.label}>
@@ -348,9 +415,9 @@ export default function GrowthLogV2Page() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  <div className="flex-1 h-px bg-slate-300" />
-                  <span className="text-[11px] font-bold text-slate-500 tracking-[0.2em]">{group.label}</span>
-                  <div className="flex-1 h-px bg-slate-300" />
+                  <div className="flex-1 h-px bg-black/[0.06]" />
+                  <span className="text-[11px] font-bold text-[var(--text-3)] tracking-[0.2em]">{group.label}</span>
+                  <div className="flex-1 h-px bg-black/[0.06]" />
                 </motion.div>
                 <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
                   {group.items.map((item, i) => {
@@ -365,7 +432,6 @@ export default function GrowthLogV2Page() {
                           duration: 0.25,
                           ease: [0.22, 1, 0.36, 1],
                         }}
-                        className="hover:bg-white/50 hover:-translate-y-px transition-all duration-200"
                       >
                         {item.kind === 'entry' ? (
                           <EntryCard

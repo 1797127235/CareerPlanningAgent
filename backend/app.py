@@ -40,8 +40,8 @@ async def lifespan(app: FastAPI):
     # Pre-warm Supervisor in background so server starts immediately
     def _prewarm():
         try:
-            from backend.routers.chat import _get_supervisor
-            _get_supervisor()
+            from agent.supervisor import _get_cached_supervisor
+            _get_cached_supervisor()
             logger.info("Supervisor pre-warmed")
         except Exception as exc:
             logger.warning("Supervisor pre-warm skipped: %s", exc)

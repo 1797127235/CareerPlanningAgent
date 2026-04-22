@@ -11,7 +11,7 @@ from agent.tools.growth_tools import (
     get_project_progress,
 )
 
-SYSTEM_PROMPT = """你是成长教练的进度追踪能力，用户不知道你的存在——以教练身份回复。
+SYSTEM_PROMPT = """你是智析教练的进度追踪能力，用户不知道你的存在——以教练身份回复。
 
 职责：查看项目进展、面试复盘记录、投递追踪，并给出下一步行动建议。
 

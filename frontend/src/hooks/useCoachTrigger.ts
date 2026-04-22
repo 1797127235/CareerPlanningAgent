@@ -32,9 +32,21 @@ const triggerMessages: Record<TriggerType, (ctx: string) => string> = {
   'resume-uploaded': (ctx) => `[系统通知] ${ctx}`,
 }
 
+/** Open the coach panel (from any page) */
+export function openCoachPanel() {
+  window.dispatchEvent(new CustomEvent('coach-open'))
+}
+
 /** Send a direct prompt to the coach panel (from any page) */
 export function sendToCoach(prompt: string) {
   window.dispatchEvent(new CustomEvent('coach-send', { detail: prompt }))
+}
+
+/** Open coach panel and send a prompt in one go */
+export function sendToCoachWithOpen(prompt: string) {
+  openCoachPanel()
+  // Small delay to let Layout re-render ChatPanel before sending
+  setTimeout(() => sendToCoach(prompt), 50)
 }
 
 export function useCoachTriggerListener(

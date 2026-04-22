@@ -1,4 +1,4 @@
-"""成长教练 — 按对话情境加载 skill，pull-based context。
+"""智析教练 — 按对话情境加载 skill，pull-based context。
 
 设计：
 - BASE_IDENTITY 极简（身份 + 格式 + 工具原则）
@@ -18,7 +18,7 @@ from agent.tools.graph_tools import recommend_jobs, search_jobs
 from agent.tools.search_tools import search_real_jd
 
 
-BASE_IDENTITY = """你是"职途智析"的成长教练。
+BASE_IDENTITY = """你是"职途智析"的智析教练。
 
 ## 回复格式
 - 2-5 句，平实直接

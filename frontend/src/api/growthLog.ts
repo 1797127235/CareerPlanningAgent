@@ -69,6 +69,20 @@ export interface GrowthDashboardData {
 export const getGrowthDashboard = () =>
   rawFetch<GrowthDashboardData>(`${BASE}/dashboard`)
 
+/* ── Insights ── */
+
+export interface InsightItem {
+  type: 'activity' | 'pipeline' | 'plan' | 'diagnosis' | 'interview'
+  level: 'normal' | 'warning' | 'highlight'
+  icon: string
+  headline: string
+  detail: string
+  link: string
+}
+
+export const getInsights = () =>
+  rawFetch<{ insights: InsightItem[] }>(`${BASE}/insights`)
+
 /* ── Projects ── */
 
 export const listProjects = () =>

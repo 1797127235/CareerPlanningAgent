@@ -193,6 +193,7 @@ def find_skill_for_topic(topic_title: str, all_graph_skills: list[str], threshol
 
 # ── Family group mapping (from escape_router.py) ──────────────────────────
 _FAMILY_GROUPS: dict[str, str] = {
+    # English keys (legacy)
     "software_development": "tech",
     "algorithm_ai": "tech",
     "data_engineering": "tech",
@@ -213,6 +214,27 @@ _FAMILY_GROUPS: dict[str, str] = {
     "manufacturing": "industry",
     "delivery_and_support": "service",
     "other": "other",
+    # Chinese keys (matching graph.json role_family)
+    "后端开发": "tech",
+    "前端开发": "tech",
+    "全栈开发": "tech",
+    "移动开发": "tech",
+    "AI/ML": "tech",
+    "数据": "tech",
+    "运维/DevOps": "tech",
+    "系统开发": "tech",
+    "系统软件": "tech",
+    "嵌入式/硬件": "tech",
+    "区块链": "tech",
+    "安全": "tech",
+    "质量保障": "tech",
+    "架构": "tech",
+    "游戏开发": "tech",
+    "设计": "design",
+    "产品": "business",
+    "管理": "business",
+    "文档": "service",
+    "社区": "service",
 }
 
 
@@ -806,14 +828,14 @@ class GraphService:
                 source_family = current.get("role_family", "other")
                 target_family = node.get("role_family", "other")
                 if _cross_family_distance(source_family, target_family) < 1.0:
-                    # For same-family routes: skip if zero skill overlap (unrelated sub-field)
-                    # Cross-family routes (e.g. tech→management) are exempt — skills differ by design
-                    if source_family == target_family:
-                        src_skills = set(s.lower() for s in current.get("must_skills", []))
-                        tgt_skills = set(s.lower() for s in node.get("must_skills", []))
-                        if src_skills and tgt_skills and not (src_skills & tgt_skills):
-                            if not self._graph.has_edge(node_id, state.node_id):
-                                continue
+                    src_skills = set(s.lower() for s in current.get("must_skills", []))
+                    tgt_skills = set(s.lower() for s in node.get("must_skills", []))
+                    has_overlap = bool(src_skills and tgt_skills and (src_skills & tgt_skills))
+                    # For same-family or same-group routes: skip if zero skill overlap
+                    # and no direct forward edge (unrelated sub-field)
+                    if source_family == target_family or _FAMILY_GROUPS.get(source_family, "other") == _FAMILY_GROUPS.get(target_family, "other"):
+                        if not has_overlap and not self._graph.has_edge(node_id, state.node_id):
+                            continue
                     gap = _compute_gap_skills(current, node, profile_skills=profile_skills)
                     gap_hours = sum(s.estimated_hours for s in gap)
                     total_h = gap_hours if gap_hours > 0 else 40
@@ -845,6 +867,9 @@ class GraphService:
 
                 # Compute weighted edge cost (4-factor)
                 edge_c = _edge_cost(current, node, neighbor, edge)
+                # Penalize reverse-direction edges (e.g. game-dev -> java becomes java -> game-dev)
+                if edge.get("source") != state.node_id:
+                    edge_c *= 1.5
                 new_cost = state.cost + edge_c
 
                 # Only expand if better
@@ -860,6 +885,7 @@ class GraphService:
         # If same-family filter yielded nothing, fall back to same-group (distance <= 0.3)
         if not candidates:
             source_family = current.get("role_family", "other")
+            source_group = _FAMILY_GROUPS.get(source_family, "other")
             for cid, cnode in nodes.items():
                 if cid == node_id:
                     continue
@@ -868,8 +894,10 @@ class GraphService:
                     continue
                 if cid not in best_cost:
                     continue
-                # Same-family zero-overlap filter (cross-family exempt)
-                if source_family == cnode.get("role_family", "other"):
+                target_family = cnode.get("role_family", "other")
+                target_group = _FAMILY_GROUPS.get(target_family, "other")
+                # Zero-overlap filter for same-family or same-group
+                if source_family == target_family or source_group == target_group:
                     src_sk = set(s.lower() for s in current.get("must_skills", []))
                     tgt_sk = set(s.lower() for s in cnode.get("must_skills", []))
                     if src_sk and tgt_sk and not (src_sk & tgt_sk):
@@ -895,9 +923,17 @@ class GraphService:
 
         # Sort candidates by composite score: prefer same-family, fewer gaps, better safety
         source_family = current.get("role_family", "other")
+        source_group = _FAMILY_GROUPS.get(source_family, "other")
         def _route_score(r: dict) -> float:
             target_node = nodes.get(r["target"], {})
-            family_bonus = 0.3 if target_node.get("role_family") == source_family else 0.0
+            target_family = target_node.get("role_family", "other")
+            target_group = _FAMILY_GROUPS.get(target_family, "other")
+            if target_family == source_family:
+                family_bonus = 0.3
+            elif target_group == source_group:
+                family_bonus = 0.0  # same group, different family — neutral
+            else:
+                family_bonus = -0.2  # cross-group — penalize
             gap_penalty = len(r["gap_skills"]) * 0.05
             zone = r["target_zone"]
             zone_bonus = {"safe": 0.2, "leverage": 0.15, "transition": 0.05, "danger": -0.1}.get(zone, 0)

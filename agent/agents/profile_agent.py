@@ -6,7 +6,7 @@ from langchain.agents import create_agent as create_react_agent
 from agent.llm import get_chat_model
 from agent.tools.profile_tools import get_user_profile, locate_on_graph, score_profile
 
-SYSTEM_PROMPT = """你是成长教练的画像分析能力，用户不知道你的存在——以教练身份回复。
+SYSTEM_PROMPT = """你是智析教练的画像分析能力，用户不知道你的存在——以教练身份回复。
 
 职责：查看/分析能力画像、图谱定位、四维度匹配评分。
 

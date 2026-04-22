@@ -35,20 +35,20 @@ const STATUS_TEXT: Record<string, string> = {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  planning: 'bg-slate-400',
-  in_progress: 'bg-blue-600',
-  completed: 'bg-green-600',
+  planning: 'bg-[var(--text-3)]',
+  in_progress: 'bg-[var(--blue)]',
+  completed: 'bg-emerald-500',
 }
 
 const STATUS_COLOR_TEXT: Record<string, string> = {
-  planning: 'text-slate-500',
-  in_progress: 'text-blue-600',
-  completed: 'text-green-600',
+  planning: 'text-[var(--text-3)]',
+  in_progress: 'text-[var(--blue)]',
+  completed: 'text-emerald-500',
 }
 
 function TagList({ tags }: { tags: string[] }) {
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium uppercase tracking-[0.14em] text-slate-400">
+    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium uppercase tracking-[0.14em] text-[var(--text-3)]">
       {tags.slice(0, 6).map((t) => (
         <span key={t}>#{t}</span>
       ))}
@@ -70,7 +70,7 @@ function AiButton({
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-blue-600 transition-colors cursor-pointer"
+      className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-2)] hover:text-[var(--blue)] transition-colors cursor-pointer"
     >
       <Lightbulb className="w-3.5 h-3.5" />
       {loading ? '生成中…' : count > 0 ? `AI 建议 ✓(${count})` : 'AI 建议'}
@@ -147,7 +147,7 @@ function LearningCardBody({
           value={draftContent}
           onChange={(e) => setDraftContent(e.target.value)}
           rows={3}
-          className="w-full px-3 py-2 text-[14px] text-slate-800 border border-slate-300 rounded-md outline-none focus:border-blue-500 resize-none"
+          className="w-full px-3 py-2 text-[14px] text-[var(--text-1)] bg-white/60 border border-black/[0.06] rounded-md outline-none focus:border-[var(--blue)]/40 resize-none"
         />
         <div className="mt-2">
           <TagChips tags={draftTags} onChange={setDraftTags} />
@@ -157,14 +157,14 @@ function LearningCardBody({
           <button
             onClick={cancelEdit}
             disabled={saving}
-            className="px-3 py-1 text-[12px] font-medium text-slate-600 hover:text-slate-900 disabled:opacity-40 cursor-pointer"
+            className="px-3 py-1 text-[12px] font-medium text-[var(--text-2)] hover:text-[var(--text-1)] disabled:opacity-40 cursor-pointer"
           >
             取消
           </button>
           <button
             onClick={saveEdit}
             disabled={saving}
-            className="px-3 py-1 text-[12px] font-semibold text-white bg-slate-900 hover:bg-blue-700 disabled:opacity-40 rounded-md cursor-pointer"
+            className="px-3 py-1 text-[12px] font-semibold text-white bg-[var(--text-1)] hover:bg-[var(--blue)] disabled:opacity-40 rounded-md cursor-pointer"
           >
             {saving ? '保存中…' : '保存'}
           </button>
@@ -175,16 +175,16 @@ function LearningCardBody({
 
   return (
     <>
-      <p className="text-[15px] text-slate-800 leading-relaxed whitespace-pre-wrap">{entry.content}</p>
+      <p className="text-[15px] text-[var(--text-1)] leading-relaxed whitespace-pre-wrap">{entry.content}</p>
       <div className="mt-3 flex items-end justify-between gap-3">
         <TagList tags={entry.tags} />
         <div className="flex items-center gap-3">
-          <span className="text-[11px] text-slate-400 tabular-nums">{fmtRelative(entry.created_at)}</span>
+          <span className="text-[11px] text-[var(--text-3)] tabular-nums">{fmtRelative(entry.created_at)}</span>
           {onUpdate && (
             <button
               onClick={startEdit}
               title="编辑"
-              className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-3)] hover:text-[var(--blue)] transition-colors cursor-pointer"
             >
               <Pencil className="w-3 h-3" />
               编辑
@@ -214,7 +214,7 @@ function InterviewCardBody({
   return (
     <>
       <div className="flex items-start justify-between gap-3">
-        <h4 className="text-[16px] font-bold text-slate-900">
+        <h4 className="text-[16px] font-bold text-[var(--text-1)]">
           {data?.company || '未知公司'} · {data?.round || '面试'}
         </h4>
         <TagList tags={entry.tags} />
@@ -222,29 +222,29 @@ function InterviewCardBody({
       {data && data.questions.length > 0 && (
         <div className="mt-3 space-y-1.5">
           {data.questions.map((qa, idx) => (
-            <div key={idx} className="text-[13px] text-slate-600 leading-relaxed">
-              <span className="text-slate-400">Q:</span> {qa.q} <span className="text-slate-300">→</span>{' '}
+            <div key={idx} className="text-[13px] text-[var(--text-2)] leading-relaxed">
+              <span className="text-[var(--text-3)]">Q:</span> {qa.q} <span className="text-[var(--text-3)]/40">→</span>{' '}
               {qa.a || '未回答'}
             </div>
           ))}
         </div>
       )}
       {data && (
-        <div className="mt-3 text-[12px] text-slate-500">
-          自评: <span className="font-medium text-slate-700">{RATING_TEXT[data.self_rating]}</span>
-          <span className="mx-2 text-slate-300">·</span>
-          结果: <span className="font-medium text-slate-700">{RESULT_TEXT[data.result]}</span>
+        <div className="mt-3 text-[12px] text-[var(--text-2)]">
+          自评: <span className="font-medium text-[var(--text-1)]">{RATING_TEXT[data.self_rating]}</span>
+          <span className="mx-2 text-[var(--text-3)]/40">·</span>
+          结果: <span className="font-medium text-[var(--text-1)]">{RESULT_TEXT[data.result]}</span>
         </div>
       )}
-      {data?.reflection && <p className="mt-2 text-[13px] text-slate-500 leading-relaxed">感受: {data.reflection}</p>}
+      {data?.reflection && <p className="mt-2 text-[13px] text-[var(--text-2)] leading-relaxed">感受: {data.reflection}</p>}
       <div className="mt-3 flex items-center justify-between gap-3">
-        <span className="text-[11px] text-slate-400 tabular-nums">{fmtRelative(entry.created_at)}</span>
+        <span className="text-[11px] text-[var(--text-3)] tabular-nums">{fmtRelative(entry.created_at)}</span>
         <div className="flex items-center gap-3">
           {onEdit && (
             <button
               onClick={onEdit}
               title="编辑面试"
-              className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-3)] hover:text-[var(--blue)] transition-colors cursor-pointer"
             >
               <Pencil className="w-3 h-3" />
               编辑
@@ -274,19 +274,19 @@ function ProjectCardBody({
   return (
     <>
       <div className="flex items-start justify-between gap-3">
-        <p className="text-[15px] text-slate-800 leading-relaxed">{entry.content}</p>
+        <p className="text-[15px] text-[var(--text-1)] leading-relaxed">{entry.content}</p>
         <TagList tags={entry.tags} />
       </div>
       {data && (
         <div className="mt-3 space-y-1">
-          <div className="flex items-center gap-1.5 text-[13px] text-slate-700 font-medium">
-            <Folder className="w-3.5 h-3.5 text-slate-400" />
+          <div className="flex items-center gap-1.5 text-[13px] text-[var(--text-1)] font-medium">
+            <Folder className="w-3.5 h-3.5 text-[var(--text-3)]" />
             {data.name}
           </div>
-          {data.description && <div className="text-[12px] text-slate-500">{data.description}</div>}
+          {data.description && <div className="text-[12px] text-[var(--text-2)]">{data.description}</div>}
           {data.skills_used.length > 0 && (
-            <div className="flex items-center gap-1.5 text-[12px] text-slate-500">
-              <Tag className="w-3 h-3 text-slate-400" />
+            <div className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)]">
+              <Tag className="w-3 h-3 text-[var(--text-3)]" />
               {data.skills_used.join(' · ')}
             </div>
           )}
@@ -295,7 +295,7 @@ function ProjectCardBody({
               href={data.github_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-1 text-[12px] text-blue-600 hover:underline"
+              className="inline-flex items-center gap-1 text-[12px] text-[var(--blue)] hover:underline"
               onClick={(e) => e.stopPropagation()}
             >
               <LinkIcon className="w-3 h-3" />
@@ -311,13 +311,13 @@ function ProjectCardBody({
         </div>
       )}
       <div className="mt-3 flex items-center justify-between gap-3">
-        <span className="text-[11px] text-slate-400 tabular-nums">{fmtRelative(entry.created_at)}</span>
+        <span className="text-[11px] text-[var(--text-3)] tabular-nums">{fmtRelative(entry.created_at)}</span>
         <div className="flex items-center gap-3">
           {onEdit && (
             <button
               onClick={onEdit}
               title="编辑项目"
-              className="flex items-center gap-1 text-[11px] font-medium text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-3)] hover:text-[var(--blue)] transition-colors cursor-pointer"
             >
               <Pencil className="w-3 h-3" />
               编辑
@@ -389,48 +389,50 @@ export function EntryCard({
 
   return (
     <>
-      <article className="group relative pt-4 pb-5 pr-7 border-t-2 border-slate-900 hover:border-blue-700 transition-colors">
-        {onDelete && (
-          <button
-            onClick={() => setConfirmOpen(true)}
-            disabled={deleting}
-            title="删除"
-            aria-label="删除这条记录"
-            className="absolute top-3 right-0 p-1 text-slate-300 hover:text-red-600 disabled:opacity-40 transition-colors cursor-pointer"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        )}
-        {effectiveCategory === 'interview' ? (
-          <InterviewCardBody
-            entry={entry}
-            expanded={expanded}
-            loading={loading}
-            onToggleAi={toggleAi}
-            onEdit={onUpdate ? () => setEditStructured(true) : undefined}
-          />
-        ) : effectiveCategory === 'project' ? (
-          <ProjectCardBody
-            entry={entry}
-            expanded={expanded}
-            loading={loading}
-            onToggleAi={toggleAi}
-            onEdit={onUpdate ? () => setEditStructured(true) : undefined}
-          />
-        ) : (
-          <LearningCardBody entry={entry} expanded={expanded} loading={loading} onToggleAi={toggleAi} onUpdate={onUpdate} />
-        )}
+      <article className="group relative glass p-4">
+        <div className="g-inner">
+          {onDelete && (
+            <button
+              onClick={() => setConfirmOpen(true)}
+              disabled={deleting}
+              title="删除"
+              aria-label="删除这条记录"
+              className="absolute top-3 right-3 p-1 text-[var(--text-3)] hover:text-red-500 disabled:opacity-40 transition-colors cursor-pointer z-10"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {effectiveCategory === 'interview' ? (
+            <InterviewCardBody
+              entry={entry}
+              expanded={expanded}
+              loading={loading}
+              onToggleAi={toggleAi}
+              onEdit={onUpdate ? () => setEditStructured(true) : undefined}
+            />
+          ) : effectiveCategory === 'project' ? (
+            <ProjectCardBody
+              entry={entry}
+              expanded={expanded}
+              loading={loading}
+              onToggleAi={toggleAi}
+              onEdit={onUpdate ? () => setEditStructured(true) : undefined}
+            />
+          ) : (
+            <LearningCardBody entry={entry} expanded={expanded} loading={loading} onToggleAi={toggleAi} onUpdate={onUpdate} />
+          )}
 
-        {expanded && entry.ai_suggestions && entry.ai_suggestions.length > 0 && (
-          <AiSuggestions
-            suggestions={entry.ai_suggestions}
-            onConvert={async (text) => {
-              await onConvertAi(text)
-              onMutate?.()
-              setExpanded(false)
-            }}
-          />
-        )}
+          {expanded && entry.ai_suggestions && entry.ai_suggestions.length > 0 && (
+            <AiSuggestions
+              suggestions={entry.ai_suggestions}
+              onConvert={async (text) => {
+                await onConvertAi(text)
+                onMutate?.()
+                setExpanded(false)
+              }}
+            />
+          )}
+        </div>
       </article>
 
       <ConfirmDialog

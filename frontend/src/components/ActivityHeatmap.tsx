@@ -25,15 +25,40 @@ function getLevel(count: number) {
   return 3
 }
 
-function formatDate(d: Date): string {
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
+/* ── China timezone helpers ───────────────────────────────────────────
+   Backend _to_local_date() pins everything to UTC+8.  If the browser
+   local timezone is NOT UTC+8, naive Date methods drift by a day.
+   We therefore convert explicitly to China time before extracting
+   year/month/date.
+   ──────────────────────────────────────────────────────────────────── */
+
+function toChinaTime(d: Date): Date {
+  const offsetMs = d.getTimezoneOffset() * 60000 // local → UTC
+  const utcMs = d.getTime() + offsetMs
+  return new Date(utcMs + 8 * 3600000) // UTC → China (UTC+8)
+}
+
+/** YYYY-MM-DD in China timezone */
+function formatDateCN(d: Date): string {
+  const cn = toChinaTime(d)
+  const y = cn.getFullYear()
+  const m = String(cn.getMonth() + 1).padStart(2, '0')
+  const day = String(cn.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
 
+/** Today as YYYY-MM-DD in China timezone */
+function todayCN(): string {
+  return formatDateCN(new Date())
+}
+
+/** Parse a YYYY-MM-DD string (China time) into a comparable Date */
+function parseCN(dateStr: string): Date {
+  return new Date(dateStr + 'T00:00:00+08:00')
+}
+
 function formatTooltipDate(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00')
+  const d = parseCN(dateStr)
   const weekdays = ['日', '一', '二', '三', '四', '五', '六']
   return `${d.getMonth() + 1}月${d.getDate()}日 周${weekdays[d.getDay()]}`
 }
@@ -50,23 +75,35 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
   } | null>(null)
   const [tooltipPos, setTooltipPos] = useState<{ left: number; top: number }>({ left: 0, top: 0 })
 
+  // Rebuild grid whenever the calendar day changes (so month labels stay current
+  // even if the user leaves the page open overnight).
+  const dayKey = Math.floor(Date.now() / 86_400_000)
+
   // Build full grid: weeks × 7 days
   const grid = useMemo(() => {
     const dayMap = new Map(days.map(d => [d.date, d]))
-    const today = new Date()
+    const todayStr = todayCN()
+    const today = parseCN(todayStr)
+
+    // Start from today, go back weeks*7-1 days, then snap to Monday
     const startDate = new Date(today)
     startDate.setDate(startDate.getDate() - (weeks * 7) + 1)
-    const dayOfWeek = startDate.getDay()
+    const dayOfWeek = toChinaTime(startDate).getDay()
     const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
     startDate.setDate(startDate.getDate() + mondayOffset)
+
+    // Extend 2 weeks past today so the current date isn't crammed at the
+    // right edge — future cells render as transparent (isFuture = true).
+    const futureEnd = new Date(today)
+    futureEnd.setDate(futureEnd.getDate() + 14)
 
     const columns: Array<Array<{ date: string; count: number; activities: string[] }>> = []
     const current = new Date(startDate)
 
-    while (current <= today) {
+    while (current <= futureEnd) {
       const week: typeof columns[0] = []
       for (let d = 0; d < 7; d++) {
-        const dateStr = formatDate(current)
+        const dateStr = formatDateCN(current)
         const data = dayMap.get(dateStr)
         week.push({
           date: dateStr,
@@ -78,7 +115,7 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
       columns.push(week)
     }
     return columns
-  }, [days, weeks])
+  }, [days, weeks, dayKey])
 
   // Auto-size cells to fill width
   useEffect(() => {
@@ -94,17 +131,25 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
     return () => window.removeEventListener('resize', calc)
   }, [grid.length])
 
-  // Month labels
+  // Month labels — just "X月", no year. Placed at the mid-column of each
+  // month so they spread out evenly; no omission filtering needed.
   const monthLabels = useMemo(() => {
-    const labels: Array<{ text: string; col: number }> = []
-    let lastMonth = -1
+    const buckets = new Map<string, { month: number; cols: number[] }>()
     grid.forEach((week, i) => {
-      const m = new Date(week[0].date + 'T00:00:00').getMonth()
-      if (m !== lastMonth) {
-        labels.push({ text: `${m + 1}月`, col: i })
-        lastMonth = m
+      const anchor = week[3] ?? week[0]
+      const d = parseCN(anchor.date)
+      const key = `${d.getFullYear()}-${d.getMonth()}`
+      if (!buckets.has(key)) {
+        buckets.set(key, { month: d.getMonth(), cols: [] })
       }
+      buckets.get(key)!.cols.push(i)
     })
+
+    const labels: Array<{ text: string; col: number }> = []
+    for (const [, entry] of buckets) {
+      const midCol = entry.cols[Math.floor(entry.cols.length / 2)]
+      labels.push({ text: `${entry.month + 1}月`, col: midCol })
+    }
     return labels
   }, [grid])
 
@@ -113,6 +158,7 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
   }
 
   const colStep = cellSize + GAP
+  const todayStr = todayCN()
 
   return (
     <div ref={containerRef} className="relative select-none">
@@ -121,8 +167,8 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
         {monthLabels.map((m, i) => (
           <span
             key={i}
-            className="absolute text-[12px] text-slate-500 font-medium"
-            style={{ left: m.col * colStep }}
+            className="absolute text-[11px] text-slate-500 font-medium whitespace-nowrap"
+            style={{ left: m.col * colStep + cellSize / 2, transform: 'translateX(-50%)' }}
           >
             {m.text}
           </span>
@@ -148,7 +194,7 @@ export function ActivityHeatmap({ days, weeks = 16 }: Props) {
             <div key={wi} className="flex flex-col" style={{ gap: GAP }}>
               {week.map(day => {
                 const level = getLevel(day.count)
-                const isFuture = new Date(day.date + 'T00:00:00') > new Date()
+                const isFuture = parseCN(day.date) > parseCN(todayStr)
                 return (
                   <div
                     key={day.date}

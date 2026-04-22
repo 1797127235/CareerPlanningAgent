@@ -50,7 +50,15 @@ def diagnose(
             graph_match = _jd_svc.match_to_graph_node(extracted, graph)
             if graph_match:
                 node = graph.get_node(graph_match["node_id"])
-                raw_routes = graph.find_escape_routes(graph_match["node_id"], db_session=db)
+                profile_skills = [
+                    s.get("name", s) if isinstance(s, dict) else s
+                    for s in profile_data.get("skills", [])
+                ]
+                raw_routes = graph.find_escape_routes(
+                    graph_match["node_id"],
+                    profile_skills=profile_skills,
+                    db_session=db,
+                )
                 graph_context = {
                     "node_id": graph_match["node_id"],
                     "label": graph_match["label"],
@@ -71,6 +79,9 @@ def diagnose(
         except Exception:
             pass  # graph context is best-effort
 
+    # Build inline coach insight
+    result["coach_insight"] = _build_coach_insight(db, user.id, title, result)
+
     # Persist diagnosis (include graph_context in result_json)
     if graph_context:
         result["graph_context"] = graph_context
@@ -86,6 +97,28 @@ def diagnose(
     db.commit()
     db.refresh(row)
 
+    # Coach intervention: JD diagnosis complete
+    try:
+        from backend.routers.guidance import create_coach_intervention
+        match_score = result.get("match_score", 0)
+        gap_skills = result.get("gap_skills", [])
+        gap_count = len(gap_skills)
+        if gap_count > 0:
+            body = f"匹配度 {match_score}%，发现 {gap_count} 个技能缺口。要我帮你生成补强计划吗？"
+        else:
+            body = f"匹配度 {match_score}%，核心技能基本覆盖。继续记录投递进展吧。"
+        create_coach_intervention(
+            db=db,
+            user_id=user.id,
+            trigger_type="jd_diagnosis_complete",
+            title="JD 诊断完成",
+            body=body,
+            cta_label="生成计划" if gap_count > 0 else "查看结果",
+            cta_route="/jd-diagnosis",
+        )
+    except Exception:
+        pass  # Don't fail the diagnosis if intervention creation fails
+
     return {
         "id": row.id,
         "match_score": result.get("match_score", 0),
@@ -95,6 +128,7 @@ def diagnose(
         "extracted_skills": extracted,
         "resume_tips": result.get("resume_tips", []),
         "graph_context": graph_context,
+        "coach_insight": result.get("coach_insight"),
     }
 
 
@@ -165,6 +199,7 @@ def get_diagnosis(
             result["extracted_skills"] = detail.get("extracted_skills", [])
             result["resume_tips"] = detail.get("resume_tips", [])
             result["graph_context"] = detail.get("graph_context")
+            result["coach_insight"] = detail.get("coach_insight")
         except Exception:
             pass
 
@@ -242,3 +277,110 @@ def delete_diagnosis(
     db.delete(row)
     db.commit()
     return {"success": True, "message": "已删除"}
+
+
+# ── Coach insight generator ────────────────────────────────────────────────
+
+def _skill_name(item):
+    if isinstance(item, dict):
+        return item.get("skill") or item.get("name") or str(item)
+    return str(item)
+
+
+def _build_coach_insight(db: Session, user_id: int, jd_title: str, result: dict) -> dict:
+    """基于当前诊断结果和用户历史诊断，生成 Inline 教练洞察卡片数据。"""
+    match_score = result.get("match_score", 0)
+    gap_skills = result.get("gap_skills", [])
+    matched_skills = result.get("matched_skills", [])
+    current_gap_names = [_skill_name(g) for g in gap_skills]
+
+    # 获取用户最近 3 次历史诊断
+    recent = (
+        db.query(JDDiagnosis)
+        .filter(JDDiagnosis.user_id == user_id)
+        .order_by(JDDiagnosis.created_at.desc())
+        .limit(3)
+        .all()
+    )
+
+    # 收集历史缺口技能
+    historical_gaps = []
+    for d_row in recent:
+        d_detail = json.loads(d_row.result_json or "{}")
+        historical_gaps.extend([_skill_name(g) for g in d_detail.get("gap_skills", [])])
+
+    # 统计当前缺口在历史中的出现频率
+    freq = {}
+    for hg in historical_gaps:
+        if hg in current_gap_names:
+            freq[hg] = freq.get(hg, 0) + 1
+
+    # 高优先级缺口
+    high_priority = [
+        _skill_name(g)
+        for g in gap_skills
+        if isinstance(g, dict) and g.get("priority") == "high"
+    ]
+
+    # 选择关键缺口：高优先级 > 共性缺口 > 第一个缺口
+    key_gap = None
+    if high_priority:
+        key_gap = high_priority[0]
+    elif freq:
+        key_gap = max(freq, key=freq.get)
+    elif current_gap_names:
+        key_gap = current_gap_names[0]
+
+    # 构建证据链
+    evidence = []
+    if key_gap and freq.get(key_gap, 0) > 0:
+        evidence.append(f"你最近诊断的 {len(recent)} 份 JD 中，{freq[key_gap]} 份也要求了 {key_gap}")
+    if key_gap and key_gap in high_priority:
+        evidence.append(f"{key_gap} 被标记为高优先级缺口")
+
+    if not current_gap_names:
+        return {
+            "type": "jd_diagnosis_complete",
+            "title": f"JD 诊断完成 · 匹配度 {match_score}%",
+            "insight": "核心技能基本覆盖，竞争力不错。建议尽快投递并记录进展，让教练跟踪你的实战成长。",
+            "evidence": [f"已匹配 {len(matched_skills)} 项核心技能"],
+            "cta": {"text": "记录投递进展", "action": "navigate", "target": "/growth-log"},
+            "secondary_cta": {
+                "text": "和教练聊聊",
+                "action": "open_chat",
+                "prompt": f"我诊断了{jd_title}，匹配度{match_score}%，接下来该做什么？",
+            },
+        }
+
+    # 有缺口时的洞察文案
+    insight_parts = [f"这份 JD 有 {len(current_gap_names)} 个技能缺口。"]
+    if key_gap:
+        if freq.get(key_gap, 0) > 0:
+            insight_parts.append(
+                f"{key_gap} 是优先级最高的——它在你的历史诊断中也频繁出现，"
+                f"说明这是该方向的共性要求，不是个别现象。"
+            )
+        elif key_gap in high_priority:
+            insight_parts.append(f"{key_gap} 被标记为高优先级缺口，建议优先补强。")
+        else:
+            insight_parts.append(f"其中 {key_gap} 建议优先关注。")
+
+    gap_list = ", ".join(current_gap_names[:5])
+    prompt_base = f"基于{jd_title}的诊断结果（匹配度{match_score}%，缺口：{gap_list}）"
+
+    return {
+        "type": "jd_diagnosis_complete",
+        "title": f"JD 诊断完成 · 匹配度 {match_score}%",
+        "insight": "".join(insight_parts),
+        "evidence": evidence,
+        "cta": {
+            "text": "生成补强计划",
+            "action": "open_chat",
+            "prompt": f"{prompt_base}，帮我生成一份补强计划。",
+        },
+        "secondary_cta": {
+            "text": "和教练聊聊",
+            "action": "open_chat",
+            "prompt": f"{prompt_base}。这份诊断结果说明了什么？我应该优先补哪个技能？",
+        },
+    }

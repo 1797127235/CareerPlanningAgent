@@ -60,7 +60,7 @@ export function PlanRow({ entry, onToggle, onDrop, onUpdate }: PlanRowProps) {
 
   if (editing) {
     return (
-      <div className="flex items-center gap-2 py-3 border-t border-slate-200">
+      <div className="flex items-center gap-2 py-3 border-t border-black/[0.06]">
         <input
           autoFocus
           value={draft}
@@ -72,13 +72,13 @@ export function PlanRow({ entry, onToggle, onDrop, onUpdate }: PlanRowProps) {
               setEditing(false)
             }
           }}
-          className="flex-1 px-2 py-1 text-[14px] border border-slate-300 rounded-md outline-none focus:border-blue-500"
+          className="flex-1 px-2 py-1 text-[14px] border border-black/[0.06] rounded-md outline-none focus:border-[var(--blue)] bg-white/60"
         />
         <button
           onClick={saveEdit}
           disabled={saving}
           title="保存"
-          className="p-1 text-slate-400 hover:text-blue-600 disabled:opacity-40 cursor-pointer"
+          className="p-1 text-[var(--text-3)] hover:text-[var(--blue)] disabled:opacity-40 cursor-pointer"
         >
           <Check className="w-4 h-4" />
         </button>
@@ -89,7 +89,7 @@ export function PlanRow({ entry, onToggle, onDrop, onUpdate }: PlanRowProps) {
           }}
           disabled={saving}
           title="取消"
-          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-40 cursor-pointer"
+          className="p-1 text-[var(--text-3)] hover:text-[var(--text-2)] disabled:opacity-40 cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -101,7 +101,7 @@ export function PlanRow({ entry, onToggle, onDrop, onUpdate }: PlanRowProps) {
     <>
       <div
         className={[
-          'group flex items-center justify-between gap-3 py-3 border-t border-slate-200 select-none',
+          'group flex items-center justify-between gap-3 py-3 select-none',
           fading ? 'opacity-0 transition-opacity duration-200' : 'opacity-100',
         ].join(' ')}
       >
@@ -111,17 +111,17 @@ export function PlanRow({ entry, onToggle, onDrop, onUpdate }: PlanRowProps) {
             className={[
               'shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-colors cursor-pointer',
               checked
-                ? 'bg-blue-600 border-blue-600'
-                : 'bg-white border-slate-300 hover:border-blue-500',
+                ? 'bg-[var(--blue)] border-[var(--blue)]'
+                : 'bg-white/60 border-black/[0.08] hover:border-[var(--blue)]/50',
             ].join(' ')}
             aria-label="完成计划"
           >
             {checked && <Check className="w-3.5 h-3.5 text-white" />}
           </button>
-          <span className="text-[14px] text-slate-800 truncate">{entry.content}</span>
+          <span className="text-[14px] text-[var(--text-1)] truncate">{entry.content}</span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[12px] text-slate-400">{fmtDue(entry.due_at)}</span>
+          <span className="text-[12px] text-[var(--text-3)]">{fmtDue(entry.due_at)}</span>
           {onUpdate && (
             <button
               onClick={() => {
@@ -130,7 +130,7 @@ export function PlanRow({ entry, onToggle, onDrop, onUpdate }: PlanRowProps) {
               }}
               title="编辑"
               aria-label="编辑计划"
-              className="p-1 text-slate-300 hover:text-blue-600 transition-colors cursor-pointer"
+              className="p-1 text-[var(--text-3)] hover:text-[var(--blue)] transition-colors cursor-pointer"
             >
               <Pencil className="w-3.5 h-3.5" />
             </button>
@@ -139,7 +139,7 @@ export function PlanRow({ entry, onToggle, onDrop, onUpdate }: PlanRowProps) {
             onClick={() => setConfirmOpen(true)}
             title="放弃计划"
             aria-label="放弃计划"
-            className="p-1 text-slate-300 hover:text-red-600 transition-colors cursor-pointer"
+            className="p-1 text-[var(--text-3)] hover:text-red-500 transition-colors cursor-pointer"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>

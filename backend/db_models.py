@@ -555,8 +555,8 @@ class ChatMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
 
-from backend.market_signal_model import MarketSignal  # noqa: F401
-from backend.city_market_signal_model import CityMarketSignal  # noqa: F401
+from backend.services.market_signals import MarketSignal  # noqa: F401
+from backend.services.market_signals import CityMarketSignal  # noqa: F401
 
 
 class UserNotification(Base):
@@ -569,13 +569,17 @@ class UserNotification(Base):
     )
     kind: Mapped[str] = mapped_column(
         String(32), nullable=False, index=True
-    )  # 'jd_followup' | 'inactive_nudge' | 'milestone_due' | 'tracked_company_update'
+    )  # 'jd_followup' | 'inactive_nudge' | 'milestone_due' | 'tracked_company_update' | 'coach_intervention'
+    trigger_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default=""
+    )  # 'profile_ready' | 'recommendations_ready' | 'jd_diagnosis_complete' | 'stage_changed'
     title: Mapped[str] = mapped_column(String(128), nullable=False)
     body: Mapped[str] = mapped_column(String(500), nullable=False)
     cta_label: Mapped[str | None] = mapped_column(String(32), nullable=True)  # "去投递" / "去更新"
     cta_route: Mapped[str | None] = mapped_column(String(128), nullable=True)  # "/growth-log" 等
     dismissed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, index=True)
 
 

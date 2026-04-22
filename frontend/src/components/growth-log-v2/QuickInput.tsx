@@ -6,9 +6,10 @@ interface QuickInputProps {
   onSent?: () => void
   onAddEntry: (data: Partial<GrowthEntry>) => Promise<unknown> | unknown
   initialText?: string
+  textareaRef?: React.RefObject<HTMLTextAreaElement | null>
 }
 
-export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputProps) {
+export function QuickInput({ onSent, onAddEntry, initialText = '', textareaRef }: QuickInputProps) {
   const [content, setContent] = useState(initialText)
   const [tags, setTags] = useState<string[]>([])
   const [isPlan, setIsPlan] = useState(false)
@@ -16,6 +17,8 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
   const [customDate, setCustomDate] = useState('')
   const [sending, setSending] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const internalRef = useRef<HTMLTextAreaElement | null>(null)
+  const inputRef = textareaRef ?? internalRef
 
   // 只在 initialText 首次非空时应用（例如从报告跳转过来带 prefill），避免覆盖用户草稿
   const appliedInitial = useRef(false)
@@ -96,19 +99,21 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
 
   return (
     <>
-      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="glass-static p-4">
+        <div className="g-inner">
         <textarea
+          ref={inputRef}
           aria-label="档案内容"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           rows={3}
-          className="w-full px-3 py-2 text-[14px] text-slate-800 placeholder:text-slate-400 outline-none resize-none"
+          className="w-full px-3 py-2 text-[14px] text-[var(--text-1)] placeholder:text-[var(--text-3)] outline-none resize-none bg-transparent"
           placeholder="写点什么…"
         />
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-wrap">
             <TagChips tags={tags} onChange={setTags} />
-            <label className="flex items-center gap-1.5 text-[12px] text-slate-600 cursor-pointer select-none">
+            <label className="flex items-center gap-1.5 text-[12px] text-[var(--text-2)] cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={isPlan}
@@ -122,7 +127,7 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
                 <select
                   value={dueType}
                   onChange={(e) => setDueType(e.target.value as any)}
-                  className="text-[12px] border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-blue-500 bg-white"
+                  className="text-[12px] border border-black/[0.06] rounded-md px-2 py-1 outline-none focus:border-[var(--blue)]/40 bg-white/60"
                 >
                   <option value="daily">今天</option>
                   <option value="weekly">本周</option>
@@ -133,7 +138,7 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
                     type="datetime-local"
                     value={customDate}
                     onChange={(e) => setCustomDate(e.target.value)}
-                    className="text-[12px] border border-slate-300 rounded-md px-2 py-1 outline-none focus:border-blue-500"
+                    className="text-[12px] border border-black/[0.06] rounded-md px-2 py-1 outline-none focus:border-[var(--blue)]/40 bg-white/60"
                   />
                 )}
               </div>
@@ -145,15 +150,15 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
               className={[
                 'px-4 py-1.5 text-[12px] font-semibold rounded-md transition-colors cursor-pointer',
                 sendable
-                  ? 'text-white bg-slate-900 hover:bg-blue-700'
-                  : 'text-slate-400 bg-slate-100 hover:bg-slate-200',
+                  ? 'text-white bg-[var(--text-1)] hover:bg-[var(--blue)]'
+                  : 'text-[var(--text-3)] bg-black/[0.04] hover:bg-black/[0.08]',
               ].join(' ')}
             >
               {sending ? '发送中…' : '发送'}
             </button>
           </div>
         </div>
-        <div className="mt-2 text-[11px] text-slate-400 min-h-[16px]">
+        <div className="mt-2 text-[11px] text-[var(--text-3)] min-h-[16px]">
           {!content.trim()
             ? '先写点内容再发送'
             : tags.length === 0
@@ -163,13 +168,12 @@ export function QuickInput({ onSent, onAddEntry, initialText = '' }: QuickInputP
                 : ''}
         </div>
         {errorMsg && (
-          <div className="mt-1 px-3 py-2 text-[12px] text-red-700 bg-red-50 border border-red-200 rounded-md">
+          <div className="mt-1 px-3 py-2 text-[12px] text-red-700 bg-red-50/60 border border-red-200/60 rounded-md">
             {errorMsg}
           </div>
         )}
+        </div>
       </div>
-
-
     </>
   )
 }

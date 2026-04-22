@@ -13,6 +13,11 @@ const TYPE_LABEL: Record<string, string> = {
 }
 
 const STAGE_NUMERAL = ['一', '二', '三']
+const STAGE_TIME_LABEL: Record<number, string> = {
+  1: '短期',
+  2: '中期',
+  3: '长期',
+}
 
 interface ChapterIVProps {
   data: ReportV2Data
@@ -21,11 +26,12 @@ interface ChapterIVProps {
 }
 
 function StageHeader({ stage }: { stage: PlanStage }) {
+  const timeLabel = STAGE_TIME_LABEL[stage.stage] || `阶段${STAGE_NUMERAL[stage.stage - 1] || stage.stage}`
   return (
     <div className="mt-12 first:mt-0">
       <div className="flex items-baseline gap-3 mb-2">
-        <span className="text-[11px] font-bold uppercase tracking-[0.22em] text-blue-600">
-          阶段{STAGE_NUMERAL[stage.stage - 1] || stage.stage}
+        <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-[11px] font-bold uppercase tracking-[0.18em]">
+          {timeLabel}
         </span>
         <span className="text-[11px] font-medium text-slate-400 tabular-nums">
           {stage.duration}

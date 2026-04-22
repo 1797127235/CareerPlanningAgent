@@ -39,10 +39,10 @@ export function TagChips({ tags, onChange }: TagChipsProps) {
             key={preset}
             onClick={() => togglePreset(preset)}
             className={[
-              'px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide transition-colors cursor-pointer',
+              'chip text-[11px] font-semibold tracking-wide cursor-pointer',
               active
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-100 text-slate-500 hover:bg-slate-200',
+                ? '!bg-[var(--blue)] !text-white !border-[var(--blue)]/30'
+                : 'text-[var(--text-2)]',
             ].join(' ')}
           >
             #{preset}
@@ -66,13 +66,13 @@ export function TagChips({ tags, onChange }: TagChipsProps) {
             if (inputValue.trim()) addCustom()
             else setShowInput(false)
           }}
-          className="w-24 px-2 py-1 text-[11px] border border-slate-300 rounded-full outline-none focus:border-blue-500"
+          className="w-24 px-2 py-1 text-[11px] rounded-full outline-none bg-white/60 border border-black/[0.06] focus:border-[var(--blue)]/40"
           placeholder="回车添加"
         />
       ) : (
         <button
           onClick={() => setShowInput(true)}
-          className="px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+          className="chip text-[11px] font-semibold tracking-wide text-[var(--text-3)] hover:text-[var(--text-2)] cursor-pointer"
         >
           +自定义
         </button>
@@ -83,7 +83,7 @@ export function TagChips({ tags, onChange }: TagChipsProps) {
         .map((t) => (
           <span
             key={t}
-            className="px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide bg-blue-600 text-white flex items-center gap-1"
+            className="chip text-[11px] font-semibold tracking-wide bg-[var(--blue)] text-white flex items-center gap-1"
           >
             #{t}
             <button

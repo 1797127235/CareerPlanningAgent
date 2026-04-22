@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react'
+import { flushSync } from 'react-dom'
 import { API_BASE } from '@/api/client'
 
 export interface CardData {
@@ -167,14 +168,26 @@ export function useChat(onComplete?: () => void): UseChatReturn {
           let pendingJdCards: JdCardData[] | undefined
           let pendingMarketCards: MarketCardData[] | undefined
           let pendingAgent: string | undefined
+          const readT0 = performance.now()
 
           while (true) {
             const { done, value } = await reader.read()
-            if (done) break
+            const readDt = performance.now() - readT0
+            if (done) {
+              console.log('[SSE-DIAG] read done at', readDt.toFixed(0), 'ms')
+              break
+            }
+            const chunkBytes = value?.length ?? value?.byteLength ?? 0
+            console.log('[SSE-DIAG] read chunk at', readDt.toFixed(0), 'ms, bytes=', chunkBytes)
 
             buffer += decoder.decode(value, { stream: true })
             const lines = buffer.split('\n')
             buffer = lines.pop() ?? ''
+
+            // Count content lines in this read batch. If multiple arrive at once
+            // (e.g. Vite proxy buffered them), we yield to the browser between
+            // updates so the user sees a typing effect instead of a single flash.
+            let _contentLinesInBatch = 0
 
             for (const line of lines) {
               if (line.startsWith('data:')) {
@@ -183,8 +196,23 @@ export function useChat(onComplete?: () => void): UseChatReturn {
                 try {
                   const parsed = JSON.parse(raw) as { content?: string; session_id?: number; card?: CardData; jd_cards?: JdCardData[]; market_cards?: MarketCardData[]; agent?: string }
                   if (parsed.content) {
-                    accumulated += parsed.content
-                    setCurrentStreamText(accumulated)
+                    const text = parsed.content
+                    // Heuristic: if the new text starts with what we already have,
+                    // it's cumulative (full text so far) — replace; otherwise append.
+                    if (accumulated && text.startsWith(accumulated) && text.length > accumulated.length) {
+                      accumulated = text
+                    } else {
+                      accumulated += text
+                    }
+                    flushSync(() => {
+                      setCurrentStreamText(accumulated)
+                    })
+                    _contentLinesInBatch++
+                    // If this read() contained multiple content chunks, give the
+                    // browser a frame to paint between updates.
+                    if (_contentLinesInBatch > 1) {
+                      await new Promise((resolve) => requestAnimationFrame(resolve))
+                    }
                   }
                   if (parsed.session_id != null) {
                     updateSessionId(parsed.session_id)

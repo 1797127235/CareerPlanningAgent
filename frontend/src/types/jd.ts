@@ -35,6 +35,25 @@ export interface GraphContext {
   }>
 }
 
+export interface CoachInsight {
+  type: string
+  title: string
+  insight: string
+  evidence: string[]
+  cta: {
+    text: string
+    action: 'open_chat' | 'navigate' | 'execute'
+    target?: string
+    prompt?: string
+  }
+  secondary_cta?: {
+    text: string
+    action: 'open_chat' | 'navigate' | 'execute'
+    target?: string
+    prompt?: string
+  }
+}
+
 export interface DiagnoseResult {
   id: number
   match_score: number
@@ -44,6 +63,7 @@ export interface DiagnoseResult {
   extracted_skills: string[]
   resume_tips?: string[]
   graph_context?: GraphContext | null
+  coach_insight?: CoachInsight | null
 }
 
 export interface DiagnosisRecord {

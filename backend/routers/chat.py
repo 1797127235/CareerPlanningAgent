@@ -1,6 +1,7 @@
 """SSE chat endpoint — streams Supervisor multi-agent responses + session persistence."""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -31,8 +32,6 @@ from backend.db_models import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-_supervisor = None
 
 # ── Market card extraction ────────────────────────────────────────────────────
 
@@ -198,15 +197,6 @@ def _get_card_for_node(node_id: str) -> dict | None:
     }
 
 
-def _get_supervisor():
-    global _supervisor
-    if _supervisor is None:
-        from agent.supervisor import build_supervisor
-
-        _supervisor = build_supervisor()
-    return _supervisor
-
-
 class PageContext(BaseModel):
     route: str = ""
     label: str = ""
@@ -222,7 +212,7 @@ class ChatRequest(BaseModel):
 
 def _hydrate_state(user: User, db: Session) -> dict:
     """Build a rich initial CareerState from the user's DB data."""
-    from backend.services.career_stage import determine_stage
+    from backend.services.stage import determine_stage
 
     state: dict = {
         "user_id": user.id,
@@ -525,7 +515,7 @@ def _build_greeting(user: User, db: Session) -> dict:
 
     if stage == "no_profile":
         greeting = (
-            f"嗨！我是你的职业成长教练。\n\n"
+            f"嗨！我是你的智析教练。\n\n"
             f"我们先从了解你开始——上传一份简历，我帮你做能力画像和方向分析。"
         )
         chips = [
@@ -876,6 +866,7 @@ def _update_coach_memo(session_id: int, user_id: int) -> None:
 async def _build_event_stream(req: ChatRequest, user: User, db: Session):
     """Core SSE generator — plain `data:` lines, no named events."""
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage as LCToolMessage, SystemMessage as LCSystemMessage
+    from agent.supervisor import stream_chat_response
 
     # ── Step 1: Create/load session FIRST, send session_id immediately ──
     try:
@@ -910,7 +901,6 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
         session = None
 
     # ── Step 2: Load conversation history + stream LLM response ──
-    supervisor = _get_supervisor()
     initial_state = _hydrate_state(user, db)
 
     messages = []
@@ -976,11 +966,9 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
     import re as _re
 
     try:
-        async for msg_chunk, metadata in supervisor.astream(
-            initial_state,
-            stream_mode="messages",
-        ):
+        async for msg_chunk, metadata in stream_chat_response(initial_state):
             node_name = metadata.get("langgraph_node", "")
+            is_native_stream = metadata.get("streaming", False)
 
             # ── Tool messages arrive complete (not chunked) ─────────────────
             if isinstance(msg_chunk, LCToolMessage):
@@ -1015,18 +1003,29 @@ async def _build_event_stream(req: ChatRequest, user: User, db: Session):
                     yield f"data: {json.dumps({'agent': agent_source}, ensure_ascii=False)}\n\n"
 
             full_response += _chunk_content
-            _stream_tail += _chunk_content
 
-            # Flush safe prefix (all but last _TAIL chars) to avoid emitting partial markers
-            if len(_stream_tail) > _TAIL:
-                _safe = _stream_tail[:-_TAIL]
-                _safe = _re.sub(r'\[COACH_RESULT_ID:\d+\]', '', _safe)
-                if _safe:
+            if is_native_stream:
+                # Native streaming: yield immediately, no tail buffer needed
+                _clean = _re.sub(r'\[COACH_RESULT_ID:\d+\]', '', _chunk_content)
+                if _clean:
                     if not _first_chunk_logged:
                         logger.info("TTFT: %.0f ms user=%d", (_time.time()-_ttft_start)*1000, user.id)
                         _first_chunk_logged = True
-                    yield f"data: {json.dumps({'content': _safe}, ensure_ascii=False)}\n\n"
-                _stream_tail = _stream_tail[-_TAIL:]
+                    logger.info("SSE yield chunk: len=%d content=%r", len(_clean), _clean[:30])
+                    yield f"data: {json.dumps({'content': _clean}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0)
+            else:
+                _stream_tail += _chunk_content
+                # Flush safe prefix (all but last _TAIL chars) to avoid emitting partial markers
+                if len(_stream_tail) > _TAIL:
+                    _safe = _stream_tail[:-_TAIL]
+                    _safe = _re.sub(r'\[COACH_RESULT_ID:\d+\]', '', _safe)
+                    if _safe:
+                        if not _first_chunk_logged:
+                            logger.info("TTFT: %.0f ms user=%d", (_time.time()-_ttft_start)*1000, user.id)
+                            _first_chunk_logged = True
+                        yield f"data: {json.dumps({'content': _safe}, ensure_ascii=False)}\n\n"
+                    _stream_tail = _stream_tail[-_TAIL:]
 
     except Exception as e:
         logger.exception("Chat stream error")
@@ -1247,7 +1246,15 @@ async def chat(
             yield 'data: {"error": "服务异常，请稍后重试"}\n\n'
             yield "data: [DONE]\n\n"
 
-    return StreamingResponse(_guarded_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        _guarded_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ── FR37: Chat session CRUD ──────────────────────────────────────────────────

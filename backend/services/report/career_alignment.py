@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from backend.services.report.loaders import _load_graph_nodes
+from backend.services.report.data import _load_graph_nodes
 
 logger = logging.getLogger(__name__)
 

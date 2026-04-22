@@ -28,6 +28,7 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import { useProfileData } from '@/hooks/useProfileData'
 import { formatDateShort } from '@/utils/format'
+import { CoachInsightCard } from '@/components/CoachInsightCard'
 
 const ease = [0.23, 1, 0.32, 1] as const
 
@@ -494,10 +495,14 @@ function DiagnosisResult({ data }: { data: JDDiagnosisDetail }) {
           </motion.div>
         )}
 
+        {data.coach_insight && (
+          <CoachInsightCard insight={data.coach_insight} delay={0.38} />
+        )}
+
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.4, ease }}
+          transition={{ delay: 0.45, duration: 0.4, ease }}
           className="glass p-5 flex items-center justify-between"
         >
           <div className="flex items-center gap-3">

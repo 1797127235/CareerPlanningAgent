@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowUp, Bot, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
+import { ArrowUp, Compass, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -296,8 +296,8 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
         className={`h-12 flex items-center justify-between px-4 shrink-0 border-b border-black/[0.06] select-none ${isPanel ? '' : 'rounded-t-2xl cursor-grab active:cursor-grabbing'}`}
       >
         <div className="flex items-center gap-2">
-          <Bot className="w-4 h-4 text-[var(--blue)]" />
-          <span className="text-[14px] font-semibold text-slate-800">成长教练</span>
+          <Compass className="w-4 h-4 text-[var(--blue)]" />
+          <span className="text-[14px] font-semibold text-slate-800">智析教练</span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -412,7 +412,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
                 <div className="bg-white/60 rounded-xl p-3 border border-white/80 shadow-sm message-enter">
                   <div className="flex items-center gap-2 mb-2">
                     <div className="w-6 h-6 rounded-lg bg-[var(--blue)] flex items-center justify-center">
-                      <Bot className="w-3.5 h-3.5 text-white" />
+                      <Compass className="w-3.5 h-3.5 text-white" />
                     </div>
                     <span className="text-[12px] font-semibold text-slate-500">智析教练</span>
                   </div>
@@ -423,7 +423,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
                 </div>
               ) : (
                 <div className="flex flex-col items-center text-center">
-                  <Bot className="w-10 h-10 text-[var(--blue)]/30 mb-3" />
+                  <Compass className="w-10 h-10 text-[var(--blue)]/30 mb-3" />
                   <p className="text-[13px] text-slate-400">随时可以开始对话</p>
                 </div>
               )}
@@ -485,7 +485,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
                 <div className="mb-4">
                   <div className="flex items-center gap-2 mb-1.5">
                     <div className={`w-6 h-6 rounded-lg ${sCfg.color} flex items-center justify-center text-white`}>
-                      <Bot className="w-3.5 h-3.5" />
+                      <Compass className="w-3.5 h-3.5" />
                     </div>
                     <span className="text-[12px] font-semibold text-slate-500">{sCfg.name}</span>
                   </div>
@@ -501,7 +501,7 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
               <div className="mb-4 message-enter">
                 <div className="flex items-center gap-2 mb-1.5">
                   <div className="w-6 h-6 rounded-lg bg-slate-500 flex items-center justify-center text-white">
-                    <Bot className="w-3.5 h-3.5" />
+                    <Compass className="w-3.5 h-3.5" />
                   </div>
                   <span className="text-[12px] font-semibold text-slate-500">思考中</span>
                 </div>
@@ -853,7 +853,7 @@ function PanelBubble({
     <div className="mb-4 group message-enter">
       <div className="flex items-center gap-2 mb-1.5">
         <div className={`w-6 h-6 rounded-lg ${agentCfg.color} flex items-center justify-center text-white`}>
-          <Bot className="w-3.5 h-3.5" />
+          <Compass className="w-3.5 h-3.5" />
         </div>
         <span className="text-[12px] font-semibold text-slate-500">{agentCfg.name}</span>
         {onTTSToggle && (

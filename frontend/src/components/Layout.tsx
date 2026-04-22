@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
-import { Bot, PanelRightOpen } from 'lucide-react'
+import { Compass, PanelRightOpen } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useJustUploaded } from '@/hooks/useResumeUpload'
 import { Sidebar } from '@/components/Sidebar'
@@ -58,6 +58,12 @@ export function Layout() {
     }
   }, [justUploaded, navigate])
 
+  // Listen for external "open coach panel" requests
+  useEffect(() => {
+    const handler = () => setCoachOpen(true)
+    window.addEventListener('coach-open', handler)
+    return () => window.removeEventListener('coach-open', handler)
+  }, [])
 
   return (
     <div className="h-screen overflow-hidden flex text-[var(--text-1)] font-sans relative z-[1]">
@@ -97,9 +103,9 @@ export function Layout() {
             <button
               onClick={() => setCoachOpen(true)}
               className="w-10 h-10 rounded-xl bg-[var(--blue)] text-white flex items-center justify-center shadow-lg shadow-blue-500/20 hover:scale-105 active:scale-95 transition-transform cursor-pointer"
-              title="展开成长教练"
+              title="展开智析教练"
             >
-              <Bot className="w-5 h-5" />
+              <Compass className="w-5 h-5" />
             </button>
             <button
               onClick={() => setCoachOpen(true)}
@@ -113,7 +119,7 @@ export function Layout() {
               style={{ writingMode: 'vertical-rl' }}
               onClick={() => setCoachOpen(true)}
             >
-              成长教练
+              智析教练
             </span>
           </div>
         )}
@@ -146,9 +152,9 @@ function MobileCoachToggle() {
             hover:scale-105 active:scale-95
             transition-transform cursor-pointer
           "
-          title="打开成长教练"
+          title="打开智析教练"
         >
-          <Bot className="w-5 h-5" />
+          <Compass className="w-5 h-5" />
         </button>
       )}
     </>

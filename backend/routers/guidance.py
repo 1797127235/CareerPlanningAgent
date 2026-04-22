@@ -282,27 +282,32 @@ class HeartbeatDismissBody(BaseModel):
     notification_id: int
 
 
+def _filter_expired(query):
+    """排除已过期的通知（expires_at 不为空且 <= now）。"""
+    now = datetime.now(timezone.utc)
+    return query.filter(
+        (UserNotification.expires_at.is_(None))
+        | (UserNotification.expires_at > now)
+    )
+
+
 @router.get("/heartbeat")
 def get_heartbeat(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """拉取未读的 heartbeat 通知，最多 3 条。"""
-    notes = (
-        db.query(UserNotification)
-        .filter(
-            UserNotification.user_id == user.id,
-            UserNotification.dismissed == False,  # noqa: E712
-        )
-        .order_by(UserNotification.created_at.desc())
-        .limit(3)
-        .all()
+    q = db.query(UserNotification).filter(
+        UserNotification.user_id == user.id,
+        UserNotification.dismissed == False,  # noqa: E712
     )
+    notes = _filter_expired(q).order_by(UserNotification.created_at.desc()).limit(3).all()
     return {
         "notifications": [
             {
                 "id": n.id,
                 "kind": n.kind,
+                "trigger_type": n.trigger_type,
                 "title": n.title,
                 "body": n.body,
                 "cta_label": n.cta_label,
@@ -335,3 +340,51 @@ def dismiss_heartbeat(
     note.dismissed_at = datetime.now(timezone.utc)
     db.commit()
     return {"ok": True}
+
+
+# ── Coach intervention helpers (used by other routers) ───────────────────────
+
+def create_coach_intervention(
+    db: Session,
+    user_id: int,
+    trigger_type: str,
+    title: str,
+    body: str,
+    cta_label: str = "",
+    cta_route: str = "",
+    ttl_hours: int = 168,
+) -> bool:
+    """Create a coach intervention notification if the user hasn't received
+    the same trigger_type within the TTL window (default 7 days).
+    Returns True if created, False if skipped (dedup).
+    """
+    from datetime import timedelta
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=ttl_hours)
+    dup = (
+        db.query(UserNotification)
+        .filter(
+            UserNotification.user_id == user_id,
+            UserNotification.trigger_type == trigger_type,
+            UserNotification.created_at >= cutoff,
+        )
+        .first()
+    )
+    if dup:
+        logger.info("[CoachIntervention] skipped: dup found for user=%s trigger=%s", user_id, trigger_type)
+        return False
+
+    note = UserNotification(
+        user_id=user_id,
+        kind="coach_intervention",
+        trigger_type=trigger_type,
+        title=title,
+        body=body,
+        cta_label=cta_label or None,
+        cta_route=cta_route or None,
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=ttl_hours) if ttl_hours else None,
+    )
+    db.add(note)
+    db.commit()
+    logger.info("[CoachIntervention] created: user=%s trigger=%s id=%s", user_id, trigger_type, note.id)
+    return True
