@@ -15,7 +15,7 @@ def locate_on_graph(profile_json: str) -> str:
         return "画像数据格式错误，请提供有效的JSON字符串。"
 
     try:
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
         from backend.services.profile_service import ProfileService
 
         graph_svc = GraphService()
@@ -105,7 +105,7 @@ def score_profile(profile_json: str, node_id: str) -> str:
         return "需要指定目标岗位的 node_id 才能进行评分。"
 
     try:
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
         from backend.services.profile_service import ProfileService
 
         graph_svc = GraphService()

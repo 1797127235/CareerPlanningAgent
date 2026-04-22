@@ -841,7 +841,7 @@ def _auto_locate_on_graph(
         len(profile_data.get("skills", [])),
     )
     try:
-        from backend.services.graph_service import get_graph_service
+        from backend.services.graph import get_graph_service
 
         graph = get_graph_service(db)
 

@@ -26,7 +26,7 @@ from backend.models import (
 
 logger = logging.getLogger(__name__)
 
-from backend.services.stage import compute_stage
+from backend.services.growth.stage import compute_stage
 
 router = APIRouter()
 

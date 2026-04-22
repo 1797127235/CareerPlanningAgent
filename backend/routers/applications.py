@@ -18,7 +18,7 @@ from backend.models import (
     Profile,
     User,
 )
-from backend.services.debrief_service import DebriefService
+from backend.services.interview.debrief import DebriefService
 
 router = APIRouter()
 _debrief_svc = DebriefService()

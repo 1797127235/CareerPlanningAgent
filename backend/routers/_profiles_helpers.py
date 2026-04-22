@@ -27,7 +27,7 @@ def _get_or_create_profile(user_id: int, db: Session) -> Profile:
 
 def _resolve_node_label(node_id: str, db: Session) -> str:
     """Resolve node label: try graph service first, then DB, then raw ID."""
-    from backend.services.graph_service import get_graph_service
+    from backend.services.graph import get_graph_service
     g = get_graph_service(db)
     gn = g.get_node(node_id)
     if gn:

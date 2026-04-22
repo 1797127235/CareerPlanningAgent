@@ -22,7 +22,7 @@ class ProfileService:
     """
 
     def __init__(self, graph_service: Any):
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
         self._graph: GraphService = graph_service
         self._profiles_cache: dict[str, Any] | None = None
         self._cross_direction_idf: dict[str, float] | None = None

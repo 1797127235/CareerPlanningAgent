@@ -26,7 +26,7 @@ from backend.models import (
     ProjectRecord,
     User,
 )
-from backend.services.growth_log_service import (
+from backend.services.growth.service import (
     generate_interview_analysis,
 )
 
@@ -196,8 +196,8 @@ def get_growth_dashboard(
 ):
     """获取成长看板数据：目标方向 + 分层技能覆盖率 + 匹配度曲线。"""
     from backend.models import CareerGoal, GrowthSnapshot
-    from backend.services.graph_service import GraphService
-    from backend.services.growth_log_service import _skill_matches
+    from backend.services.graph import GraphService
+    from backend.services.growth.service import _skill_matches
 
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     if not profile:

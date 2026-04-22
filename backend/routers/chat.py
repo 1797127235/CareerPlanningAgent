@@ -212,7 +212,7 @@ class ChatRequest(BaseModel):
 
 def _hydrate_state(user: User, db: Session) -> dict:
     """Build a rich initial CareerState from the user's DB data."""
-    from backend.services.stage import determine_stage
+    from backend.services.growth.stage import determine_stage
 
     state: dict = {
         "user_id": user.id,
@@ -421,7 +421,7 @@ def _get_graph_nodes_for_chat() -> dict:
 
 def _build_greeting(user: User, db: Session) -> dict:
     """Build a stage-aware greeting + dynamic action chips for the chat panel."""
-    from backend.services.stage import compute_stage
+    from backend.services.growth.stage import compute_stage
 
     # Gather user state
     profile = (
@@ -820,7 +820,7 @@ def _update_coach_memo(session_id: int, user_id: int) -> None:
     """
     from backend.db import SessionLocal
     from backend.models import ChatMessage, Profile
-    from backend.services.coach_memory import add_conversation, migrate_legacy_memo
+    from backend.services.coach.memory import add_conversation, migrate_legacy_memo
     from sqlalchemy import func
 
     db = SessionLocal()

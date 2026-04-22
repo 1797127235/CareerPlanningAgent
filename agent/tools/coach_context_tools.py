@@ -172,7 +172,7 @@ def get_memory_recall(query: str = "用户偏好") -> str:
     if not user_id:
         return "用户上下文未注入"
     try:
-        from backend.services.coach_memory import search_user_context
+        from backend.services.coach.memory import search_user_context
         memories = search_user_context(user_id, query, limit=3)
         if not memories:
             return f"未找到关于「{query}」的历史记忆"

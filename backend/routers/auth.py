@@ -50,7 +50,7 @@ def me(user: User = Depends(get_current_user)):
     return ok({"id": user.id, "username": user.username})
 
 
-from backend.services.stage import determine_stage
+from backend.services.growth.stage import determine_stage
 
 @router.get("/me/stage")
 def get_career_stage(

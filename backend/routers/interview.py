@@ -471,7 +471,7 @@ def start_interview(
         # ── Step 2: If bank insufficient, generate via LLM ──
         if questions is None:
             try:
-                from backend.services.interview_skill_loader import build_prompt
+                from backend.services.interview.skill_loader import build_prompt
                 system_prompt, user_prompt = build_prompt(
                     skill_id=skill_id,
                     resume_text=profile_summary,

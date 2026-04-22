@@ -8,7 +8,7 @@ from langchain_core.tools import tool
 def search_jobs(keyword: str) -> str:
     """搜索岗位：按关键词搜索岗位图谱中的岗位节点。返回匹配的岗位列表。"""
     try:
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
 
         svc = GraphService()
         svc.load()
@@ -44,7 +44,7 @@ def recommend_jobs(user_skills: str, preferences_json: str = "") -> str:
             pass
 
     try:
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
 
         svc = GraphService()
         svc.load()
@@ -120,7 +120,7 @@ def recommend_jobs(user_skills: str, preferences_json: str = "") -> str:
 def get_job_detail(job_name: str) -> str:
     """查看岗位详情：查询岗位图谱中指定岗位的详细信息，包括技能要求、AI影响评分等。"""
     try:
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
 
         svc = GraphService()
         svc.load()
@@ -210,7 +210,7 @@ def get_escape_routes(node_id: str) -> str:
         return "需要先定位你在图谱中的位置，才能计算逃生路线。请先完成画像分析。"
 
     try:
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
 
         svc = GraphService()
         svc.load()

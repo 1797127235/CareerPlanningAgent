@@ -328,7 +328,7 @@ def _build_full_context(state: CareerState, for_triage: bool = False) -> str:
         if last_user_msg:
             try:
                 import time as _t
-                from backend.services.coach_memory import search_user_context
+                from backend.services.coach.memory import search_user_context
                 _mem_t0 = _t.time()
                 memories = search_user_context(user_id, last_user_msg, limit=5)
                 _mem_ms = (_t.time() - _mem_t0) * 1000

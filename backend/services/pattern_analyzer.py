@@ -78,7 +78,7 @@ def run_pattern_analysis_all() -> int:
     """扫所有用户，把 pattern 作为结构化记忆写入 Mem0。"""
     from backend.db import SessionLocal
     from backend.models import User
-    from backend.services.coach_memory import get_memory
+    from backend.services.coach.memory import get_memory
 
     db = SessionLocal()
     count = 0

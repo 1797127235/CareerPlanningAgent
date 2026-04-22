@@ -8,7 +8,7 @@ from collections import defaultdict
 from typing import Any
 
 from backend.services.profile.shared import FAMILY_KEYWORDS, _soft_skills_as_list
-from backend.services.graph_service import _get_skill_embedder
+from backend.services.graph import _get_skill_embedder
 
 
 def _collect_profile_text(profile: dict[str, Any]) -> list[tuple[str, float]]:

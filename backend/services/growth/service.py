@@ -72,7 +72,7 @@ def _compute_readiness_live(profile_id: int, db: Session) -> float | None:
         if not goal:
             return None
 
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
         svc = GraphService()
         svc.load()
         node = svc.get_node(goal.target_node_id)
@@ -156,7 +156,7 @@ def get_current_readiness(profile_id: int, db: Session) -> float | None:
             .first()
         )
         if goal:
-            from backend.services.graph_service import GraphService
+            from backend.services.graph import GraphService
             svc = GraphService()
             svc.load()
             node = svc.get_node(goal.target_node_id)
@@ -188,7 +188,7 @@ def get_current_readiness(profile_id: int, db: Session) -> float | None:
         if not skill_names:
             return None
 
-        from backend.services.graph_service import GraphService
+        from backend.services.graph import GraphService
         svc = GraphService()
         svc.load()
         results = svc.recommend_by_skills(skill_names, top_n=1)

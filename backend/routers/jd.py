@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from backend.auth import get_current_user
 from backend.db import get_db
 from backend.models import JDDiagnosis, Profile, User
-from backend.services.graph_service import get_graph_service
+from backend.services.graph import get_graph_service
 from backend.services.jd_service import JDService
 
 router = APIRouter()

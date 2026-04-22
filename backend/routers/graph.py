@@ -15,7 +15,7 @@ from backend.auth import get_current_user
 from backend.db import get_db
 from backend.models import JobNode, JobNodeIntro, Profile, User
 from backend.llm import get_llm_client, get_model
-from backend.services.graph_service import get_graph_service
+from backend.services.graph import get_graph_service
 
 _ROLE_INTROS_PATH   = Path(__file__).resolve().parent.parent.parent / "data" / "role_intros.json"
 _SIGNALS_PATH       = Path(__file__).resolve().parent.parent.parent / "data" / "market_signals.json"
