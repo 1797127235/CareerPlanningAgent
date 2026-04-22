@@ -28,7 +28,7 @@ def graph_data() -> dict:
 @pytest.fixture(scope="session")
 def graph_service():
     """Session-scoped GraphService instance with graph loaded."""
-    from backend.services.graph_service import GraphService
+    from backend.services.graph import GraphService
     svc = GraphService()
     svc.load()
     return svc

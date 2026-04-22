@@ -16,6 +16,10 @@ from sqlalchemy.orm import Session
 from backend.auth import get_current_user
 from backend.db import get_db
 from backend.models import CareerGoal, Profile, User
+from backend.services.graph.embedding import embedding_prefilter
+from backend.services.graph.matching import find_role_id_for_job_target
+from backend.services.graph.query import _get_role_list_text
+from backend.services.graph.skills import _build_work_content_summary, _expand_chinese_tokens, _extract_implied_skills_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -166,10 +170,6 @@ _RECOMMEND_PROMPT = """你是一个职业推荐 AI。根据用户的技能和背
 def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     """Call LLM to generate recommendations. Returns response dict or None on failure."""
     from backend.llm import llm_chat, parse_json_response, get_model
-    from backend.routers._profiles_graph import (
-        _extract_implied_skills_from_text, _get_role_list_text,
-        embedding_prefilter, find_role_id_for_job_target,
-    )
 
     skill_objs = [s for s in profile_data.get("skills", []) if isinstance(s, dict) and s.get("name")]
     if not skill_objs:
@@ -215,7 +215,6 @@ def _generate_recommendations(profile_data: dict, top_k: int = 5) -> dict:
     user_internships = "\n".join(intern_texts[:4]) or "无"
 
     edu = profile_data.get("education", {})
-    from backend.routers._profiles_graph import _build_work_content_summary
     work_content_summary = _build_work_content_summary(profile_data)
     prompt = _RECOMMEND_PROMPT.format(
         role_list=_get_role_list_text(candidate_ids),
@@ -406,7 +405,6 @@ def _ensure_job_target_first(profile_data: dict, recs: list[dict]) -> tuple[list
     Also attempts regex fallback on raw_text if job_target is missing from parsed data.
     Returns (modified_recs, job_target_source) for diagnostics.
     """
-    from backend.routers._profiles_graph import find_role_id_for_job_target
 
     job_target = (profile_data.get("job_target") or "").strip()
     source = "parsed"

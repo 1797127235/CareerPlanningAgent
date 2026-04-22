@@ -43,11 +43,6 @@ if [ "$OLD_PKG" != "$NEW_PKG" ] || [ "$OLD_SRC" != "$NEW_SRC" ]; then
         npm ci --prefer-offline
     fi
     npm run build
-    # Sync latest graph data
-    if [ -f "$APP_DIR/artifacts/pipeline/graph.json" ]; then
-        mkdir -p dist/data
-        cp "$APP_DIR/artifacts/pipeline/graph.json" dist/data/graph.json
-    fi
     cd "$APP_DIR"
 else
     echo "[3/4] Frontend unchanged, skipping build."

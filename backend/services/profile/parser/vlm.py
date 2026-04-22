@@ -91,7 +91,7 @@ def _extract_profile_multimodal_vl(content: bytes) -> dict:
             return {}
 
         doc = fitz.open(stream=_io.BytesIO(content), filetype="pdf")
-        from backend.routers._profiles_graph import _build_skill_vocab
+        from backend.services.graph.skills import _build_skill_vocab
         skill_vocab = _build_skill_vocab()
 
         # Build message content: all page images + extraction prompt

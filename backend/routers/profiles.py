@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from backend.auth import get_current_user
 from backend.db import get_db
 from backend.models import Profile, User
-from backend.routers._profiles_graph import _auto_locate_on_graph
+from backend.services.graph.locator import _auto_locate_on_graph
 from backend.routers._profiles_helpers import (
     _get_or_create_profile,
     _profile_to_dict,

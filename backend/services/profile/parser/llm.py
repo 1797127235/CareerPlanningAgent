@@ -23,7 +23,7 @@ _SKILLS_RETRY_PROMPT = """从以下简历文本中只提取技能列表，返回
 def _extract_profile_with_llm(raw_text: str, hint_job_target: str = "") -> dict:
     try:
         from backend.llm import llm_chat, parse_json_response
-        from backend.routers._profiles_graph import _build_skill_vocab
+        from backend.services.graph.skills import _build_skill_vocab
         skill_vocab = _build_skill_vocab()
 
         # Smart truncation: preserve key sections, drop fluff
