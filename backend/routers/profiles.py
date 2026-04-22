@@ -22,11 +22,11 @@ from backend.routers._profiles_helpers import (
     _merge_profiles,
     _execute_profile_reset,
 )
-from backend.routers._profiles_parsing import (
-    _extract_profile_with_llm,
+from backend.services.profile.parser.llm import _extract_profile_with_llm
+from backend.services.profile.parser.postprocess import _lazy_fix_misclassified_internships
+from backend.services.profile.parser.vlm import (
     _extract_profile_multimodal_vl,
     _ocr_pdf_with_vl,
-    _lazy_fix_misclassified_internships,
 )
 
 from backend.services.profile import ProfileService

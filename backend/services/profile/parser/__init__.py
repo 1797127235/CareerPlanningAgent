@@ -96,7 +96,7 @@ def parse_resume_pipeline(file_content: bytes, filename: str, hint_job_target: s
     llm_profile: ProfileData | None = None
     if not sdk_profile or _is_insufficient(sdk_profile):
         logger.info("SDK result insufficient, running LLM direct extraction")
-        from backend.routers._profiles_parsing import _extract_profile_with_llm
+        from backend.services.profile.parser.llm import _extract_profile_with_llm
         raw_profile = _extract_profile_with_llm(raw_text, hint_job_target=regex_job_target)
         if raw_profile:
             try:
