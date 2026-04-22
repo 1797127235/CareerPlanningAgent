@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: career-agent-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # SQLite + runtime data 持久化（宿主机目录挂载，防止容器删除后丢失）
+      - ./data:/app/data:rw
+      # 可选：日志目录
+      - ./logs:/app/logs:rw
+    networks:
+      - career-agent-net
+    # 不暴露端口到宿主机，只让 nginx 在容器网络内访问
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  nginx:
+    image: nginx:alpine
+    container_name: career-agent-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+      - ./deploy/nginx-docker.conf:/etc/nginx/conf.d/default.conf:ro
+    networks:
+      - career-agent-net
+    depends_on:
+      backend:
+        condition: service_healthy
+
+networks:
+  career-agent-net:
+    driver: bridge
