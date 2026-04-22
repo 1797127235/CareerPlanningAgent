@@ -412,12 +412,16 @@ async def chat(
 
     _SSE_TIMEOUT = 120  # 2 minutes max per chat turn
 
+    import time
+
     async def _guarded_stream():
         """Wrap the event stream with an overall timeout."""
+        start = time.monotonic()
         try:
-            async with asyncio.timeout(_SSE_TIMEOUT):
-                async for chunk in _build_event_stream(req, user, db):
-                    yield chunk
+            async for chunk in _build_event_stream(req, user, db):
+                if time.monotonic() - start > _SSE_TIMEOUT:
+                    raise TimeoutError()
+                yield chunk
         except TimeoutError:
             logger.warning("SSE stream timed out after %ds for user %s", _SSE_TIMEOUT, user.id)
             yield 'data: {"error": "响应超时，请重试"}\n\n'

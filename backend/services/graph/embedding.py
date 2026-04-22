@@ -6,14 +6,11 @@ import logging
 import math
 from pathlib import Path
 
+from backend.config import DASHSCOPE_API_KEY, LLM_BASE_URL
 from backend.services.graph.query import _get_graph_nodes
+from backend.services.graph.skills import _expand_chinese_tokens
 
 logger = logging.getLogger(__name__)
-
-_NODE_EMBEDDINGS: dict | None = None
-_NODE_EMBEDDINGS_MTIME: float = 0.0
-
-# ── Embedding pre-filter ─────────────────────────────────────────────────────
 
 _NODE_EMBEDDINGS: dict | None = None
 _NODE_EMBEDDINGS_MTIME: float = 0.0
@@ -21,7 +18,7 @@ _NODE_EMBEDDINGS_MTIME: float = 0.0
 
 def _load_node_embeddings() -> dict:
     global _NODE_EMBEDDINGS, _NODE_EMBEDDINGS_MTIME
-    path = Path(__file__).resolve().parent.parent.parent / "data" / "node_embeddings.json"
+    path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "node_embeddings.json"
     try:
         mtime = path.stat().st_mtime
     except OSError:

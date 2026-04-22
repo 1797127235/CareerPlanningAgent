@@ -8,7 +8,7 @@ from pathlib import Path
 from backend.config import DASHSCOPE_API_KEY, LLM_BASE_URL
 from backend.services.graph.query import _get_graph_nodes, _get_role_list_text
 from backend.services.graph.embedding import embedding_prefilter
-from backend.services.graph.skills import _build_graph_skill_tokens, _expand_chinese_tokens, _extract_implied_skills_from_text
+from backend.services.graph.skills import _build_graph_skill_tokens, _build_work_content_summary, _expand_chinese_tokens, _extract_implied_skills_from_text
 
 logger = logging.getLogger(__name__)
 

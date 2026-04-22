@@ -8,8 +8,9 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from backend.models import CareerGoal, Profile
+from backend.services.graph.matching import _llm_match_role, find_role_id_for_job_target
 from backend.services.graph.query import _get_graph_nodes
-from backend.services.graph.skills import _build_work_content_summary, _extract_implied_skills_from_text
+from backend.services.graph.skills import _build_work_content_summary, _extract_implied_skills_from_text, _expand_chinese_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,9 @@ def _auto_locate_on_graph(
         profile_data.get("job_target", ""),
         len(profile_data.get("skills", [])),
     )
+    profile = None
+    p_hash = None
+    rec_resp = None
     try:
         from backend.services.graph import get_graph_service
 
@@ -66,12 +70,13 @@ def _auto_locate_on_graph(
 
         # Cache recommendations from the same LLM call
         recs_raw = llm_result.get("recommendations", [])
+        enriched = []
         if recs_raw:
             from backend.routers.recommendations import _save_rec_cache
             from backend.services.gap_analyzer import profile_hash
 
             # Enrich with graph data
-            graph_path = Path(__file__).resolve().parent.parent.parent / "data" / "graph.json"
+            graph_path = Path(__file__).resolve().parent.parent.parent.parent / "data" / "graph.json"
             graph_nodes: dict = {}
             try:
                 nodes_list = json.loads(graph_path.read_text(encoding="utf-8")).get("nodes", [])
@@ -80,7 +85,6 @@ def _auto_locate_on_graph(
                 pass
 
             skills = [s.get("name", "") for s in profile_data.get("skills", []) if s.get("name")]
-            enriched = []
             for r in recs_raw[:6]:
                 rid = r.get("role_id", "")
                 if rid not in graph_nodes:
@@ -216,6 +220,78 @@ def _auto_locate_on_graph(
                 backfilled += 1
             if backfilled:
                 logger.info("Auto-locate backfill: added %d candidates (task+skill)", backfilled)
+
+        # ── Fallback: if all LLM results were filtered, run skill-based backfill ──
+        if not enriched:
+            logger.info("All LLM recommendations filtered, running full backfill")
+            user_skill_set = {
+                (s.get("name") or "").lower().strip()
+                for s in profile_data.get("skills", [])
+                if isinstance(s, dict) and s.get("name")
+            }
+            user_skill_set |= _extract_implied_skills_from_text(profile_data)
+            text_parts = []
+            rt = (profile_data.get("raw_text") or "").lower()
+            if rt:
+                text_parts.append(rt)
+            for p in profile_data.get("projects", []):
+                if isinstance(p, dict):
+                    text_parts.append(str(p.get("name", "")).lower())
+                    text_parts.append(str(p.get("description", "") or p.get("highlights", "")).lower())
+                elif isinstance(p, str):
+                    text_parts.append(p.lower())
+            for i in profile_data.get("internships", []):
+                if isinstance(i, dict):
+                    text_parts.append(str(i.get("role", "")).lower())
+                    text_parts.append(str(i.get("description", "") or i.get("highlights", "")).lower())
+                elif isinstance(i, str):
+                    text_parts.append(i.lower())
+            user_text_combined = " ".join(text_parts)
+            exp_years = profile_data.get("experience_years", 0) or 0
+            backfill_candidates = []
+            for nid, node in graph_nodes.items():
+                cl = node.get("career_level", 0) or 0
+                if exp_years == 0 and cl > 3:
+                    continue
+                if exp_years <= 1 and cl > 4:
+                    continue
+                raw_skills = [
+                    (s if isinstance(s, str) else s.get("name", "")).lower().strip()
+                    for s in (node.get("must_skills") or [])
+                ]
+                expanded_skills = _expand_chinese_tokens(raw_skills)
+                overlap = len(user_skill_set & expanded_skills)
+                core_tasks = [t.strip() for t in node.get("core_tasks", []) if t and len(t.strip()) >= 3]
+                expanded_tasks = _expand_chinese_tokens(core_tasks)
+                task_hits = sum(1 for t in expanded_tasks if len(t) >= 2 and t in user_text_combined) if core_tasks else 0
+                total_score = overlap + task_hits * 2
+                if total_score == 0:
+                    continue
+                backfill_candidates.append((total_score, overlap, task_hits, nid, node))
+            backfill_candidates.sort(key=lambda x: -x[0])
+            for total_score, overlap, task_hits, nid, node in backfill_candidates[:6]:
+                base_affinity = min(60 + total_score * 5, 78)
+                reason_parts = []
+                if overlap:
+                    reason_parts.append(f"技能画像与该方向有 {overlap} 项重合")
+                if task_hits:
+                    reason_parts.append(f"项目/实习经历与该岗位核心任务有 {task_hits} 项匹配")
+                enriched.append({
+                    "role_id": nid,
+                    "label": node.get("label", nid),
+                    "affinity_pct": base_affinity,
+                    "matched_skills": [],
+                    "gap_skills": (node.get("must_skills") or [])[:4],
+                    "gap_hours": 0,
+                    "zone": node.get("zone", "safe"),
+                    "salary_p50": node.get("salary_p50", 0),
+                    "reason": "；".join(reason_parts) or f"技能画像与该方向有 {overlap} 项重合",
+                    "channel": "growth",
+                    "career_level": node.get("career_level", 0),
+                    "replacement_pressure": node.get("replacement_pressure", 50),
+                    "human_ai_leverage": node.get("human_ai_leverage", 50),
+                })
+            logger.info("Full backfill: added %d candidates", len(enriched))
 
             # ── Add promotion targets（应届生不加，避免混淆）──────────
             if exp_years >= 1:
