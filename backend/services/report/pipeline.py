@@ -6,7 +6,6 @@ import copy
 import json
 import logging
 import openai
-import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -18,7 +17,6 @@ from backend.services.report import data as _report_data
 from backend.services.report import scoring
 from backend.services.report import skill_gap
 from backend.services.report import action_plan
-from backend.services.report import career_alignment
 from backend.services.report import narrative
 from backend.services.report import summarize
 from backend.skills._loader import SkillOutputParseError
@@ -50,12 +48,6 @@ def generate_report(user_id: int, db) -> dict:
     Returns the report data dict (to be serialized into Report.data_json).
     Raises ValueError if prerequisite data is missing.
     """
-    # Always reload level_skills so changes from enrich scripts are picked up
-    # without requiring a full server restart.
-    try:
-        loaders._LEVEL_SKILLS = json.loads((loaders._DATA_DIR / "level_skills.json").read_text(encoding="utf-8"))
-    except Exception:
-        pass
     _report_data._load_static()
 
     from backend.models import (
@@ -191,17 +183,17 @@ def generate_report(user_id: int, db) -> dict:
 
     _desc_practiced: set[str] = set()
     for desc in profile_projects_raw:
-        desc_norm = shared._norm_skill(desc)
+        desc_norm = _report_data._norm_skill(desc)
         for skill in user_skills_raw:
-            if _matches_in_text(shared._norm_skill(skill), desc_norm):
+            if _matches_in_text(_report_data._norm_skill(skill), desc_norm):
                 _desc_practiced.add(skill)  # keep original casing from user_skills_raw
 
     # Also scan growth log project names/descriptions
     for p in projects:
         if p.name:
-            pname_norm = shared._norm_skill(p.name)
+            pname_norm = _report_data._norm_skill(p.name)
             for skill in user_skills_raw:
-                if _matches_in_text(shared._norm_skill(skill), pname_norm):
+                if _matches_in_text(_report_data._norm_skill(skill), pname_norm):
                     _desc_practiced.add(skill)
 
     logger.info("Rule-based desc scan: found practiced skills %s", _desc_practiced)
@@ -227,7 +219,7 @@ def generate_report(user_id: int, db) -> dict:
     # 两者互不依赖，结果取并集加入 practiced 集合。
     _user_skills_all = list(_report_data._user_skill_set(profile_data))
     _texts_to_infer = profile_projects_raw[:4] + [p.name for p in projects if not p.skills_used and p.name]
-    _uncovered = [s for s in _user_skills_all if not shared._skill_in_set(s, practiced)]
+    _uncovered = [s for s in _user_skills_all if not _report_data._skill_in_set(s, practiced)]
 
     def _run_merged_skill_inference() -> tuple[list[str], list[str]]:
         """Returns (extracted_skills, validated_claimed)."""
@@ -314,9 +306,9 @@ def generate_report(user_id: int, db) -> dict:
     ).lower()
 
     for _req_skill in _node_skill_names:
-        if shared._skill_matches(_req_skill, _user_skills_all) or shared._skill_in_set(_req_skill, practiced):
+        if _report_data._skill_matches(_req_skill, _user_skills_all) or _report_data._skill_in_set(_req_skill, practiced):
             continue
-        _hints = shared._PROJECT_SKILL_HINTS.get(_req_skill, [])
+        _hints = _report_data._PROJECT_SKILL_HINTS.get(_req_skill, [])
         if any(_h in _all_project_text for _h in _hints):
             practiced.add(_req_skill.lower().strip())
 
@@ -464,28 +456,18 @@ def generate_report(user_id: int, db) -> dict:
             _db.close()
 
     def _worker_career_alignment():
-        try:
-            return career_alignment._build_career_alignment(
-                profile_data=profile_data,
-                projects=projects,
-                graph_nodes=loaders._load_graph_nodes(),
-                target_node_id=node_id,
-                summary=summary,
-            )
-        except Exception as e:
-            logger.warning("Career alignment build failed: %s", e)
-            # 硬兜底：绝不返回 None，避免前端显示「数据不足」的硬编码 UI
-            return {
-                "observations": "基于当前档案标签，可初步观察与目标岗位的技能重叠情况。",
-                "alignments": [{
-                    "node_id": node_id,
-                    "label": goal.target_label,
-                    "score": 0.5,
-                    "evidence": "用户已标定该方向为目标岗位",
-                    "gap": "建议补充可量化的项目成果和技术文档以提升对齐度。",
-                }],
-                "cannot_judge": ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
-            }
+        # career_alignment LLM feature removed — hardcoded fallback to keep schema contract
+        return {
+            "observations": "基于当前档案标签，可初步观察与目标岗位的技能重叠情况。",
+            "alignments": [{
+                "node_id": node_id,
+                "label": goal.target_label,
+                "score": 0.5,
+                "evidence": "用户已标定该方向为目标岗位",
+                "gap": "建议补充可量化的项目成果和技术文档以提升对齐度。",
+            }],
+            "cannot_judge": ["晋升节奏、团队匹配度等需要入职后才能判断的维度"],
+        }
 
     def _worker_differentiation():
         return _build_differentiation_advice(
@@ -686,11 +668,7 @@ def _slim_summary_for_action_plan(summary: dict) -> dict:
         "profile_core": summary.get("profile_core"),
         # 只取最近 5 条里程碑，给时间锚用
         "milestones": (summary.get("milestones") or [])[:5],
-        # skill_deltas 去掉四维趋势数组（数据量大，对行动计划无意义）
-        "skill_deltas": {
-            k: v for k, v in (summary.get("skill_deltas") or {}).items()
-            if k != "four_dim_trend"
-        },
+        "skill_deltas": summary.get("skill_deltas") or {},
         # signals：保留聚合数字，去掉 raw / debriefs 原文
         "signals": _slim_signals(summary.get("signals") or {}),
         "completed_since_last_report": summary.get("completed_since_last_report"),
