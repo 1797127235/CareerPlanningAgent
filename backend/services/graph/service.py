@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 import networkx as nx
 from sqlalchemy.orm import Session
 
-from backend.services.graph.embed import _get_skill_embedder, find_skill_for_topic
 from backend.services.graph.path import (
     _FAMILY_GROUPS,
     _GapSkill,
@@ -108,12 +107,6 @@ class GraphService:
             "edge_count": g.number_of_edges(),
         }
 
-    def _get_edges(self) -> list[tuple[str, str]]:
-        """Return list of (source, target) pairs — for test helpers."""
-        if self._graph is None:
-            return []
-        return list(self._graph.edges())
-
     def _get_edges_with_type(self) -> list[tuple[str, str, str]]:
         """Return list of (source, target, edge_type) tuples."""
         if self._graph is None:
@@ -129,13 +122,6 @@ class GraphService:
 
     def get_node(self, node_id: str) -> dict | None:
         """Get a single node by node_id."""
-        return self._nodes.get(node_id)
-
-    def get_node_by_label(self, label: str) -> dict | None:
-        """Get a node by its Chinese label."""
-        node_id = self._label_index.get(label)
-        if node_id is None:
-            return None
         return self._nodes.get(node_id)
 
     def search_nodes(self, keyword: str) -> list[dict]:
@@ -196,207 +182,8 @@ class GraphService:
 
         return tier1 + tier2 + tier3
 
-    def recommend_by_skills(self, user_skills: list[str], top_n: int = 5, preferences: dict | None = None) -> list[dict]:
-        """Recommend jobs by matching user skills + career preferences.
-
-        Scoring: skill_match * 0.6 + preference_match * 0.4
-        Skill matching: exact (1.0) + semantic (0.7) per skill
-        Preference matching: based on role_family, zone, career_level, replacement_pressure
-
-        Returns top_n nodes sorted by total score (descending).
-        """
-        if self._graph is None:
-            self.load()
-        if not user_skills:
-            return []
-
-        user_set = {s.lower().strip() for s in user_skills if s}
-        user_list = [s.strip() for s in user_skills if s.strip()]
-
-        # Try to get embeddings for semantic matching
-        embedder = _get_skill_embedder()
-
-        # Batch-embed all skills upfront (graph skills from cache, user skills on-the-fly)
-        if embedder:
-            all_graph_skills = set()
-            for node in self._nodes.values():
-                all_graph_skills.update(s.lower().strip() for s in node.get("must_skills", []))
-            embedder.ensure_embedded(list(all_graph_skills))
-            embedder.ensure_embedded(user_list)
-            embedder.save_cache()  # Persist for next time
-
-        scored: list[tuple[float, dict]] = []
-
-        for node in self._nodes.values():
-            must = {s.lower().strip() for s in node.get("must_skills", [])}
-            if not must:
-                continue
-
-            # Tier 1: exact match
-            exact_overlap = user_set & must
-            exact_missing = must - user_set
-
-            # Tier 2: semantic match for remaining skills
-            semantic_matches: list[str] = []
-            final_missing = set(exact_missing)
-
-            if embedder and exact_missing and user_list:
-                for missing_skill in list(exact_missing):
-                    best_sim = embedder.best_similarity(missing_skill, user_list)
-                    if best_sim >= 0.70:  # Threshold for semantic match
-                        semantic_matches.append(missing_skill)
-                        final_missing.discard(missing_skill)
-
-            skill_score = len(exact_overlap) + len(semantic_matches) * 0.7
-
-            # Preference scoring (0.0 - 1.0)
-            pref_score = 0.0
-            if preferences and skill_score > 0:
-                pref_hits = 0
-                pref_total = 0
-
-                # Work style -> role_family mapping
-                ws = preferences.get("work_style", "")
-                if ws:
-                    pref_total += 1
-                    family = node.get("role_family", "").lower()
-                    ws_map = {
-                        "tech": ["后端", "前端", "全栈", "系统", "移动", "游戏", "区块链"],
-                        "product": ["产品", "设计", "社区", "文档"],
-                        "data": ["数据", "ai", "ml"],
-                        "management": ["管理", "架构"],
-                    }
-                    if any(kw in family for kw in ws_map.get(ws, [])):
-                        pref_hits += 1
-
-                # AI attitude -> replacement_pressure
-                ai_att = preferences.get("ai_attitude", "")
-                if ai_att:
-                    pref_total += 1
-                    rp = node.get("replacement_pressure", 50)
-                    if ai_att == "do_ai" and "ai" in node.get("role_family", "").lower():
-                        pref_hits += 1
-                    elif ai_att == "avoid_ai" and rp < 30:
-                        pref_hits += 1
-                    elif ai_att == "no_preference":
-                        pref_hits += 0.5
-
-                # Value priority -> zone
-                vp = preferences.get("value_priority", "")
-                if vp:
-                    pref_total += 1
-                    zone = node.get("zone", "")
-                    if vp == "stability" and zone == "safe":
-                        pref_hits += 1
-                    elif vp == "growth" and zone == "leverage":
-                        pref_hits += 1
-                    elif vp == "innovation" and zone in ("leverage", "transition"):
-                        pref_hits += 0.7
-                    elif vp == "balance":
-                        pref_hits += 0.5  # Neutral
-
-                # Company type -> career_level
-                ct = preferences.get("company_type", "")
-                if ct:
-                    pref_total += 1
-                    cl = node.get("career_level", 2)
-                    if ct == "big_tech" and node.get("skill_count", 0) >= 6:
-                        pref_hits += 1  # Big tech wants full-stack skills
-                    elif ct == "startup" and cl <= 3:
-                        pref_hits += 1  # Startups want ICs
-                    elif ct == "state_owned" and node.get("zone") == "safe":
-                        pref_hits += 1
-                    elif ct == "growing":
-                        pref_hits += 0.5
-
-                pref_score = pref_hits / pref_total if pref_total > 0 else 0.0
-
-            # Combined score: skill (60%) + preference (40%)
-            total_score = skill_score * 0.6 + pref_score * skill_score * 0.4
-            if total_score > 0:
-                info = dict(node)
-                info["overlap_count"] = len(exact_overlap) + len(semantic_matches)
-                info["overlap_skills"] = sorted(exact_overlap)
-                if semantic_matches:
-                    info["semantic_matches"] = sorted(semantic_matches)
-                info["missing_skills"] = sorted(final_missing)
-                scored.append((total_score, info))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [item for _, item in scored[:top_n]]
-
     # ------------------------------------------------------------------
-    # Shortest path (migrated from graph_loader.py)
-    # ------------------------------------------------------------------
-
-    def shortest_path(self, source: str, target: str) -> dict[str, Any] | None:
-        """Dijkstra shortest path with difficulty-mapped weights (低=1, 中=2, 高=3)."""
-        if self._graph is None:
-            return None
-        try:
-            path_nodes = nx.dijkstra_path(self._graph, source, target, weight="weight")
-        except (nx.NetworkXNoPath, nx.NodeNotFound):
-            return None
-
-        edges = []
-        total_weight = 0.0
-        for i in range(len(path_nodes) - 1):
-            edge_data = self._graph.get_edge_data(path_nodes[i], path_nodes[i + 1])
-            if edge_data:
-                edges.append(edge_data)
-                total_weight += edge_data.get("weight", 2.0)
-
-        return {
-            "path_nodes": path_nodes,
-            "path_edges": edges,
-            "total_difficulty_score": total_weight,
-        }
-
-    # ------------------------------------------------------------------
-    # BFS reachable (migrated from graph_loader.py)
-    # ------------------------------------------------------------------
-
-    def bfs_reachable(self, node_id: str, max_hops: int = 2) -> list[dict[str, Any]]:
-        """BFS reachable nodes with path and cumulative cost."""
-        if self._graph is None or node_id not in self._graph:
-            return []
-
-        visited = {node_id}
-        queue: list[tuple[str, list[str], list[dict], float]] = [
-            (node_id, [node_id], [], 0.0)
-        ]
-        results = []
-        head = 0
-
-        while head < len(queue):
-            current, path, edges, cost = queue[head]
-            head += 1
-
-            for _, neighbor, edge_data in self._graph.out_edges(current, data=True):
-                if neighbor in visited:
-                    continue
-                new_path = path + [neighbor]
-                new_edges = edges + [edge_data]
-                new_cost = cost + edge_data.get("weight", 2.0)
-
-                if len(new_path) - 1 <= max_hops:
-                    visited.add(neighbor)
-                    target_node = self._nodes.get(neighbor, {})
-                    results.append({
-                        "target_node": {
-                            "node_id": neighbor,
-                            "label": target_node.get("label", neighbor),
-                        },
-                        "path_nodes": new_path,
-                        "path_edges": new_edges,
-                        "total_difficulty_score": new_cost,
-                        "hops": len(new_path) - 1,
-                    })
-                    if len(new_path) - 1 < max_hops:
-                        queue.append((neighbor, new_path, new_edges, new_cost))
-
-        return results
-
+    # Escape routes (migrated from escape_router.py)
     # ------------------------------------------------------------------
     # Escape routes (migrated from escape_router.py)
     # ------------------------------------------------------------------
@@ -493,7 +280,7 @@ class GraphService:
                     continue
 
                 # Compute weighted edge cost (4-factor)
-                edge_c = _edge_cost(current, node, neighbor, edge)
+                edge_c = _edge_cost(node, neighbor, edge)
                 # Penalize reverse-direction edges (e.g. game-dev -> java becomes java -> game-dev)
                 if edge.get("source") != state.node_id:
                     edge_c *= 1.5
@@ -655,19 +442,6 @@ class GraphService:
             "trai_ratio": None,
             "cai_ratio": None,
         }
-
-    # ------------------------------------------------------------------
-    # Transition probability (stub — deferred to later task)
-    # ------------------------------------------------------------------
-
-    def compute_transition_probability(self, source: str, target: str) -> float:
-        """Compute P(source -> target).
-
-        TODO: Migrate full Sigmoid model from transition_probability.py.
-        Currently returns a neutral 0.5 placeholder.
-        """
-        return 0.5
-
 
 # ── Shared singleton accessor ───────────────────────────────────────────────
 

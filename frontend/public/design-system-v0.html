@@ -1,0 +1,283 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design System v0</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep: #060b14;
+  --bg-surface: #0c1220;
+  --bg-elevated: #111a2e;
+  --bg-card: #0f1623;
+  --border-subtle: rgba(148,163,184,0.08);
+  --border-medium: rgba(148,163,184,0.14);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-tertiary: #475569;
+  --accent-cyan: #22d3ee;
+  --accent-blue: #60a5fa;
+  --accent-ice: #e0f2fe;
+  --glow-cyan: rgba(34,211,238,0.12);
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Plus Jakarta Sans', 'Noto Sans SC', sans-serif;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --ease-glass: cubic-bezier(0.23,1,0.32,1);
+}
+:root[data-theme="arctic"] {
+  --bg-deep: #e4e9ef;
+  --bg-surface: #eef1f5;
+  --bg-elevated: #f5f7fa;
+  --bg-card: rgba(255,255,255,0.82);
+  --border-subtle: rgba(255,255,255,0.6);
+  --border-medium: rgba(0,0,0,0.06);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --accent-cyan: #0891b2;
+  --accent-blue: #2563eb;
+  --accent-ice: #cffafe;
+  --glow-cyan: rgba(8,145,178,0.08);
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  min-height: 100vh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.4s ease, color 0.4s ease;
+}
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0;
+  background-image: linear-gradient(rgba(148,163,184,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+}
+.container { max-width: 1100px; margin: 0 auto; padding: 48px 24px; position: relative; z-index: 1; }
+h1 { font-size: clamp(32px, 5vw, 48px); font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+h2 { font-size: clamp(20px, 3vw, 28px); font-weight: 700; letter-spacing: -0.01em; }
+h3 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--text-tertiary); }
+.label-mono { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-cyan); }
+.card {
+  background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: var(--radius-lg);
+  padding: 24px; position: relative; overflow: hidden;
+  transition: all 0.3s var(--ease-glass);
+}
+.card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent); }
+.card:hover { border-color: rgba(148,163,184,0.22); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+:root[data-theme="arctic"] .card {
+  background: var(--bg-card); backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border-top-color: rgba(255,255,255,0.8);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 16px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.03);
+}
+:root[data-theme="arctic"] .card:hover {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 12px 40px rgba(0,0,0,0.06), 0 3px 8px rgba(0,0,0,0.04);
+}
+.tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 100px; font-size: 12px; font-weight: 600; border: 1px solid var(--border-medium); background: var(--bg-elevated); color: var(--text-secondary); }
+.tag-cyan { background: rgba(34,211,238,0.08); border-color: rgba(34,211,238,0.2); color: var(--accent-cyan); }
+.tag-blue { background: rgba(96,165,250,0.08); border-color: rgba(96,165,250,0.2); color: var(--accent-blue); }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; border-radius: var(--radius-md); font-size: 14px; font-weight: 600; cursor: pointer; border: none; transition: all 0.2s var(--ease-glass); font-family: var(--font-sans); }
+.btn-primary { background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue)); color: #060b14; }
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-ghost { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-medium); }
+.btn-ghost:hover { background: var(--bg-elevated); color: var(--text-primary); }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.status-mastered { background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,0.4); }
+.status-gap { background: #fbbf24; box-shadow: 0 0 6px rgba(251,191,36,0.4); }
+.status-optional { background: var(--text-tertiary); }
+.section { margin-bottom: 48px; }
+.section-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 20px; }
+.hero-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.hero-meta { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.skills-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 768px) { .skills-grid { grid-template-columns: 1fr; } }
+.skill-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--radius-md); background: var(--bg-elevated); border: 1px solid var(--border-subtle); transition: all 0.2s var(--ease-glass); }
+.skill-item:hover { border-color: var(--border-medium); }
+.skill-item .reason { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.gap-list { display: flex; flex-direction: column; gap: 10px; }
+.gap-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); transition: all 0.2s var(--ease-glass); }
+.gap-item:hover { border-color: var(--border-medium); }
+.gap-item.high { background: rgba(251,191,36,0.04); border-color: rgba(251,191,36,0.15); }
+.gap-priority { font-family: var(--font-mono); font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 4px; white-space: nowrap; margin-top: 2px; }
+.gap-priority.high { background: rgba(251,191,36,0.12); color: #fbbf24; }
+.gap-priority.medium { background: rgba(96,165,250,0.08); color: var(--accent-blue); }
+.tweaks { position: fixed; bottom: 24px; right: 24px; z-index: 100; }
+.tweaks-toggle { width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--border-medium); background: var(--bg-elevated); color: var(--text-secondary); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; box-shadow: 0 4px 16px rgba(0,0,0,0.1); transition: all 0.2s var(--ease-glass); }
+.tweaks-toggle:hover { color: var(--text-primary); transform: scale(1.05); }
+.tweaks-panel { position: absolute; bottom: 60px; right: 0; width: 260px; background: var(--bg-card); border: 1px solid var(--border-medium); border-radius: var(--radius-lg); padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,0.2); opacity: 0; pointer-events: none; transform: translateY(8px); transition: all 0.25s var(--ease-glass); }
+.tweaks-panel.open { opacity: 1; pointer-events: auto; transform: translateY(0); }
+.tweaks-panel h4 { font-size: 13px; font-weight: 700; margin-bottom: 12px; color: var(--text-primary); }
+.tweaks-option { display: block; width: 100%; padding: 8px 12px; margin-bottom: 6px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--bg-elevated); color: var(--text-secondary); font-size: 13px; cursor: pointer; text-align: left; transition: all 0.15s ease; }
+.tweaks-option:hover { border-color: var(--border-medium); color: var(--text-primary); }
+.tweaks-option.active { border-color: var(--accent-cyan); color: var(--accent-cyan); background: var(--glow-cyan); }
+.swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.swatch { padding: 16px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); text-align: center; }
+.swatch-color { width: 100%; height: 32px; border-radius: var(--radius-sm); margin-bottom: 8px; }
+.swatch-name { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); }
+@keyframes enter { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.enter { animation: enter 0.5s var(--ease-glass) both; }
+.enter-d1 { animation-delay: 0.08s; }
+.enter-d2 { animation-delay: 0.16s; }
+.enter-d3 { animation-delay: 0.24s; }
+.enter-d4 { animation-delay: 0.32s; }
+.back-link { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text-tertiary); text-decoration: none; margin-bottom: 24px; transition: color 0.2s ease; }
+.back-link:hover { color: var(--text-primary); }
+</style>
+</head>
+<body>
+<div class="bg-grid"></div>
+<div class="container">
+  <div class="section enter">
+    <div class="label-mono" style="margin-bottom:8px;">Design System v0</div>
+    <h1 style="margin-bottom:8px;">全局视觉系统升级</h1>
+    <p style="color:var(--text-secondary); font-size:15px; max-width:520px;">
+      三个全新方向，解决&ldquo;太素&rdquo;问题。默认展示 Dossier（精密档案），可用右下角 Tweaks 切换。
+    </p>
+  </div>
+  <div class="section enter enter-d1">
+    <div class="section-header"><h3>Color Tokens</h3></div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-deep);"></div><div class="swatch-name">bg-deep</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-surface);"></div><div class="swatch-name">bg-surface</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-elevated);"></div><div class="swatch-name">bg-elevated</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--text-primary);"></div><div class="swatch-name">text-primary</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-cyan);"></div><div class="swatch-name">accent-cyan</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-blue);"></div><div class="swatch-name">accent-blue</div></div>
+    </div>
+  </div>
+  <div class="section enter enter-d2">
+    <div class="section-header"><h3>Components</h3></div>
+    <div class="card" style="margin-bottom:16px;">
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+        <button class="btn btn-primary">主要按钮</button>
+        <button class="btn btn-ghost">次要按钮</button>
+        <span class="tag">默认标签</span>
+        <span class="tag tag-cyan">起步岗位</span>
+        <span class="tag tag-blue">杠杆区</span>
+        <span style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary);"><span class="status-dot status-mastered"></span> 已掌握</span>
+        <span style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--text-secondary);"><span class="status-dot status-gap"></span> 需补强</span>
+      </div>
+    </div>
+  </div>
+  <div class="section enter enter-d3">
+    <div class="section-header"><h3>Page Mock: Match Detail</h3></div>
+    <a href="#" class="back-link">&#8592; 返回画像</a>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="hero-bar">
+        <div>
+          <h2 style="margin-bottom:4px;">高级前端工程师</h2>
+          <div class="hero-meta">
+            <span class="tag tag-cyan">起步岗位</span>
+            <span class="tag tag-blue">杠杆区</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-family:var(--font-mono); font-size:11px; color:var(--text-tertiary); margin-bottom:4px;">掌握 5 / 12 模块</div>
+          <div style="display:flex; gap:16px;">
+            <div style="text-align:center;"><div style="font-size:20px; font-weight:800; color:#34d399;">5</div><div style="font-size:11px; color:var(--text-tertiary);">已掌握</div></div>
+            <div style="text-align:center;"><div style="font-size:20px; font-weight:800; color:#fbbf24;">4</div><div style="font-size:11px; color:var(--text-tertiary);">需补强</div></div>
+            <div style="text-align:center;"><div style="font-size:20px; font-weight:800; color:var(--text-tertiary);">3</div><div style="font-size:11px; color:var(--text-tertiary);">建议关注</div></div>
+          </div>
+        </div>
+      </div>
+      <p style="margin-top:16px; font-size:14px; color:var(--text-secondary); line-height:1.7;">
+        基于你的项目经验和技术栈，这个岗位与你的匹配度处于杠杆区。核心框架你已掌握，主要缺口在性能优化和工程化深度。
+      </p>
+    </div>
+    <div class="skills-grid">
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+          <span class="status-dot status-mastered"></span>
+          <h2 style="font-size:16px;">已掌握</h2>
+          <span class="tag" style="margin-left:auto;">5</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div class="skill-item">
+            <span class="status-dot status-mastered" style="margin-top:6px;"></span>
+            <div><div style="font-size:14px; font-weight:600;">React / TypeScript</div><div class="reason">3 年实际项目经验</div></div>
+          </div>
+          <div class="skill-item">
+            <span class="status-dot status-mastered" style="margin-top:6px;"></span>
+            <div><div style="font-size:14px; font-weight:600;">组件化设计</div><div class="reason">独立搭建过 Design System</div></div>
+          </div>
+          <div class="skill-item">
+            <span class="status-dot status-mastered" style="margin-top:6px;"></span>
+            <div><div style="font-size:14px; font-weight:600;">状态管理</div><div class="reason">Zustand / Redux 实战</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+          <span class="status-dot status-gap"></span>
+          <h2 style="font-size:16px;">建议学习</h2>
+          <span class="tag" style="margin-left:auto;">4</span>
+        </div>
+        <div class="gap-list">
+          <div class="gap-item high">
+            <span class="gap-priority high">HIGH</span>
+            <div><div style="font-size:14px; font-weight:600;">性能优化深度</div><div class="reason">Bundle 分析、懒加载策略、渲染优化</div></div>
+          </div>
+          <div class="gap-item high">
+            <span class="gap-priority high">HIGH</span>
+            <div><div style="font-size:14px; font-weight:600;">微前端架构</div><div class="reason">Module Federation、qiankun 实战经验</div></div>
+          </div>
+          <div class="gap-item">
+            <span class="gap-priority medium">MED</span>
+            <div><div style="font-size:14px; font-weight:600;">测试策略</div><div class="reason">E2E、组件测试覆盖</div></div>
+          </div>
+          <div class="gap-item">
+            <span class="gap-priority medium">MED</span>
+            <div><div style="font-size:14px; font-weight:600;">CI/CD 流水线</div><div class="reason">GitHub Actions、自动化部署</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex; gap:12px; margin-top:16px; flex-wrap:wrap;">
+      <button class="btn btn-ghost" style="flex:1; min-width:160px; justify-content:center;">去图谱查看该岗位</button>
+      <button class="btn btn-primary" style="flex:1; min-width:160px; justify-content:center;">去成长档案追踪</button>
+    </div>
+  </div>
+  <div class="section enter enter-d4">
+    <div class="card">
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+        <span class="status-dot status-optional"></span>
+        <h2 style="font-size:16px;">锦上添花</h2>
+        <span class="tag" style="margin-left:auto;">3</span>
+      </div>
+      <div style="display:flex; flex-wrap:wrap; gap:8px;">
+        <span class="tag">Webpack 深度调优</span>
+        <span class="tag">WebAssembly</span>
+        <span class="tag">无障碍设计</span>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="tweaks">
+  <button class="tweaks-toggle" onclick="toggleTweaks()" title="Tweaks">&#9881;</button>
+  <div class="tweaks-panel" id="tweaksPanel">
+    <h4>Theme</h4>
+    <button class="tweaks-option active" onclick="setTheme('dossier')" data-theme="dossier">&#9670; Dossier（精密档案）</button>
+    <button class="tweaks-option" onclick="setTheme('arctic')" data-theme="arctic">&#9671; Arctic（冰原折纸）</button>
+    <h4 style="margin-top:16px;">Notes</h4>
+    <p style="font-size:12px; color:var(--text-tertiary); line-height:1.6;">
+      &#8226; 去掉了覆盖率百分比和进度条<br>
+      &#8226; 用 HIGH/MED 标签替代量化优先级<br>
+      &#8226; 数字只做计数，不做仪表盘
+    </p>
+  </div>
+</div>
+<script>
+function toggleTweaks() { document.getElementById('tweaksPanel').classList.toggle('open'); }
+function setTheme(name) {
+  document.documentElement.setAttribute('data-theme', name);
+  document.querySelectorAll('.tweaks-option').forEach(el => { el.classList.toggle('active', el.dataset.theme === name); });
+}
+document.addEventListener('click', (e) => { if (!e.target.closest('.tweaks')) { document.getElementById('tweaksPanel').classList.remove('open'); } });
+</script>
+</body>
+</html>

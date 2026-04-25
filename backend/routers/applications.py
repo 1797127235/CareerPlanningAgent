@@ -193,36 +193,7 @@ def create_application(
     db.commit()
     db.refresh(app)
 
-    # Auto-complete matching action plan tasks
-    try:
-        from backend.routers.growth_log import _auto_complete_plan_tasks
-        _auto_complete_plan_tasks(db, user.id, record_type="application")
-    except Exception:
-        pass  # non-critical
-
     return _app_to_dict(app, None, _get_jd_title(db, app.jd_diagnosis_id))
-
-
-@router.get("/{app_id}")
-def get_application(
-    app_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Get a single application with its debrief (if any)."""
-    app = db.query(JobApplication).filter(
-        JobApplication.id == app_id, JobApplication.user_id == user.id
-    ).first()
-    if not app:
-        raise HTTPException(404, "投递记录不存在")
-    debrief = (
-        db.query(InterviewDebrief)
-        .filter(InterviewDebrief.application_id == app_id)
-        .order_by(InterviewDebrief.created_at.desc())
-        .first()
-    )
-    jd = db.query(JDDiagnosis).filter(JDDiagnosis.id == app.jd_diagnosis_id).first() if app.jd_diagnosis_id else None
-    return _app_to_dict(app, debrief, jd.jd_title if jd else None, jd)
 
 
 @router.patch("/{app_id}/status")

@@ -4,21 +4,7 @@ from __future__ import annotations
 from backend.models.user import User, UserNotification
 from backend.models.profile import Profile, CareerGoal, SjtSession
 from backend.models.report import Report
-from backend.models.graph import (
-    Skill,
-    AiToolMapping,
-    JobNode,
-    JobNodeIntro,
-    JobEdge,
-    JobScore,
-    OnetJob,
-    OnetTask,
-    TaskAutomation,
-    TaskMatching,
-    ScoreChangelog,
-    RescoreRun,
-)
-from backend.models.market import MarketSignal, CityMarketSignal
+from backend.models.graph import JobNode, JobNodeIntro, JobEdge, JobScore
 from backend.models.jd import JDDiagnosis, JobApplication, InterviewDebrief
 from backend.models.growth import (
     ProjectRecord,
@@ -41,20 +27,10 @@ __all__ = [
     "CareerGoal",
     "SjtSession",
     "Report",
-    "Skill",
-    "AiToolMapping",
     "JobNode",
     "JobNodeIntro",
     "JobEdge",
     "JobScore",
-    "OnetJob",
-    "OnetTask",
-    "TaskAutomation",
-    "TaskMatching",
-    "ScoreChangelog",
-    "RescoreRun",
-    "MarketSignal",
-    "CityMarketSignal",
     "JDDiagnosis",
     "JobApplication",
     "InterviewDebrief",

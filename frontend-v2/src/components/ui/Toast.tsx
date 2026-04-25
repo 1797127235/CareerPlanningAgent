@@ -1,11 +1,10 @@
-import { createContext, useCallback, useContext, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useCallback, useState, type ReactNode } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { ToastContext } from './ToastContext'
 
-export type ToastItem = { id: number; message: string }
+type ToastItem = { id: number; message: string }
 
-const ToastContext = createContext<{ toast: (msg: string) => void }>({ toast: () => {} })
-
-export function ToastProvider({ children }: { children: React.ReactNode }) {
+export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([])
 
   const toast = useCallback((message: string) => {
@@ -38,5 +37,3 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     </ToastContext.Provider>
   )
 }
-
-export const useToast = () => useContext(ToastContext)

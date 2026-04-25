@@ -97,7 +97,3 @@ class ProfileData(BaseModel):
         """Serialize to plain dict for JSON storage / API response."""
         return self.model_dump(mode="json")
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "ProfileData":
-        """Deserialize from plain dict (e.g. DB stored JSON)."""
-        return cls.model_validate(data)

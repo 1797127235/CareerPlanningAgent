@@ -97,49 +97,6 @@ def _score_skills(
     return min(100, int(matched_w / total_w * 100))
 
 
-def _score_qualities(mock_sessions: list) -> int | None:
-    """职业素养: average of interview dimension scores. None if no data."""
-    if not mock_sessions:
-        return None
-
-    dim_scores: list[float] = []
-    for session in mock_sessions:
-        # Try mapped_dimensions first (structured per-dim scores)
-        mapped_raw = getattr(session, "mapped_dimensions", None)
-        if mapped_raw:
-            try:
-                dims = json.loads(mapped_raw)
-                if isinstance(dims, dict):
-                    for v in dims.values():
-                        if isinstance(v, (int, float)) and 0 <= v <= 100:
-                            dim_scores.append(float(v))
-            except Exception:
-                pass
-
-        # Fallback: analysis_json overall rating → rough heuristic
-        if not dim_scores:
-            analysis_raw = getattr(session, "analysis_json", None)
-            if analysis_raw:
-                try:
-                    analysis = json.loads(analysis_raw)
-                    if isinstance(analysis, dict):
-                        overall = analysis.get("overall", "")
-                        strengths = analysis.get("strengths", [])
-                        weaknesses = analysis.get("weaknesses", [])
-                        if isinstance(strengths, list) and isinstance(weaknesses, list):
-                            s_cnt = len(strengths)
-                            w_cnt = len(weaknesses)
-                            total = s_cnt + w_cnt
-                            if total > 0:
-                                dim_scores.append(s_cnt / total * 100)
-                except Exception:
-                    pass
-
-    if not dim_scores:
-        return None
-    return min(100, int(sum(dim_scores) / len(dim_scores)))
-
-
 def _score_potential(
     snapshots: list,
     projects: list,

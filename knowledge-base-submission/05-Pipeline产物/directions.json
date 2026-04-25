@@ -1,0 +1,733 @@
+{
+  "41-3091.00": {
+    "original_title": "Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel",
+    "total_jd_count": 985,
+    "onet_code": "41-3091.00",
+    "onet_title": "Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "商务专员",
+      "广告销售",
+      "电话销售",
+      "网络销售",
+      "销售助理",
+      "销售工程师",
+      "销售运营"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "41-3091.00",
+        "direction_label": "Sales Representatives of Services, Except Advertising, Insurance, Financial Services, and Travel",
+        "description": "Sell services to individuals or businesses. May describe options or resolve client problems."
+      }
+    ]
+  },
+  "15-1232.00": {
+    "original_title": "Computer User Support Specialists",
+    "total_jd_count": 960,
+    "onet_code": "15-1232.00",
+    "onet_title": "Computer User Support Specialists",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "实施工程师",
+      "技术支持工程师"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "15-1232.00",
+        "direction_label": "Computer User Support Specialists",
+        "description": "Provide technical assistance to computer users. Answer questions or resolve computer problems for clients in person, via telephone, or electronically. May provide assistance concerning the use of computer hardware and software, including printing, installation, word processing, electronic mail, and operating systems."
+      }
+    ]
+  },
+  "15-1253.00": {
+    "original_title": "Software Quality Assurance Analysts and Testers",
+    "total_jd_count": 915,
+    "onet_code": "15-1253.00",
+    "onet_title": "Software Quality Assurance Analysts and Testers",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "测试工程师",
+      "软件测试"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "15-1253.00",
+        "direction_label": "Software Quality Assurance Analysts and Testers",
+        "description": "Develop and execute software tests to identify software problems and their causes. Test system modifications to prepare for implementation. Document software and application defects using a bug tracking system and report defects to software or web developers. Create and maintain databases of known defects. May participate in software design reviews to provide input on functional requirements, operational characteristics, product designs, and schedules."
+      }
+    ]
+  },
+  "Java": {
+    "original_title": "Software Developers",
+    "total_jd_count": 537,
+    "onet_code": "15-1252.00",
+    "onet_title": "Software Developers",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "Java"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "Java",
+        "direction_label": "Software Developers",
+        "description": ""
+      }
+    ]
+  },
+  "19-2099.00": {
+    "original_title": "Physical Scientists, All Other",
+    "total_jd_count": 535,
+    "onet_code": "19-2099.00",
+    "onet_title": "Physical Scientists, All Other",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "科研人员"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "19-2099.00",
+        "direction_label": "Physical Scientists, All Other",
+        "description": "All physical scientists not listed separately."
+      }
+    ]
+  },
+  "11-1021.00": {
+    "original_title": "General and Operations Managers",
+    "total_jd_count": 405,
+    "onet_code": "11-1021.00",
+    "onet_title": "General and Operations Managers",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "游戏运营",
+      "社区运营",
+      "运营助理/专员"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "11-1021.00",
+        "direction_label": "General and Operations Managers",
+        "description": "Plan, direct, or coordinate the operations of public or private sector organizations, overseeing multiple departments or locations. Duties and responsibilities include formulating policies, managing daily operations, and planning the use of materials and human resources, but are too diverse and general in nature to be classified in any one functional area of management or administration, such as personnel, purchasing, or administrative services. Usually manage through subordinate supervisors. Excludes First-Line Supervisors."
+      }
+    ]
+  },
+  "C/C++": {
+    "original_title": "Software Developers",
+    "total_jd_count": 370,
+    "onet_code": "15-1252.00",
+    "onet_title": "Software Developers",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "C/C++"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "C/C++",
+        "direction_label": "Software Developers",
+        "description": ""
+      }
+    ]
+  },
+  "15-1254.00": {
+    "original_title": "Web Developers",
+    "total_jd_count": 243,
+    "onet_code": "15-1254.00",
+    "onet_title": "Web Developers",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "前端开发"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "15-1254.00",
+        "direction_label": "Web Developers",
+        "description": "Develop and implement websites, web applications, application databases, and interactive web interfaces. Evaluate code to ensure that it is properly structured, meets industry standards, and is compatible with browsers and devices. Optimize website performance, scalability, and server-side code and processes. May develop website infrastructure and integrate websites with other computer applications."
+      }
+    ]
+  },
+  "17-2072.00": {
+    "original_title": "Electronics Engineers, Except Computer",
+    "total_jd_count": 234,
+    "onet_code": "17-2072.00",
+    "onet_title": "Electronics Engineers, Except Computer",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "硬件测试"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "17-2072.00",
+        "direction_label": "Electronics Engineers, Except Computer",
+        "description": "Research, design, develop, or test electronic components and systems for commercial, industrial, military, or scientific use employing knowledge of electronic theory and materials properties. Design electronic circuits and components for use in fields such as telecommunications, aerospace guidance and propulsion control, acoustics, or instruments and controls."
+      }
+    ]
+  },
+  "产品专员/助理": {
+    "original_title": "产品专员/助理",
+    "total_jd_count": 202,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "产品专员/助理",
+      "项目专员/助理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "产品专员/助理",
+        "direction_label": "产品专员/助理",
+        "description": ""
+      }
+    ]
+  },
+  "管培生/储备干部": {
+    "original_title": "管培生/储备干部",
+    "total_jd_count": 147,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "管培生/储备干部"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "管培生/储备干部",
+        "direction_label": "管培生/储备干部",
+        "description": ""
+      }
+    ]
+  },
+  "网络客服": {
+    "original_title": "网络客服",
+    "total_jd_count": 146,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "网络客服"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "网络客服",
+        "direction_label": "网络客服",
+        "description": ""
+      }
+    ]
+  },
+  "内容审核": {
+    "original_title": "内容审核",
+    "total_jd_count": 146,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "内容审核"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "内容审核",
+        "direction_label": "内容审核",
+        "description": ""
+      }
+    ]
+  },
+  "律师": {
+    "original_title": "律师",
+    "total_jd_count": 145,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "律师"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "律师",
+        "direction_label": "律师",
+        "description": ""
+      }
+    ]
+  },
+  "风电工程师": {
+    "original_title": "风电工程师",
+    "total_jd_count": 145,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "风电工程师"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "风电工程师",
+        "direction_label": "风电工程师",
+        "description": ""
+      }
+    ]
+  },
+  "13-1071.00": {
+    "original_title": "Human Resources Specialists",
+    "total_jd_count": 144,
+    "onet_code": "13-1071.00",
+    "onet_title": "Human Resources Specialists",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "招聘专员/助理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "13-1071.00",
+        "direction_label": "Human Resources Specialists",
+        "description": "Recruit, screen, interview, or place individuals within an organization. May perform other activities in multiple human resources areas."
+      }
+    ]
+  },
+  "质检员": {
+    "original_title": "质检员",
+    "total_jd_count": 144,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "质检员"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "质检员",
+        "direction_label": "质检员",
+        "description": ""
+      }
+    ]
+  },
+  "大客户代表": {
+    "original_title": "大客户代表",
+    "total_jd_count": 144,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "大客户代表"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "大客户代表",
+        "direction_label": "大客户代表",
+        "description": ""
+      }
+    ]
+  },
+  "总助/CEO助理/董事长助理": {
+    "original_title": "总助/CEO助理/董事长助理",
+    "total_jd_count": 143,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "总助/CEO助理/董事长助理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "总助/CEO助理/董事长助理",
+        "direction_label": "总助/CEO助理/董事长助理",
+        "description": ""
+      }
+    ]
+  },
+  "BD经理": {
+    "original_title": "BD经理",
+    "total_jd_count": 143,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "BD经理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "BD经理",
+        "direction_label": "BD经理",
+        "description": ""
+      }
+    ]
+  },
+  "律师助理": {
+    "original_title": "律师助理",
+    "total_jd_count": 142,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "律师助理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "律师助理",
+        "direction_label": "律师助理",
+        "description": ""
+      }
+    ]
+  },
+  "统计员": {
+    "original_title": "统计员",
+    "total_jd_count": 142,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "统计员"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "统计员",
+        "direction_label": "统计员",
+        "description": ""
+      }
+    ]
+  },
+  "售后客服": {
+    "original_title": "售后客服",
+    "total_jd_count": 141,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "售后客服"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "售后客服",
+        "direction_label": "售后客服",
+        "description": ""
+      }
+    ]
+  },
+  "猎头顾问": {
+    "original_title": "猎头顾问",
+    "total_jd_count": 139,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "猎头顾问"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "猎头顾问",
+        "direction_label": "猎头顾问",
+        "description": ""
+      }
+    ]
+  },
+  "质量管理/测试": {
+    "original_title": "质量管理/测试",
+    "total_jd_count": 138,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "质量管理/测试"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "质量管理/测试",
+        "direction_label": "质量管理/测试",
+        "description": ""
+      }
+    ]
+  },
+  "储备干部": {
+    "original_title": "储备干部",
+    "total_jd_count": 137,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "储备干部"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "储备干部",
+        "direction_label": "储备干部",
+        "description": ""
+      }
+    ]
+  },
+  "储备经理人": {
+    "original_title": "储备经理人",
+    "total_jd_count": 132,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "储备经理人"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "储备经理人",
+        "direction_label": "储备经理人",
+        "description": ""
+      }
+    ]
+  },
+  "档案管理": {
+    "original_title": "档案管理",
+    "total_jd_count": 130,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "档案管理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "档案管理",
+        "direction_label": "档案管理",
+        "description": ""
+      }
+    ]
+  },
+  "资料管理": {
+    "original_title": "资料管理",
+    "total_jd_count": 127,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "资料管理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "资料管理",
+        "direction_label": "资料管理",
+        "description": ""
+      }
+    ]
+  },
+  "APP推广": {
+    "original_title": "APP推广",
+    "total_jd_count": 121,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "APP推广"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "APP推广",
+        "direction_label": "APP推广",
+        "description": ""
+      }
+    ]
+  },
+  "英语翻译": {
+    "original_title": "英语翻译",
+    "total_jd_count": 117,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "英语翻译"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "英语翻译",
+        "direction_label": "英语翻译",
+        "description": ""
+      }
+    ]
+  },
+  "23-1011.00": {
+    "original_title": "Lawyers",
+    "total_jd_count": 116,
+    "onet_code": "23-1011.00",
+    "onet_title": "Lawyers",
+    "onet_mapped": true,
+    "match_method": "keyword",
+    "cn_titles_merged": [
+      "法务专员/助理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "23-1011.00",
+        "direction_label": "Lawyers",
+        "description": "Represent clients in criminal and civil litigation and other legal proceedings, draw up legal documents, or manage or advise clients on legal transactions. May specialize in a single area or may practice broadly in many areas of law."
+      }
+    ]
+  },
+  "培训师": {
+    "original_title": "培训师",
+    "total_jd_count": 114,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "培训师"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "培训师",
+        "direction_label": "培训师",
+        "description": ""
+      }
+    ]
+  },
+  "电话客服": {
+    "original_title": "电话客服",
+    "total_jd_count": 109,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "电话客服"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "电话客服",
+        "direction_label": "电话客服",
+        "description": ""
+      }
+    ]
+  },
+  "游戏推广": {
+    "original_title": "游戏推广",
+    "total_jd_count": 98,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "游戏推广"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "游戏推广",
+        "direction_label": "游戏推广",
+        "description": ""
+      }
+    ]
+  },
+  "知识产权/专利代理": {
+    "original_title": "知识产权/专利代理",
+    "total_jd_count": 97,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "知识产权/专利代理"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "知识产权/专利代理",
+        "direction_label": "知识产权/专利代理",
+        "description": ""
+      }
+    ]
+  },
+  "咨询顾问": {
+    "original_title": "咨询顾问",
+    "total_jd_count": 95,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "咨询顾问"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "咨询顾问",
+        "direction_label": "咨询顾问",
+        "description": ""
+      }
+    ]
+  },
+  "项目招投标": {
+    "original_title": "项目招投标",
+    "total_jd_count": 86,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "项目招投标"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "项目招投标",
+        "direction_label": "项目招投标",
+        "description": ""
+      }
+    ]
+  },
+  "日语翻译": {
+    "original_title": "日语翻译",
+    "total_jd_count": 84,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "日语翻译"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "日语翻译",
+        "direction_label": "日语翻译",
+        "description": ""
+      }
+    ]
+  },
+  "项目经理/主管": {
+    "original_title": "项目经理/主管",
+    "total_jd_count": 80,
+    "onet_code": null,
+    "onet_title": null,
+    "onet_mapped": false,
+    "match_method": "cluster",
+    "cn_titles_merged": [
+      "项目经理/主管"
+    ],
+    "sub_directions": [
+      {
+        "direction_id": "项目经理/主管",
+        "direction_label": "项目经理/主管",
+        "description": ""
+      }
+    ]
+  }
+}

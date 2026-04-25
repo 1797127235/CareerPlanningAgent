@@ -111,6 +111,10 @@ def _profile_to_dict(profile: Profile, db: Session, user_id: int) -> dict:
     return item
 
 
+def _load_profile_json(profile: Profile) -> dict:
+    return json.loads(profile.profile_json or "{}")
+
+
 # Re-export for backward compatibility
 _merge_skills = merge_skills
 _merge_profiles = merge_profiles

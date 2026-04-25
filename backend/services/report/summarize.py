@@ -8,14 +8,11 @@ import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any
-
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from backend.models import (
     GrowthEntry,
-    GrowthSnapshot,
     InterviewDebrief,
     InterviewRecord,
     JobApplication,
@@ -605,19 +602,6 @@ def _build_skill_deltas(
     except Exception as e:
         logger.warning("_build_skill_deltas practiced_in_window ProjectLog failed: %s", e)
 
-    # ── all-time practiced (for still_claimed_only) ──
-    all_practiced: set[str] = set()
-    try:
-        all_projs = db.query(ProjectRecord).filter(
-            ProjectRecord.user_id == user_id
-        ).all()
-        for p in all_projs:
-            for s in (p.skills_used or []):
-                if isinstance(s, str) and s.strip():
-                    all_practiced.add(s.strip())
-    except Exception as e:
-        logger.warning("_build_skill_deltas all_practiced failed: %s", e)
-
     # ── gained_since_last_report ──
     gained_since_last_report: set[str] = set()
     if prev_report is not None and skill_gap_current is not None:
@@ -637,35 +621,9 @@ def _build_skill_deltas(
         except Exception as e:
             logger.warning("_build_skill_deltas gained failed: %s", e)
 
-    # ── four_dim_trend ──
-    four_dim_trend: dict[str, list] = {}
-    try:
-        snaps = (
-            db.query(GrowthSnapshot)
-            .filter(GrowthSnapshot.profile_id == profile.id)
-            .order_by(GrowthSnapshot.created_at.asc())
-            .limit(20)
-            .all()
-        )
-        detail_snapshots = [s for s in snaps if s.four_dim_detail]
-        last3 = detail_snapshots[-3:]
-        dims = ["foundation", "skills", "qualities", "potential"]
-        for dim in dims:
-            four_dim_trend[dim] = []
-        for s in last3:
-            d = s.four_dim_detail if isinstance(s.four_dim_detail, dict) else {}
-            for dim in dims:
-                four_dim_trend[dim].append(d.get(dim))
-    except Exception as e:
-        logger.warning("_build_skill_deltas four_dim_trend failed: %s", e)
-        four_dim_trend = {
-            "foundation": [], "skills": [], "qualities": [], "potential": []
-        }
-
     return {
         "practiced_in_window": sorted(practiced_in_window),
         "gained_since_last_report": sorted(gained_since_last_report),
-        "four_dim_trend": four_dim_trend,
     }
 
 

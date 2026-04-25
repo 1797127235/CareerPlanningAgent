@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Upload, PenLine } from 'lucide-react'
 import { useProfileData, type ManualProfilePayload } from '@/hooks/useProfileData'
@@ -8,6 +8,7 @@ import { setProfileName, updateProfile } from '@/api/profiles'
 import { fetchRecommendations, type Recommendation as ApiRecommendation } from '@/api/recommendations'
 import { Block, BlockGrid, Tooltip, useToast } from '@/components/ui'
 import { GLOSSARY } from '@/lib/glossary'
+import Navbar from '@/components/shared/Navbar'
 import {
   EducationCard,
   InternshipCard,
@@ -29,23 +30,31 @@ import { SjtQuiz } from '@/components/profile-v2/SjtQuiz'
 import { ManualProfileForm } from '@/components/profile-v2/ManualProfileForm'
 import { UploadCta } from '@/components/profile-v2/UploadCta'
 import { mockProfileData } from '@/components/profile-v2/mockData'
-import type { ProfileData, Education, Internship, Skill } from '@/types/profile'
+import ProfileReadonlyView from '@/components/profile-v2/ProfileReadonlyView'
+import type { Education, Internship, Skill } from '@/types/profile'
 import type { ProjectItem } from '@/components/profile-v2/cards/ProjectCard'
 
 function useRecommendations(hasProfile: boolean) {
   const [recs, setRecs] = useState<ApiRecommendation[]>([])
-  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!hasProfile) return
-    setLoading(true)
+    let active = true
+
     fetchRecommendations(6)
-      .then((res) => setRecs(res.recommendations || []))
-      .catch(() => setRecs([]))
-      .finally(() => setLoading(false))
+      .then((res) => {
+        if (active) setRecs(res.recommendations || [])
+      })
+      .catch(() => {
+        if (active) setRecs([])
+      })
+
+    return () => {
+      active = false
+    }
   }, [hasProfile])
 
-  return { recs, loading }
+  return { recs }
 }
 
 const sjtDims = ['communication', 'learning', 'collaboration', 'innovation', 'resilience'] as const
@@ -61,18 +70,25 @@ const MODAL_CARD = {
 }
 
 export default function ProfilePage() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isMock = searchParams.get('mock') === '1'
   const { toast } = useToast()
 
   const { profile, loading, loadError, loadProfile, savingEdit, handleSaveEdit } = useProfileData(!isMock)
-  const { uploading, uploadStep, uploadError, justUploaded, fileInputRef, triggerFileDialog, onFileSelected } = useResumeUpload(loadProfile)
+  const { uploadStep, uploadError, justUploaded, fileInputRef, triggerFileDialog, onFileSelected } = useResumeUpload(loadProfile)
 
   const [showManual, setShowManual] = useState(false)
   const [sjtOpen, setSjtOpen] = useState(false)
   const [showNamePrompt, setShowNamePrompt] = useState(false)
   const [pendingName, setPendingName] = useState('')
+  const [isEditing, setIsEditing] = useState(false)
   const namePromptShown = useRef(false)
+
+  /* Toggle back to readonly after a fresh upload */
+  useEffect(() => {
+    if (justUploaded) setIsEditing(false)
+  }, [justUploaded])
 
   const data = isMock ? mockProfileData : profile
   const hasProfile = isMock
@@ -193,7 +209,8 @@ export default function ProfilePage() {
   if (showManual) {
     return (
       <main className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
-        <div className="max-w-[860px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] py-[var(--space-6)]">
+        <Navbar />
+        <div className="max-w-[860px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] pt-[80px] pb-[var(--space-6)]">
           <ManualProfileForm
             onSave={async (payload: ManualProfilePayload) => {
               await handleSaveEdit(payload)
@@ -229,90 +246,219 @@ export default function ProfilePage() {
 
   return (
     <motion.main {...PAGE_FADE} className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
+      <Navbar />
       <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt" className="hidden" onChange={onFileSelected} />
 
-      <div className="max-w-[860px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] py-[var(--space-6)]">
+      <div className="max-w-[1200px] mx-auto px-6 md:px-12 pt-[80px] pb-24">
         {/* Header + Progress */}
-        <section className="mb-[var(--space-5)]">
+        <section className="mb-16">
           {hasProfile ? (
             <>
-              <h1 className="text-[var(--text-2xl)] font-semibold text-[var(--ink-1)] tracking-tight">
-                我们已经认识 {daysSince} 天了
-              </h1>
-              <p className="mt-1 text-[var(--text-sm)] text-[var(--ink-3)] font-serif italic">
-                最近更新于 {data?.updated_at ? data.updated_at.slice(0, 10) : '今天'}
-              </p>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                {['名字', '教育', '经历', '技能', '软技能', '目标'].map((label, i) => {
-                  const done = [
-                    !!data?.name,
-                    !!data?.profile?.education?.school,
-                    ((data?.profile?.internships?.length ?? 0) > 0) || ((data?.profile?.projects?.length ?? 0) > 0),
-                    (data?.profile?.skills?.length ?? 0) > 0,
-                    Object.keys((data?.profile?.soft_skills as Record<string, unknown>) ?? {}).filter((k) => k !== '_version').length > 0,
-                    (data?.career_goals?.length ?? 0) > 0,
-                  ][i]
-                  return (
-                    <span
-                      key={label}
-                      className={[
-                        'inline-flex items-center px-2.5 py-1 rounded-[var(--radius-pill)] text-[var(--text-xs)] border',
-                        done ? 'bg-[var(--chestnut)] text-white border-[var(--chestnut)]' : 'bg-transparent text-[var(--ink-3)] border-[var(--line)]',
-                      ].join(' ')}
+              {!isEditing ? (
+                <ProfileReadonlyView
+                  data={data}
+                  onEdit={() => setIsEditing(true)}
+                  onReport={() => navigate('/report')}
+                />
+              ) : (
+                <>
+                  <h1 className="text-[var(--text-2xl)] font-semibold text-[var(--ink-1)] tracking-tight">
+                    我们已经认识 {daysSince} 天了
+                  </h1>
+                  <p className="mt-1 text-[var(--text-sm)] text-[var(--ink-3)] font-serif italic">
+                    最近更新于 {data?.updated_at ? data.updated_at.slice(0, 10) : '今天'}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    {['名字', '教育', '经历', '技能', '软技能', '目标'].map((label, i) => {
+                      const done = [
+                        !!data?.name,
+                        !!data?.profile?.education?.school,
+                        ((data?.profile?.internships?.length ?? 0) > 0) || ((data?.profile?.projects?.length ?? 0) > 0),
+                        (data?.profile?.skills?.length ?? 0) > 0,
+                        Object.keys((data?.profile?.soft_skills as Record<string, unknown>) ?? {}).filter((k) => k !== '_version').length > 0,
+                        (data?.career_goals?.length ?? 0) > 0,
+                      ][i]
+                      return (
+                        <span
+                          key={label}
+                          className={[
+                            'inline-flex items-center px-2.5 py-1 rounded-[var(--radius-pill)] text-[var(--text-xs)] border',
+                            done ? 'bg-[var(--chestnut)] text-white border-[var(--chestnut)]' : 'bg-transparent text-[var(--ink-3)] border-[var(--line)]',
+                          ].join(' ')}
+                        >
+                          {done ? '✓ ' : ''}{label}
+                        </span>
+                      )
+                    })}
+                  </div>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <button
+                      onClick={triggerFileDialog}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] border border-[var(--line)] hover:bg-[var(--line)]/10 transition-[color,background-color] duration-200 active:scale-[0.98]"
                     >
-                      {done ? '✓ ' : ''}{label}
-                    </span>
-                  )
-                })}
-              </div>
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={triggerFileDialog}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] border border-[var(--line)] hover:bg-[var(--line)]/10 transition-[color,background-color] duration-200 active:scale-[0.98]"
-                >
-                  <Upload className="w-4 h-4" /> 重新上传简历
-                </button>
-                <button
-                  onClick={() => setShowManual(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
-                >
-                  <PenLine className="w-4 h-4" /> 手动补一笔
-                </button>
-              </div>
+                      <Upload className="w-4 h-4" /> 重新上传简历
+                    </button>
+                    <button
+                      onClick={() => setShowManual(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
+                    >
+                      <PenLine className="w-4 h-4" /> 手动补一笔
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <>
-              <h1 className="text-[var(--text-2xl)] font-semibold text-[var(--ink-1)] tracking-tight">
-                还没开始讲给我听
-              </h1>
-              <p className="mt-2 text-[var(--text-base)] text-[var(--ink-2)] max-w-[68ch]">
-                这份档案只给系统看，不会给任何第三方。你可以传一份简历让系统自动提取，也可以先手动填几句，以后随时补。
-              </p>
-              <div className="mt-6 space-y-3 max-w-md">
-                <UploadCta
-                  step={uploadStep}
-                  label="上传一份简历"
-                  subLabel="PDF / Word / TXT，10MB 以内"
-                  onClick={triggerFileDialog}
-                />
-                {uploadError && (
-                  <div className="rounded-[var(--radius-md)] border border-red-200 bg-red-50 px-4 py-3 text-[var(--text-sm)] text-red-700">
-                    {uploadError}
+              {/* Empty State — v2 Design */}
+              <div className="grid gap-8 md:grid-cols-2 md:gap-12 items-center" style={{ minHeight: 'calc(100vh - 180px)' }}>
+                {/* Left — Copy */}
+                <div>
+                  {/* Kicker */}
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="inline-block h-px w-8" style={{ background: '#9A9590' }} />
+                    <p className="text-[11px] font-medium tracking-[0.12em]" style={{ fontFamily: 'var(--font-sans)', color: '#9A9590' }}>
+                      AI 职业能力画像
+                    </p>
                   </div>
-                )}
-                <button
-                  onClick={() => setShowManual(true)}
-                  className="w-full text-left rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--bg-card)] px-5 py-4 hover:shadow-[var(--shadow-block)] transition-shadow"
-                >
-                  <p className="text-[var(--text-base)] font-medium text-[var(--ink-1)]">手动讲给我听</p>
-                  <p className="text-[var(--text-sm)] text-[var(--ink-2)]">几个字就够了，不用一次填完</p>
-                </button>
+
+                  <h1
+                    style={{
+                      fontFamily: 'var(--font-serif)',
+                      fontSize: 'clamp(36px, 4.5vw, 56px)',
+                      lineHeight: 1.15,
+                      letterSpacing: '0.01em',
+                      color: 'var(--ink-1)',
+                      fontWeight: 600,
+                    }}
+                  >
+                    创建你的
+                    <br />
+                    AI 职业能力档案
+                  </h1>
+
+                  <p
+                    className="mt-5 leading-[1.7]"
+                    style={{
+                      fontFamily: 'var(--font-sans)',
+                      fontSize: '15px',
+                      color: 'var(--ink-2)',
+                      maxWidth: '460px',
+                    }}
+                  >
+                    上传简历或补充关键经历，CareerPlan 将自动识别你的技能结构、项目亮点与潜在优势，生成一份专属成长分析。
+                  </p>
+
+                  {/* Entry Cards */}
+                  <div className="mt-8 grid gap-4 sm:grid-cols-2 max-w-[500px]">
+                    {/* Upload Card */}
+                    <button
+                      onClick={triggerFileDialog}
+                      className="group relative text-center p-6 transition-all duration-200"
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--line)',
+                        borderRadius: '12px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#B85C38'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(184,92,56,0.08)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--line)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    >
+                      {/* 推荐角标 */}
+                      <span
+                        className="absolute top-0 left-0 px-2.5 py-1 text-[10px] font-medium text-white"
+                        style={{
+                          background: '#B85C38',
+                          borderRadius: '12px 0 12px 0',
+                        }}
+                      >
+                        推荐
+                      </span>
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(184,92,56,0.06)' }}>
+                        <Upload size={22} style={{ color: '#B85C38' }} />
+                      </div>
+                      <p className="text-[15px] font-semibold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-sans)' }}>
+                        上传简历
+                      </p>
+                      <p className="mt-1 text-[12px]" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
+                        推荐方式 · 1 分钟完成
+                      </p>
+                      <div className="my-3 mx-auto w-8 h-px" style={{ background: 'var(--line)' }} />
+                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
+                        支持 PDF / Word / TXT，AI 自动提取经历、技能与项目亮点。
+                      </p>
+                    </button>
+
+                    {/* Manual Card */}
+                    <button
+                      onClick={() => setShowManual(true)}
+                      className="group text-center p-6 transition-all duration-200"
+                      style={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--line)',
+                        borderRadius: '12px',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = '#B85C38'
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(184,92,56,0.08)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = 'var(--line)'
+                        e.currentTarget.style.boxShadow = 'none'
+                      }}
+                    >
+                      <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(0,0,0,0.03)' }}>
+                        <PenLine size={22} style={{ color: 'var(--ink-2)' }} />
+                      </div>
+                      <p className="text-[15px] font-semibold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-sans)' }}>
+                        手动填写
+                      </p>
+                      <p className="mt-1 text-[12px]" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
+                        灵活补充 · 随时补充
+                      </p>
+                      <div className="my-3 mx-auto w-8 h-px" style={{ background: 'var(--line)' }} />
+                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
+                        没有简历也可以，从教育经历、项目经验和目标岗位开始建立档案。
+                      </p>
+                    </button>
+                  </div>
+
+                  {uploadError && (
+                    <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700 max-w-[500px]">
+                      {uploadError}
+                    </div>
+                  )}
+
+                  <div className="mt-6 flex items-center gap-2">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9590" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                    <p className="text-[12px]" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
+                      档案仅用于系统分析，不会分享给任何第三方。
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right — 3D Illustration */}
+                <div className="flex items-center justify-center">
+                  <img
+                    src="/profile-hero.png"
+                    alt="AI 职业能力档案"
+                    className="w-full max-w-[420px]"
+                    style={{ objectFit: 'contain' }}
+                  />
+                </div>
               </div>
             </>
           )}
         </section>
 
-        {hasProfile && (
+        {hasProfile && isEditing && (
           <>
             {sjtOpen ? (
               <div className="mb-[var(--space-5)]">

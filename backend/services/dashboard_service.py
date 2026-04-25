@@ -213,80 +213,6 @@ def _get_recent_activities(
     return activities[:limit]
 
 
-def recommend_next_step(profile_id: int, db: Session) -> dict[str, Any]:
-    """根据用户当前阶段和进度，推荐最适合的下一步行动。
-
-    Returns
-    -------
-    dict with ``stage``, ``stage_label``, ``recommendations`` (list[str]).
-    Raises ValueError if profile not found.
-    """
-    from backend.models import Profile, CareerGoal, JDDiagnosis
-
-    profile = db.query(Profile).filter_by(id=profile_id).first()
-    if profile is None:
-        raise ValueError(f"未找到画像 #{profile_id}")
-
-    # Check career goal
-    goal = (
-        db.query(CareerGoal)
-        .filter_by(profile_id=profile_id, is_active=True)
-        .first()
-    )
-
-    # Check JD diagnosis history
-    jd_count = (
-        db.query(JDDiagnosis)
-        .filter_by(profile_id=profile_id)
-        .count()
-    )
-
-    stats = get_dashboard_stats(profile_id, db)
-
-    # Determine user stage and recommend
-    recommendations: list[str] = []
-
-    if goal is None:
-        stage = "no_goal"
-        recommendations.append("探索岗位图谱，了解不同岗位的发展前景")
-        recommendations.append("完成图谱定位，找到你当前最匹配的位置")
-        recommendations.append("查看逃生路线，设定职业目标")
-    elif jd_count == 0:
-        stage = "has_goal"
-        recommendations.append(f"你的目标是「{goal.target_label}」，下一步做JD诊断")
-        recommendations.append("找一份目标岗位的真实JD，做匹配度分析")
-        recommendations.append("根据缺口技能制定学习计划")
-    else:
-        stage = "active"
-        streak = stats.get("streak_days", 0)
-        project_count = stats.get("project_count", 0)
-        application_count = stats.get("application_count", 0)
-
-        if project_count < 2:
-            recommendations.append("在成长档案中记录一个实战项目，补齐缺口技能")
-        if application_count < 3:
-            recommendations.append("追踪更多目标岗位投递，积累面试机会")
-        if streak == 0:
-            recommendations.append("今天还没有活动记录，保持学习节奏")
-        else:
-            recommendations.append(f"已连续活跃 {streak} 天，继续保持")
-
-    if not recommendations:
-        recommendations.append("继续保持学习节奏，定期回顾和更新画像数据。")
-
-    stage_names = {
-        "no_goal": "未设目标",
-        "has_goal": "已设目标",
-        "active": "积极学习中",
-    }
-
-    return {
-        "stage": stage,
-        "stage_label": stage_names.get(stage, stage),
-        "recommendations": recommendations,
-    }
-
-
 def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[str, Any]:
     """Return daily activity counts for the last N weeks, for heatmap rendering.
 
@@ -406,17 +332,3 @@ def get_activity_heatmap(profile_id: int, db: Session, weeks: int = 16) -> dict[
 
     return {"days": days, "streak": streak}
 
-
-def _dim_trend(scores: list[int]) -> str:
-    """Compare last 3 scores vs earlier scores. Needs ≥4 data points."""
-    if len(scores) < 4:
-        return "flat"
-    recent = scores[-3:]
-    earlier = scores[:-3]
-    recent_avg = sum(recent) / len(recent)
-    earlier_avg = sum(earlier) / len(earlier)
-    if recent_avg > earlier_avg + 3:
-        return "up"
-    if recent_avg < earlier_avg - 3:
-        return "down"
-    return "flat"

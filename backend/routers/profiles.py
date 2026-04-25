@@ -8,8 +8,8 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
-from pydantic import BaseModel
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile, File
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
@@ -18,123 +18,22 @@ from backend.models import Profile, User
 from backend.services.graph.locator import _auto_locate_on_graph
 from backend.routers._profiles_helpers import (
     _get_or_create_profile,
+    _load_profile_json,
     _profile_to_dict,
     _merge_profiles,
     _execute_profile_reset,
 )
 from backend.services.profile.parser.llm import _extract_profile_with_llm
 from backend.services.profile.parser.postprocess import _lazy_fix_misclassified_internships
-from backend.services.profile.parser.vlm import (
-    _extract_profile_multimodal_vl,
-    _ocr_pdf_with_vl,
-)
+from backend.services.profile.parser.vlm import _ocr_pdf_with_vl
 
 from backend.services.profile import ProfileService
-from backend.services.profile.sjt import score_to_level
 from backend.utils import ok
 
 logger = logging.getLogger(__name__)
 
 
 router = APIRouter()
-
-
-class UpdateProjectDescBody(BaseModel):
-    description: str
-
-
-class RefineProjectBody(BaseModel):
-    """基于 original_text 内容匹配来定位项目，避免数组下标漂移。"""
-    original_text: str
-    new_description: str
-
-
-@router.patch("/me/projects/refine")
-def refine_profile_project(
-    body: RefineProjectBody,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """按原文内容匹配更新 profile_json.projects 中的某一条。
-
-    相比下标定位，内容匹配不受学生增删/重排项目的影响；
-    若匹配失败（例如学生已经手动改过），返回 409，让前端提示"档案已变动，请刷新"。
-    """
-    profile = (
-        db.query(Profile)
-        .filter(Profile.user_id == user.id)
-        .with_for_update()
-        .first()
-    )
-    if not profile:
-        raise HTTPException(404, "未找到画像")
-
-    data = json.loads(profile.profile_json or "{}")
-    projects = data.get("projects", [])
-    target = body.original_text.strip()
-    if not target:
-        raise HTTPException(400, "original_text 不能为空")
-
-    matched_idx = -1
-    for i, p in enumerate(projects):
-        if isinstance(p, str) and p.strip() == target:
-            matched_idx = i
-            break
-        if isinstance(p, dict):
-            desc = (p.get("description") or p.get("name") or "").strip()
-            if desc == target:
-                matched_idx = i
-                break
-
-    if matched_idx < 0:
-        raise HTTPException(409, "档案已变动，未找到对应项目原文。请刷新后重试。")
-
-    current = projects[matched_idx]
-    if isinstance(current, str):
-        projects[matched_idx] = body.new_description
-    else:
-        projects[matched_idx] = {**current, "description": body.new_description}
-
-    data["projects"] = projects
-    profile.profile_json = json.dumps(data, ensure_ascii=False, default=str)
-    db.commit()
-    return {"ok": True}
-
-
-@router.patch("/me/projects/{proj_index}")
-def update_profile_project(
-    proj_index: int,
-    body: UpdateProjectDescBody,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """[遗留] 按下标更新；新代码请用 PATCH /me/projects/refine（按内容匹配）。"""
-    profile = (
-        db.query(Profile)
-        .filter(Profile.user_id == user.id)
-        .with_for_update()
-        .first()
-    )
-    if not profile:
-        raise HTTPException(404, "未找到画像")
-
-    data = json.loads(profile.profile_json or "{}")
-    projects = data.get("projects", [])
-
-    if proj_index < 0 or proj_index >= len(projects):
-        raise HTTPException(400, "项目索引越界")
-
-    current = projects[proj_index]
-    if isinstance(current, str):
-        projects[proj_index] = body.description
-    elif isinstance(current, dict):
-        projects[proj_index] = {**current, "description": body.description}
-
-    data["projects"] = projects
-    profile.profile_json = json.dumps(data, ensure_ascii=False, default=str)
-    db.commit()
-
-    return {"ok": True}
 
 
 # ── GET /profiles — return single profile ───────────────────────────────────
@@ -249,6 +148,7 @@ class UpdateProfileRequest(BaseModel):
 @router.put("/")
 def update_profile(
     req: UpdateProfileRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -260,7 +160,7 @@ def update_profile(
     profile = _get_or_create_profile(user.id, db)
 
     if req.profile is not None:
-        existing = json.loads(profile.profile_json or "{}")
+        existing = _load_profile_json(profile)
         if req.merge:
             merged = _merge_profiles(existing, req.profile)
         else:
@@ -281,40 +181,22 @@ def update_profile(
         quality_data = ProfileService.compute_quality(merged)
         profile.quality_json = json.dumps(quality_data, ensure_ascii=False, default=str)
 
+        logger.info(
+            "[UPDATE-PROFILE] job_target=%r source=%r merge=%s",
+            merged.get("job_target", ""),
+            (merged or {}).get("source", ""),
+            req.merge,
+        )
+
+        # Graph location runs in background — don't block the response
+        _final_snapshot = json.loads(json.dumps(merged, default=str))
+        background_tasks.add_task(_auto_locate_bg, profile.id, user.id, _final_snapshot)
+
     if req.quality is not None:
         profile.quality_json = json.dumps(req.quality, ensure_ascii=False, default=str)
 
     db.commit()
     db.refresh(profile)
-
-    _final = json.loads(profile.profile_json or "{}")
-    logger.info(
-        "[UPDATE-PROFILE] job_target=%r source=%r merge=%s",
-        _final.get("job_target", ""),
-        (_final or {}).get("source", ""),
-        req.merge,
-    )
-
-    # Graph location + growth event run in background threads — don't block the response
-    if req.profile is not None:
-        import threading as _threading
-        from backend.db import SessionLocal as _SL
-        _pid, _uid = profile.id, user.id
-        _skill_count = len(_final.get("skills", []))
-        _source = (_final or {}).get("source", "")
-        # Defensive copy: prevent concurrent mutation of mutable dict reference
-        _final_snapshot = json.loads(json.dumps(_final, default=str))
-
-        def _locate_bg():
-            _bg_db = _SL()
-            try:
-                _auto_locate_on_graph(_pid, _uid, _final_snapshot, _bg_db)
-            except Exception:
-                logger.exception("Background graph location failed (profile %s)", _pid)
-            finally:
-                _bg_db.close()
-
-        _threading.Thread(target=_locate_bg, daemon=True).start()
 
     return ok(_profile_to_dict(profile, db, user.id), message="画像已更新")
 
@@ -328,7 +210,7 @@ def reparse_profile(
 ):
     """Re-run LLM extraction on stored raw_text and update the profile."""
     profile = _get_or_create_profile(user.id, db)
-    existing = json.loads(profile.profile_json or "{}")
+    existing = _load_profile_json(profile)
     raw_text = existing.get("raw_text") or existing.get("markdown", "")
     if not raw_text.strip():
         raise HTTPException(400, "没有原始简历文本，请重新上传简历")
@@ -353,6 +235,14 @@ def reparse_profile(
 class SetNameRequest(BaseModel):
     name: str
 
+    @field_validator("name")
+    @classmethod
+    def _strip_and_check(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("姓名不能为空")
+        return v
+
 
 @router.patch("/name")
 def set_profile_name(
@@ -364,7 +254,7 @@ def set_profile_name(
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     if not profile:
         raise HTTPException(404, "画像不存在")
-    profile.name = req.name.strip()
+    profile.name = req.name
     db.commit()
     return ok(message="姓名已更新")
 
@@ -391,9 +281,10 @@ def set_preferences(
     if not profile:
         raise HTTPException(404, "画像不存在")
 
-    profile_data = json.loads(profile.profile_json or "{}")
-    profile_data["preferences"] = req.model_dump(exclude_none=True)
-    profile.profile_json = json.dumps(profile_data, ensure_ascii=False)
+    profile_data = _load_profile_json(profile)
+    dumped = req.model_dump(exclude_none=True)
+    profile_data["preferences"] = {k: v for k, v in dumped.items() if v != ""}
+    profile.profile_json = json.dumps(profile_data, ensure_ascii=False, default=str)
     db.commit()
     return ok(message="就业意愿已保存")
 
@@ -414,121 +305,3 @@ def reset_profile(
     return ok(message="画像已重置")
 
 
-# ── SJT soft-skill assessment routes (merged from _profiles_sjt.py) ─────────
-
-import uuid
-from datetime import datetime, timedelta, timezone
-
-from backend.models import SjtSession
-
-
-@router.post("/sjt/generate")
-def generate_sjt(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Generate personalized SJT questions based on the user's profile."""
-    profile = _get_or_create_profile(user.id, db)
-    profile_data = json.loads(profile.profile_json or "{}")
-
-    try:
-        questions = ProfileService.generate_sjt_questions(profile_data)
-    except Exception:
-        try:
-            questions = ProfileService.generate_sjt_questions(profile_data)
-        except Exception as e:
-            raise HTTPException(500, f"生成失败，请重试: {e}")
-
-    session_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc)
-    session = SjtSession(
-        id=session_id,
-        profile_id=profile.id,
-        questions_json=json.dumps(questions, ensure_ascii=False),
-        created_at=now,
-        expires_at=now + timedelta(hours=1),
-    )
-    db.add(session)
-    db.commit()
-
-    safe_questions = [
-        {
-            "id": q["id"],
-            "dimension": q["dimension"],
-            "scenario": q["scenario"],
-            "options": [{"id": o["id"], "text": o["text"]} for o in q["options"]],
-        }
-        for q in questions
-    ]
-    return ok({"session_id": session_id, "questions": safe_questions})
-
-
-class SjtSubmitRequest(BaseModel):
-    session_id: str
-    answers: list[dict]
-
-
-@router.post("/sjt/submit")
-def submit_sjt(
-    req: SjtSubmitRequest,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Score SJT v2 answers, generate advice, write back to profile."""
-    profile = _get_or_create_profile(user.id, db)
-
-    session = db.query(SjtSession).filter(SjtSession.id == req.session_id).first()
-    if not session:
-        raise HTTPException(410, "评估会话不存在，请重新开始")
-    if session.profile_id != profile.id:
-        raise HTTPException(400, "会话与画像不匹配")
-
-    now_utc = datetime.now(timezone.utc)
-    expires = session.expires_at
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if expires < now_utc:
-        db.delete(session)
-        db.commit()
-        raise HTTPException(410, "评估已过期，请重新开始")
-
-    questions = json.loads(session.questions_json)
-    expected_ids = {q["id"] for q in questions}
-    submitted_ids = {a.get("question_id") for a in req.answers}
-    missing = expected_ids - submitted_ids
-    if missing:
-        raise HTTPException(400, f"缺少以下题目的回答: {', '.join(sorted(missing))}")
-
-    result = ProfileService.score_sjt_v2(req.answers, questions)
-    dimensions = result["dimensions"]
-
-    profile_data = json.loads(profile.profile_json or "{}")
-    advice = ProfileService.generate_sjt_advice(dimensions, req.answers, questions, profile_data)
-
-    soft_skills = {"_version": 2}
-    for dim, info in dimensions.items():
-        soft_skills[dim] = {
-            "score": info["score"],
-            "level": info["level"],
-            "advice": advice.get(dim, ""),
-        }
-
-    profile_data["soft_skills"] = soft_skills
-    profile.profile_json = json.dumps(profile_data, ensure_ascii=False, default=str)
-    quality_data = ProfileService.compute_quality(profile_data)
-    profile.quality_json = json.dumps(quality_data, ensure_ascii=False, default=str)
-
-    db.delete(session)
-    db.commit()
-
-    all_scores = [info["score"] for info in dimensions.values()]
-    overall_score = round(sum(all_scores) / len(all_scores)) if all_scores else 0
-    overall_level = score_to_level(overall_score)
-
-    return ok({
-        "dimensions": [
-            {"key": dim, "level": info["level"], "advice": advice.get(dim, "")}
-            for dim, info in dimensions.items()
-        ],
-        "overall_level": overall_level,
-    })

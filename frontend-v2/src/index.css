@@ -2,7 +2,7 @@
 
 :root {
   /* Design System — from .impeccable.md v2.0 */
-  --bg-paper: oklch(0.97 0.012 75);
+  --bg-paper: #F9F4EE;
   --bg-card: oklch(0.99 0.006 75);
   --ink-1: oklch(0.20 0.018 60);
   --ink-2: oklch(0.42 0.012 60);
@@ -36,9 +36,9 @@
   --lh-ui: 1.4;
 
   /* Font families */
-  --font-sans: "Commissioner Variable", "Noto Sans SC", system-ui, sans-serif;
-  --font-serif: "Literata Variable", "Noto Serif SC", Georgia, serif;
-  --font-display: "Commissioner Variable", "Noto Sans SC", system-ui, sans-serif;
+  --font-sans: "Commissioner Variable", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font-serif: "Literata Variable", "Noto Serif SC", "Source Han Serif SC", "STSong", "SimSun", Georgia, serif;
+  --font-display: "Commissioner Variable", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
   font-family: var(--font-sans);

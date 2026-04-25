@@ -3,24 +3,16 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.attributes import flag_modified
-
 from backend.auth import get_current_user
 from backend.db import get_db
 from backend.models import (
-    ActionPlanV2,
-    ActionProgress,
-    CareerGoal,
     GrowthEntry,
     InterviewRecord,
-    JDDiagnosis,
-    JobApplication,
     Profile,
     ProjectLog,
     ProjectRecord,
@@ -28,10 +20,7 @@ from backend.models import (
 )
 from backend.services.growth.dashboard import build_growth_dashboard
 from backend.services.growth.insights import build_growth_insights_with_profile
-from backend.services.growth.service import (
-    auto_complete_plan_tasks,
-    generate_interview_analysis,
-)
+from backend.services.growth.service import generate_interview_analysis
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +100,6 @@ class UpdateInterviewRequest(BaseModel):
 # ── Timeline ──────────────────────────────────────────────────────────────────
 
 @router.get("/dashboard")
-@router.get("/dashboard")
 def get_growth_dashboard(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -122,7 +110,6 @@ def get_growth_dashboard(
 
 # ── Insights ──────────────────────────────────────────────────────────────────
 
-@router.get("/insights")
 @router.get("/insights")
 def get_growth_insights(
     user: User = Depends(get_current_user),
@@ -187,11 +174,6 @@ def create_project(
     db.flush()
     db.commit()
     db.refresh(project)
-
-    # Auto-complete matching action plan tasks
-    _auto_complete_plan_tasks(
-        db, user.id, project_name=req.name, skills=req.skills_used, record_type="project",
-    )
 
     return _serialize_project(project)
 

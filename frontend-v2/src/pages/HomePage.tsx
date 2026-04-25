@@ -11,10 +11,11 @@ import { useProfileData } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { fetchReportList, type ReportListItem } from '@/api/report'
 import { getActivityPulse, type ActivityPulseData } from '@/api/growthLog'
+import Navbar from '@/components/shared/Navbar'
 
 /* ── Design Tokens ── */
 const t = {
-  bg: '#F5F0E8',
+  bg: '#F9F4EE',
   bgAlt: '#EDE8DF',
   ink: '#1F1F1F',
   inkSecondary: '#6B6560',
@@ -63,95 +64,6 @@ function useActivityPulseLocal(enabled: boolean) {
       .catch(() => setPulse(null))
   }, [enabled])
   return pulse
-}
-
-/* ── Navbar ── */
-function Navbar() {
-  const navigate = useNavigate()
-  const [open, setOpen] = useState(false)
-
-  const links = [
-    { label: '能力画像', route: '/profile' },
-    { label: '成长路径', route: '/growth-log' },
-    { label: '岗位图谱', route: '/graph' },
-    { label: '方法论', route: '/coach/chat' },
-  ]
-
-  return (
-    <nav
-      className="fixed left-0 right-0 top-0 z-50"
-      style={{ background: t.bg, borderBottom: `1px solid ${t.line}` }}
-    >
-      <div className={`${containerClass} flex h-[64px] items-center justify-between`}>
-        <button
-          onClick={() => navigate('/')}
-          className="text-[17px] font-semibold tracking-tight transition-opacity duration-200 hover:opacity-60"
-          style={{ ...serif, color: t.ink }}
-        >
-          CareerPlan
-        </button>
-
-        <div className="hidden items-center gap-8 md:flex">
-          {links.map((l) => (
-            <button
-              key={l.route}
-              onClick={() => navigate(l.route)}
-              className="text-[15px] font-medium transition-colors duration-200"
-              style={{ ...sans, color: t.inkSecondary }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = t.ink }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = t.inkSecondary }}
-            >
-              {l.label}
-            </button>
-          ))}
-          <button
-            onClick={() => navigate('/login')}
-            className="ml-2 rounded-md px-4 py-2 text-[13px] font-medium text-white transition-colors duration-200"
-            style={{ background: t.button, ...sans }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = t.buttonHover }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = t.button }}
-          >
-            开始分析
-          </button>
-        </div>
-
-        <button
-          className="flex flex-col gap-1.5 p-2 md:hidden"
-          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-          onClick={() => setOpen(!open)}
-          aria-label="菜单"
-        >
-          <span className="block w-5" style={{ borderTop: `1.5px solid ${t.inkSecondary}` }} />
-          <span className="block w-5" style={{ borderTop: `1.5px solid ${t.inkSecondary}` }} />
-        </button>
-      </div>
-
-      {open && (
-        <div
-          className="flex flex-col gap-3 px-6 py-4 md:hidden"
-          style={{ borderTop: `1px solid ${t.line}` }}
-        >
-          {links.map((l) => (
-            <button
-              key={l.route}
-              onClick={() => { navigate(l.route); setOpen(false) }}
-              className="text-left text-[15px]"
-              style={{ ...sans, color: t.inkSecondary }}
-            >
-              {l.label}
-            </button>
-          ))}
-          <button
-            onClick={() => { navigate('/login'); setOpen(false) }}
-            className="mt-1 w-fit rounded-md px-4 py-2 text-[13px] font-medium text-white"
-            style={{ background: t.button, ...sans }}
-          >
-            开始分析
-          </button>
-        </div>
-      )}
-    </nav>
-  )
 }
 
 /* ── Hero ── */

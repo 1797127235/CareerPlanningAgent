@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Chapter, PaperCard, PullQuote } from '@/components/editorial'
 import { NextStepsCard } from './NextStepsCard'

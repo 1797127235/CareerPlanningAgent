@@ -37,12 +37,12 @@ if (-not (Test-Path "$Root\backend\app.py")) {
 }
 Write-Host "[OK] Backend file found" -ForegroundColor Green
 
-if (-not (Test-Path "$Root\frontend\package.json")) {
-    Write-Host "[ERROR] frontend\package.json not found" -ForegroundColor Red
+if (-not (Test-Path "$Root\frontend-v2\package.json")) {
+    Write-Host "[ERROR] frontend-v2\package.json not found" -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }
-Write-Host "[OK] Frontend file found" -ForegroundColor Green
+Write-Host "[OK] Frontend-v2 file found" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -59,7 +59,7 @@ Start-Sleep -Seconds 3
 
 # Start Frontend
 Write-Host "[2/2] Starting Frontend (port 5173)..." -ForegroundColor Yellow
-$frontendCmd = "Set-Location '$Root\frontend'; npm run dev; Read-Host 'Press Enter to close'"
+$frontendCmd = "Set-Location '$Root\frontend-v2'; npm run dev; Read-Host 'Press Enter to close'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd -WindowStyle Normal
 
 Start-Sleep -Seconds 2

@@ -99,6 +99,8 @@ def create_app() -> FastAPI:
         interview,
         jd,
         profiles,
+        profiles_projects,
+        profiles_sjt,
         recommendations,
         report,
     )
@@ -106,17 +108,19 @@ def create_app() -> FastAPI:
     app.include_router(auth.router, prefix="/api/auth", tags=["认证"])
     app.include_router(applications.router, prefix="/api/applications", tags=["求职跟踪"])
     app.include_router(profiles.router, prefix="/api/profiles", tags=["画像"])
+    app.include_router(profiles_projects.router, prefix="/api/profiles", tags=["画像"])
+    app.include_router(profiles_sjt.router, prefix="/api/profiles", tags=["画像"])
     app.include_router(graph.router, prefix="/api/graph", tags=["图谱"])
     app.include_router(jd.router, prefix="/api/jd", tags=["JD诊断"])
     # 面试练习已砍 — 轻量校准改走 Coach 对话，不再需要独立 /practice 路由
     app.include_router(chat.router, prefix="/api/chat", tags=["AI对话"])
     app.include_router(report.router, prefix="/api/report", tags=["报告"])
+    app.include_router(interview.router, prefix="/api/interview", tags=["模拟面试"])
     app.include_router(dashboard.router, prefix="/api/dashboard", tags=["看板"])
     app.include_router(guidance.router, prefix="/api/guidance", tags=["引导"])
     app.include_router(recommendations.router, prefix="/api/recommendations", tags=["推荐"])
     app.include_router(coach_results.router, prefix="/api/coach/results", tags=["教练结果"])
     app.include_router(growth_log.router, prefix="/api/growth-log", tags=["成长档案"])
-    app.include_router(interview.router, prefix="/api/interview", tags=["模拟面试"])
 
     return app
 

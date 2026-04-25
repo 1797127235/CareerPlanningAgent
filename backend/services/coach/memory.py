@@ -88,29 +88,6 @@ def add_conversation(user_id: int, conversation: str) -> None:
         logger.exception("Failed to add memory for user %d", user_id)
 
 
-def search_user_context(user_id: int, query: str, limit: int = 5) -> list[str]:
-    """按语义搜索用户相关记忆。供 supervisor 按 agent 需求切片注入。"""
-    try:
-        mem = get_memory()
-        results = mem.search(query=query, user_id=str(user_id), limit=limit)
-        # Mem0 返回结构: [{"memory": "...", "score": 0.x, ...}, ...]
-        return [r.get("memory", "") for r in results if isinstance(r, dict)]
-    except Exception:
-        logger.exception("Memory search failed for user %d", user_id)
-        return []
-
-
-def get_all_memories(user_id: int) -> list[str]:
-    """拿该用户的全部记忆（用于冷启动注入）。"""
-    try:
-        mem = get_memory()
-        results = mem.get_all(user_id=str(user_id))
-        return [r.get("memory", "") for r in results if isinstance(r, dict)]
-    except Exception:
-        logger.exception("get_all_memories failed for user %d", user_id)
-        return []
-
-
 def migrate_legacy_memo(user_id: int, legacy_text: str) -> None:
     """一次性迁移：把老的 coach_memo 字符串塞进 Mem0。幂等（Mem0 内部去重）。"""
     if not legacy_text or not legacy_text.strip():

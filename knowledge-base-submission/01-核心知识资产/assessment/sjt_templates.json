@@ -1,0 +1,186 @@
+{
+  "version": 2,
+  "dimensions": ["communication", "learning", "collaboration", "innovation", "resilience"],
+  "templates": [
+    {
+      "id": "t01",
+      "dimension": "communication",
+      "scenario_template": "你负责向{stakeholder}汇报{project_type}项目的进展，但对方对技术细节不感兴趣，只关心{business_concern}。汇报前一天你发现了一个{risk_type}风险。你会怎么做？",
+      "fill_slots": ["stakeholder", "project_type", "business_concern", "risk_type"],
+      "options": [
+        {"id": "a", "text_template": "直接用技术语言详细说明{risk_type}的影响和原因", "efficacy": 2},
+        {"id": "b", "text_template": "用{stakeholder}关心的{business_concern}角度重新包装风险信息，同时附上应对方案", "efficacy": 4},
+        {"id": "c", "text_template": "先不提风险，等内部解决了再汇报", "efficacy": 1},
+        {"id": "d", "text_template": "简要提及风险存在，但把重点放在已取得的进展上", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t02",
+      "dimension": "communication",
+      "scenario_template": "在{team_context}的一次需求评审会上，{role_a}和{role_b}对{feature}的实现方式产生了分歧，讨论逐渐升温。作为参会者，你会怎么做？",
+      "fill_slots": ["team_context", "role_a", "role_b", "feature"],
+      "options": [
+        {"id": "a", "text_template": "保持沉默，等他们自己解决", "efficacy": 1},
+        {"id": "b", "text_template": "先分别复述双方的核心诉求，确认理解无误后再引导讨论折中方案", "efficacy": 4},
+        {"id": "c", "text_template": "直接站队支持你认为技术上更合理的一方", "efficacy": 2},
+        {"id": "d", "text_template": "建议先搁置争议，会后各自准备方案再对比", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t03",
+      "dimension": "communication",
+      "scenario_template": "你刚加入{team_name}团队，负责{task_area}模块。联调时发现上游{upstream_team}提供的接口文档和实际行为不一致，影响了你的开发进度。你会怎么做？",
+      "fill_slots": ["team_name", "task_area", "upstream_team"],
+      "options": [
+        {"id": "a", "text_template": "自己看源码猜测正确行为，先绕过去", "efficacy": 2},
+        {"id": "b", "text_template": "整理出具体的不一致点，附上请求和响应截图，通过工作群 @ 对方确认", "efficacy": 4},
+        {"id": "c", "text_template": "直接在群里说'你们文档是错的'，让对方更新", "efficacy": 1},
+        {"id": "d", "text_template": "先和自己的 leader 反馈，让 leader 去协调", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t04",
+      "dimension": "learning",
+      "scenario_template": "团队决定在{project_context}中引入{new_tech}，你之前没接触过这项技术，但需要在{timeline}内用它完成{task}。你会怎么做？",
+      "fill_slots": ["project_context", "new_tech", "timeline", "task"],
+      "options": [
+        {"id": "a", "text_template": "从官方文档和教程开始，边学边写一个最小可用原型验证关键功能", "efficacy": 4},
+        {"id": "b", "text_template": "找一个完整的课程系统学习，确保基础扎实后再动手", "efficacy": 2},
+        {"id": "c", "text_template": "直接从 StackOverflow 和 AI 助手复制代码拼凑，能跑就行", "efficacy": 1},
+        {"id": "d", "text_template": "先问团队里有经验的人推荐学习路径，然后快速过一遍核心概念再开始", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t05",
+      "dimension": "learning",
+      "scenario_template": "你在{current_domain}工作了一段时间后，被调到了一个完全陌生的{new_domain}项目组。项目已经进行到中期，团队在讨论{topic}时你很多概念听不懂。你会怎么做？",
+      "fill_slots": ["current_domain", "new_domain", "topic"],
+      "options": [
+        {"id": "a", "text_template": "假装听懂了，回去自己百度", "efficacy": 1},
+        {"id": "b", "text_template": "会后整理不懂的关键词，阅读项目文档和 wiki，再约一位同事请教确认理解", "efficacy": 4},
+        {"id": "c", "text_template": "当场就每个不懂的词提问，打断讨论节奏", "efficacy": 2},
+        {"id": "d", "text_template": "把不懂的术语记下来，等项目结束后再慢慢学", "efficacy": 1}
+      ]
+    },
+    {
+      "id": "t06",
+      "dimension": "learning",
+      "scenario_template": "你在{project}中使用的{technology}发布了一个大版本更新，引入了{breaking_change}。团队还没有升级计划，但你注意到新版本解决了你当前遇到的{pain_point}。你会怎么做？",
+      "fill_slots": ["project", "technology", "breaking_change", "pain_point"],
+      "options": [
+        {"id": "a", "text_template": "等团队统一安排升级", "efficacy": 2},
+        {"id": "b", "text_template": "在个人分支上做一次升级验证，记录影响范围和改动量，写成简短评估发给团队参考", "efficacy": 4},
+        {"id": "c", "text_template": "直接在主分支升级，出了问题再回滚", "efficacy": 1},
+        {"id": "d", "text_template": "阅读 changelog 了解变更，评估是否值得升级，但不主动推动", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t07",
+      "dimension": "collaboration",
+      "scenario_template": "你和{colleague}共同负责{project}的开发，但你们在{decision_point}上有不同意见。{colleague}坚持用方案 A，你认为方案 B 更合理。deadline 快到了。你会怎么做？",
+      "fill_slots": ["colleague", "project", "decision_point"],
+      "options": [
+        {"id": "a", "text_template": "坚持己见，拉更多人支持你的方案", "efficacy": 2},
+        {"id": "b", "text_template": "约{colleague}对齐，各自列出方案的优劣，一起定一个评估标准来决策", "efficacy": 4},
+        {"id": "c", "text_template": "让步用方案 A，反正时间来不及了", "efficacy": 2},
+        {"id": "d", "text_template": "找 leader 来裁决", "efficacy": 1}
+      ]
+    },
+    {
+      "id": "t08",
+      "dimension": "collaboration",
+      "scenario_template": "在{project}中，{teammate}负责的{module}模块进度严重滞后，已经开始影响你负责的{your_module}。{teammate}看起来压力很大但没有主动求助。你会怎么做？",
+      "fill_slots": ["project", "teammate", "module", "your_module"],
+      "options": [
+        {"id": "a", "text_template": "在站会上公开指出{teammate}的进度问题", "efficacy": 1},
+        {"id": "b", "text_template": "私下找{teammate}聊，了解困难所在，看自己能否分担一部分或帮忙解决卡点", "efficacy": 4},
+        {"id": "c", "text_template": "向 leader 反馈进度风险，让 leader 决定如何调配", "efficacy": 3},
+        {"id": "d", "text_template": "先把自己的部分做好，用 mock 数据绕过依赖", "efficacy": 2}
+      ]
+    },
+    {
+      "id": "t09",
+      "dimension": "collaboration",
+      "scenario_template": "你被临时拉进一个跨团队协作项目，负责{your_part}。{other_team}团队的工作方式和你们团队差异很大——他们习惯{their_style}，而你们团队习惯{your_style}。你会怎么做？",
+      "fill_slots": ["your_part", "other_team", "their_style", "your_style"],
+      "options": [
+        {"id": "a", "text_template": "坚持用你们团队的方式，毕竟你更熟悉", "efficacy": 1},
+        {"id": "b", "text_template": "先了解对方工作方式的原因和优势，在关键协作节点约定统一规范，其他部分各自灵活处理", "efficacy": 4},
+        {"id": "c", "text_template": "完全按对方的方式来，减少摩擦", "efficacy": 2},
+        {"id": "d", "text_template": "提议双方在项目开始时开个对齐会，商定协作流程", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t10",
+      "dimension": "innovation",
+      "scenario_template": "你在做{project}时发现现有的{current_approach}效率很低，团队一直这么用但没人质疑。你有一个用{new_idea}替代的想法，但不确定可行性。你会怎么做？",
+      "fill_slots": ["project", "current_approach", "new_idea"],
+      "options": [
+        {"id": "a", "text_template": "按原来的{current_approach}继续做，不要节外生枝", "efficacy": 1},
+        {"id": "b", "text_template": "用业余时间做一个{new_idea}的最小验证原型，拿数据对比后再向团队提议", "efficacy": 4},
+        {"id": "c", "text_template": "在站会上直接说{current_approach}不好，应该换{new_idea}", "efficacy": 2},
+        {"id": "d", "text_template": "先和 leader 私下聊聊这个想法，看看他的态度", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t11",
+      "dimension": "innovation",
+      "scenario_template": "公司举办{hackathon_name}创新活动，你有一个关于{idea_topic}的想法，但需要用到你不熟悉的{unfamiliar_tech}。组队阶段你发现没有人做过类似的事。你会怎么做？",
+      "fill_slots": ["hackathon_name", "idea_topic", "unfamiliar_tech"],
+      "options": [
+        {"id": "a", "text_template": "放弃这个想法，做一个用熟悉技术能完成的保守项目", "efficacy": 2},
+        {"id": "b", "text_template": "快速学习{unfamiliar_tech}的核心概念，找互补技能的人组队，聚焦验证核心假设而非完美实现", "efficacy": 4},
+        {"id": "c", "text_template": "一个人硬做，不需要组队", "efficacy": 1},
+        {"id": "d", "text_template": "先调研市面上是否有类似产品，如果没有就说明可能不靠谱", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t12",
+      "dimension": "innovation",
+      "scenario_template": "你负责的{system}最近频繁被用户投诉{pain_point}。团队的常规做法是{patch_approach}。你分析后觉得根本原因是{root_cause}，但修复它意味着重构一部分架构。你会怎么做？",
+      "fill_slots": ["system", "pain_point", "patch_approach", "root_cause"],
+      "options": [
+        {"id": "a", "text_template": "继续{patch_approach}，至少能快速缓解问题", "efficacy": 2},
+        {"id": "b", "text_template": "写一份分析文档说明{root_cause}的影响，提出分阶段重构方案，同时用{patch_approach}兜底当前问题", "efficacy": 4},
+        {"id": "c", "text_template": "直接开始重构，做完了大家就知道值不值了", "efficacy": 1},
+        {"id": "d", "text_template": "在技术周会上抛出{root_cause}的分析，看团队有没有兴趣一起讨论", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t13",
+      "dimension": "resilience",
+      "scenario_template": "你负责的{feature}功能在上线后出了{incident}，影响了{user_count}用户。leader 在群里问情况，PM 也在催修复。你会怎么做？",
+      "fill_slots": ["feature", "incident", "user_count"],
+      "options": [
+        {"id": "a", "text_template": "先在群里解释这不完全是你的问题，之前代码审查也通过了", "efficacy": 1},
+        {"id": "b", "text_template": "先发一条状态同步：已定位到问题，预计修复时间，临时缓解方案。然后集中精力修复，完成后做一次复盘", "efficacy": 4},
+        {"id": "c", "text_template": "不回消息，埋头修bug，修好了再说", "efficacy": 2},
+        {"id": "d", "text_template": "马上找同事帮忙一起看，人多力量大", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t14",
+      "dimension": "resilience",
+      "scenario_template": "你花了两周做的{deliverable}方案，在{review_meeting}上被{senior}否定了大部分内容，给出的理由是'{reason}'。你内心很沮丧。你会怎么做？",
+      "fill_slots": ["deliverable", "review_meeting", "senior", "reason"],
+      "options": [
+        {"id": "a", "text_template": "当场和{senior}争论，你觉得对方没理解你的思路", "efficacy": 1},
+        {"id": "b", "text_template": "先消化情绪，客观记录{senior}的反馈要点，回去分析哪些有道理、哪些需要进一步讨论，然后修订方案", "efficacy": 4},
+        {"id": "c", "text_template": "全盘接受，按{senior}说的改就是了", "efficacy": 2},
+        {"id": "d", "text_template": "会后找{senior}私下聊，理解他否定的深层原因", "efficacy": 3}
+      ]
+    },
+    {
+      "id": "t15",
+      "dimension": "resilience",
+      "scenario_template": "项目进入{phase}阶段，你同时要处理{task_a}和{task_b}，两个都很紧急。加班了一周，身体和精神都很疲惫，但进度还是不理想。你会怎么做？",
+      "fill_slots": ["phase", "task_a", "task_b"],
+      "options": [
+        {"id": "a", "text_template": "继续硬撑，反正快结束了", "efficacy": 1},
+        {"id": "b", "text_template": "梳理两个任务的优先级和最小交付标准，和 leader 透明沟通当前状态，协商是否可以调整范围或获得支援", "efficacy": 4},
+        {"id": "c", "text_template": "两个都做，但降低质量标准，先交差", "efficacy": 2},
+        {"id": "d", "text_template": "自己决定先做{task_a}，{task_b}延期，不告诉任何人", "efficacy": 1}
+      ]
+    }
+  ]
+}

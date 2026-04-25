@@ -16,18 +16,11 @@ _DATA_DIR = _PROJECT_ROOT / "data"
 # ── Static data (loaded once per process) ───────────────────────────────────
 
 _GRAPH_NODES: dict[str, dict] = {}
-_LEVEL_SKILLS: dict[str, dict] = {}
 _MARKET: dict[str, dict] = {}        # family_name -> signal dict
 _NODE_TO_FAMILY: dict[str, str] = {} # node_id -> family_name
 
 _SKILL_FILL_PATH_PATH = _PROJECT_ROOT / "data" / "skill_fill_path_tags.json"
 _SKILL_FILL_PATH_CACHE: dict[str, str] | None = None
-
-# Career-alignment graph cache (auto-invalidates on mtime change)
-_graph_cache: list[dict] | None = None
-_graph_mtime: float = 0.0
-
-
 
 _PROJECT_SKILL_HINTS: dict[str, list[str]] = {
     "性能优化": ["性能", "高性能", "压测", "benchmark", "qps", "延迟", "吞吐", "profile", "热点", "优化"],
@@ -165,27 +158,6 @@ def _batch_embed(texts: list[str]) -> list[list[float]] | None:
         logger.warning("_batch_embed failed: %s", e)
         return None
 
-# ── Data loaders ────────────────────────────────────────────────────────────
-
-
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-_DATA_DIR = _PROJECT_ROOT / "data"
-
-# ── Static data (loaded once per process) ─────────────────────────────────────
-
-_GRAPH_NODES: dict[str, dict] = {}
-_LEVEL_SKILLS: dict[str, dict] = {}
-_MARKET: dict[str, dict] = {}        # family_name → signal dict
-_NODE_TO_FAMILY: dict[str, str] = {} # node_id → family_name
-
-_SKILL_FILL_PATH_PATH = _PROJECT_ROOT / "data" / "skill_fill_path_tags.json"
-_SKILL_FILL_PATH_CACHE: dict[str, str] | None = None
-
-# Career-alignment graph cache (auto-invalidates on mtime change)
-_graph_cache: list[dict] | None = None
-_graph_mtime: float = 0.0
-
-
 _LEARN_KEYWORDS = {
     "数据结构", "算法", "操作系统", "计算机网络", "计算机组成",
     "数据库原理", "编译原理", "离散数学", "概率", "线性代数",
@@ -236,35 +208,8 @@ def _classify_fill_path(skill_name: str, covered_by_project: bool = False) -> st
     return "practice" if covered_by_project else "both"
 
 
-def _load_graph_nodes() -> list[dict]:
-    """Load & cache graph.json nodes, auto-invalidate on mtime change."""
-    global _graph_cache, _graph_mtime
-    try:
-        graph_path = _DATA_DIR / "graph.json"
-        mtime = graph_path.stat().st_mtime
-        if _graph_cache is None or mtime != _graph_mtime:
-            with open(graph_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            _graph_cache = data.get("nodes", [])
-            _graph_mtime = mtime
-        return _graph_cache or []
-    except Exception as e:
-        logger.warning("Failed to load graph.json: %s", e)
-        return []
-
-
-def reload_static() -> None:
-    """Force-reload all static data (call after regenerating data files)."""
-    global _GRAPH_NODES, _LEVEL_SKILLS, _MARKET, _NODE_TO_FAMILY
-    _GRAPH_NODES = {}
-    _LEVEL_SKILLS = {}
-    _MARKET = {}
-    _NODE_TO_FAMILY = {}
-    _load_static()
-
-
 def _load_static() -> None:
-    global _GRAPH_NODES, _LEVEL_SKILLS, _MARKET, _NODE_TO_FAMILY
+    global _GRAPH_NODES, _MARKET, _NODE_TO_FAMILY
     if _GRAPH_NODES:
         return
 
@@ -273,11 +218,6 @@ def _load_static() -> None:
         _GRAPH_NODES = {n["node_id"]: n for n in raw.get("nodes", [])}
     except Exception as e:
         logger.warning("graph.json load failed: %s", e)
-
-    try:
-        _LEVEL_SKILLS = json.loads((_DATA_DIR / "level_skills.json").read_text(encoding="utf-8"))
-    except Exception:
-        pass  # optional — fallback to gap_skills
 
     try:
         raw_market = json.loads((_DATA_DIR / "market_signals.json").read_text(encoding="utf-8"))
@@ -303,11 +243,6 @@ def get_graph_nodes() -> dict[str, dict]:
     return _GRAPH_NODES
 
 
-def get_level_skills() -> dict[str, dict]:
-    _load_static()
-    return _LEVEL_SKILLS
-
-
 def get_market() -> dict[str, dict]:
     _load_static()
     return _MARKET
@@ -317,6 +252,3 @@ def get_node_to_family() -> dict[str, str]:
     _load_static()
     return _NODE_TO_FAMILY
 
-
-def get_skill_fill_path_cache() -> dict[str, str]:
-    return _load_skill_fill_path_cache()

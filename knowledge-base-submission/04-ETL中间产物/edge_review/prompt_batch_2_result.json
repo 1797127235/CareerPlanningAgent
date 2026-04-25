@@ -1,0 +1,152 @@
+[
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["TCP/IP协议栈深度理解", "路由交换设备配置(Cisco/华为)", "防火墙策略管理", "负载均衡配置", "SDN网络编排"],
+    "reason": "运维工程师具备Linux与网络基础，转网络工程师主要补充网络设备配置与协议知识。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["Linux内核原理与调优", "KVM/VMware虚拟化技术", "分布式存储(Ceph/GlusterFS)", "Shell/Python系统脚本进阶", "系统性能监控与分析"],
+    "reason": "网络工程师对底层基础设施有理解，转系统工程师主要补充OS内核与虚拟化技术。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "低",
+    "gap_skills": ["Docker容器原理与操作", "Kubernetes集群管理", "Containerd运行时", "K8s网络与存储插件", "容器安全加固"],
+    "reason": "系统工程师具备Linux与虚拟化基础，向容器化方向延伸是自然技术演进。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["Go/Python SRE工具开发", "Prometheus/Grafana监控体系", "SLO/SLA指标设计", "混沌工程实践", "容量规划与弹性伸缩"],
+    "reason": "容器工程师K8s经验直接复用，转SRE主要补充可靠性工程方法论与监控告警体系。"
+  },
+  {
+    "edge_type": "promotion",
+    "difficulty": "中",
+    "gap_skills": ["质量管理体系(ISO/CMMI)", "过程审计与合规管理", "风险识别与评估方法", "质量工具(六西格玛/PDCA)", "跨团队质量推进能力"],
+    "reason": "测试工程师转QA是质量方向的自然晋升，从执行测试拓展至质量体系建设。"
+  },
+  {
+    "edge_type": "transition",
+    "difficulty": "高",
+    "gap_skills": ["Python/Java编程能力", "Selenium/Appium自动化框架", "接口自动化测试(Pytest/RestAssured)", "CI/CD流水线集成", "性能测试(JMeter/Locust)"],
+    "reason": "QA工程师侧重流程管理，转自动化测试需从零建立编程与自动化框架能力。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["嵌入式系统基础(RTOS/裸机)", "MQTT/LoRa无线通信协议", "传感器选型与数据采集", "云平台(阿里云IoT/AWS IoT)对接", "固件OTA升级与调试"],
+    "reason": "硬件工程师具备电路基础，向IoT延伸需补充无线通信协议与嵌入式软件知识。"
+  },
+  {
+    "edge_type": "transition",
+    "difficulty": "高",
+    "gap_skills": ["Verilog/VHDL硬件描述语言", "FPGA逻辑设计与综合", "时序约束与静态时序分析", "数字信号处理算法", "Vivado/Quartus开发工具"],
+    "reason": "IoT工程师偏软件协议栈，转FPGA需重新建立数字逻辑与硬件描述语言体系。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "低",
+    "gap_skills": ["Axure/ProtoPie原型工具", "交互规范与模式设计", "信息架构梳理方法", "用户流程与任务分析", "动效与微交互设计"],
+    "reason": "UI设计师已具备视觉审美基础，转交互设计主要补充原型工具与用户流程设计思维。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["用户访谈与深度访谈技术", "问卷设计与统计分析", "可用性测试方法", "用户画像与旅程图构建", "定性定量研究方法论"],
+    "reason": "交互设计师熟悉用户流程，转用研主要补充研究方法论与数据分析能力。"
+  },
+  {
+    "edge_type": "promotion",
+    "difficulty": "中",
+    "gap_skills": ["需求文档撰写(PRD/MRD)", "产品路线图规划", "数据分析与指标体系", "跨部门协作与项目管理", "商业模式与竞品分析"],
+    "reason": "UX设计师已具备用户研究与原型能力，转产品经理是设计到产品决策的自然晋升。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["SQL数据查询与分析", "数据仓库与数据建模基础", "BI工具使用(Tableau/Power BI)", "指标体系设计方法", "数据治理与数据质量管理"],
+    "reason": "B端产品经理具备系统设计能力，转数据产品主要补充数据工程与分析工具知识。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["增长模型(AARRR/北极星指标)", "A/B测试设计与分析", "用户心理学与行为设计", "渠道投放策略与ROI优化", "裂变机制与病毒传播设计"],
+    "reason": "数据产品经理有数据分析基础，转增长产品主要补充增长方法论与用户运营策略。"
+  },
+  {
+    "edge_type": "promotion",
+    "difficulty": "中",
+    "gap_skills": ["平台生态架构设计", "API开放平台设计规范", "第三方开发者生态运营", "平台治理规则制定", "平台商业化策略"],
+    "reason": "增长产品经理积累了数据分析与用户运营经验，向平台产品晋升需补充生态与架构思维。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "低",
+    "gap_skills": ["故障诊断与排查方法论", "客户沟通与情绪管理", "技术支持文档编写", "服务流程与SLA管理", "客户续约与满意度管理"],
+    "reason": "实施工程师具备产品部署与技术基础，转售后主要补充客户服务与故障处理软技能。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["产品演示与Demo能力", "方案撰写与标书制作", "招投标流程与规则", "技术需求挖掘与确认", "PPT高质量呈现技巧"],
+    "reason": "客户成功经理具备客户关系与行业知识，转售前主要补充方案设计与技术表达能力。"
+  },
+  {
+    "edge_type": "transition",
+    "difficulty": "高",
+    "gap_skills": ["产品战略规划与路线图", "市场洞察与竞争分析", "商业模式设计与验证", "团队管理与人才培养", "跨部门资源协调能力"],
+    "reason": "架构师技术深度强但产品与商业思维差距大，跨管理方向转型需系统补充产品战略与团队管理能力。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["客户开发与线索挖掘", "商务谈判与签单能力", "CRM系统与销售漏斗管理", "销售策略与目标达成", "团队管理与销售培训"],
+    "reason": "市场营销对品牌与用户有理解，转销售经理主要补充客户开发与商务谈判实战能力。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["增长黑客思维与方法论", "A/B测试设计与数据分析", "渠道投放与ROI追踪", "用户分层运营策略", "裂变活动设计与执行"],
+    "reason": "销售经理具备客户与商务能力，转增长运营需补充数据驱动的线上运营与实验思维。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "低",
+    "gap_skills": ["渠道资源开发与合作谈判", "生态资源整合能力", "商务合同与法务基础", "市场分析与机会判断", "CRM与合作伙伴管理"],
+    "reason": "增长运营具备数据分析与活动策划能力，转商务拓展主要补充商务谈判与资源整合能力。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["品牌战略与定位方法论", "整合营销传播(IMC)规划", "PR媒体关系与危机公关", "内容策划与创意执行", "品牌资产管理与评估"],
+    "reason": "渠道经理具备市场推广与数据分析经验，转品牌经理主要补充品牌战略与传播体系知识。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["招聘渠道运营(BOSS/猎聘/内推)", "简历筛选与面试技巧", "人才画像设计", "雇主品牌建设", "招聘数据分析与漏斗优化"],
+    "reason": "行政专员具备内部协调与沟通基础，转招聘专员主要补充人才获取与面试评估能力。"
+  },
+  {
+    "edge_type": "adjacent_role",
+    "difficulty": "中",
+    "gap_skills": ["培训需求调研与分析", "课程开发与教学设计(ISD)", "内外部讲师体系搭建", "培训效果评估(柯氏模型)", "在线学习平台运营"],
+    "reason": "招聘专员具备人才理解与沟通能力，转培训专员主要补充课程设计与学习体系管理知识。"
+  },
+  {
+    "edge_type": "transition",
+    "difficulty": "高",
+    "gap_skills": ["薪酬体系设计与岗位评估", "绩效管理体系(OKR/KPI)", "Excel高级数据处理与建模", "劳动法规与薪酬合规", "HR系统(SAP/北森)操作"],
+    "reason": "培训专员转薪酬绩效跨越HR子领域，需系统学习数字化分析与薪酬制度设计知识。"
+  },
+  {
+    "edge_type": "transition",
+    "difficulty": "高",
+    "gap_skills": ["财务报表阅读与分析", "Excel财务建模", "预算编制与管控方法", "成本核算与控制", "行业财务指标体系"],
+    "reason": "法务转财务分析跨专业领域较大，合规思维有一定共通，但需系统补充财务知识与数据分析能力。"
+  }
+]

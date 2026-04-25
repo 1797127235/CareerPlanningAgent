@@ -212,7 +212,6 @@ def execute_profile_reset(user_id: int, profile: "Profile", db: Session) -> None
 
     # Safety net: warn if new FK-linked tables appear but aren't in explicit list
     try:
-        from sqlalchemy import inspect as sa_inspect
         from backend.db import Base
 
         def _enumerate_user_owned_tables(metadata):

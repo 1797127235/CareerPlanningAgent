@@ -7,11 +7,6 @@ from backend.services.report.data import (
     _PROJECT_SKILL_HINTS,
     _skill_matches,
 )
-from backend.services.report.skill_gap import (
-    _skill_action,
-    _has_hardcoded_guidance,
-    _generate_skill_actions_llm,
-)
 
 
 def _build_action_plan(

@@ -22,6 +22,7 @@ from backend.models import (
     ProjectRecord,
     Report,
     User,
+    UserNotification,
 )
 
 logger = logging.getLogger(__name__)
@@ -271,75 +272,6 @@ def get_guidance(
         guidance["tone"] = "urgent"
 
     return guidance
-
-
-from datetime import datetime, timezone
-from pydantic import BaseModel
-from backend.models import UserNotification
-
-
-class HeartbeatDismissBody(BaseModel):
-    notification_id: int
-
-
-def _filter_expired(query):
-    """排除已过期的通知（expires_at 不为空且 <= now）。"""
-    now = datetime.now(timezone.utc)
-    return query.filter(
-        (UserNotification.expires_at.is_(None))
-        | (UserNotification.expires_at > now)
-    )
-
-
-@router.get("/heartbeat")
-def get_heartbeat(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """拉取未读的 heartbeat 通知，最多 3 条。"""
-    q = db.query(UserNotification).filter(
-        UserNotification.user_id == user.id,
-        UserNotification.dismissed == False,  # noqa: E712
-    )
-    notes = _filter_expired(q).order_by(UserNotification.created_at.desc()).limit(3).all()
-    return {
-        "notifications": [
-            {
-                "id": n.id,
-                "kind": n.kind,
-                "trigger_type": n.trigger_type,
-                "title": n.title,
-                "body": n.body,
-                "cta_label": n.cta_label,
-                "cta_route": n.cta_route,
-                "created_at": n.created_at.isoformat(),
-            }
-            for n in notes
-        ]
-    }
-
-
-@router.post("/heartbeat/dismiss")
-def dismiss_heartbeat(
-    body: HeartbeatDismissBody,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """用户点关闭 → 标记 dismissed。"""
-    note = (
-        db.query(UserNotification)
-        .filter(
-            UserNotification.id == body.notification_id,
-            UserNotification.user_id == user.id,
-        )
-        .first()
-    )
-    if not note:
-        raise HTTPException(404, "通知不存在")
-    note.dismissed = True
-    note.dismissed_at = datetime.now(timezone.utc)
-    db.commit()
-    return {"ok": True}
 
 
 # ── Coach intervention helpers (used by other routers) ───────────────────────

@@ -215,6 +215,3 @@ def llm_chat(
         return ""
 
 
-# ── Backward-compat aliases ──
-
-load_env = _load_env

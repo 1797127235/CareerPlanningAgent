@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { generateReportV2, type ReportV2Data } from '@/api/report'
 import {
@@ -20,7 +20,7 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (isMock) {
       setData(mockReportData)
       setLoading(false)
@@ -40,11 +40,11 @@ export default function ReportPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [isMock])
 
   useEffect(() => {
     load()
-  }, [isMock])
+  }, [load])
 
   if (loading) {
     return (

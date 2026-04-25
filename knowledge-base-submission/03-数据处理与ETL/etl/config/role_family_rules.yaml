@@ -1,0 +1,221 @@
+# role_family_rules.yaml — 岗位分类关键词配置
+# version: 2025-01
+# 修改说明: priority 越小越优先匹配，避免关键词重叠时误分类
+# exclude_keywords: 命中任一排除词则跳过此 family
+
+version: "2025-01"
+
+families:
+
+  AI/ML:
+    priority: 1
+    include_keywords:
+      - 算法工程师
+      - 机器学习
+      - 深度学习
+      - NLP工程师
+      - 大模型
+      - LLM
+      - AI工程师
+      - 人工智能工程师
+      - 计算机视觉
+      - CV工程师
+      - 推荐算法
+      - 搜索算法
+      - AIGC
+      - 强化学习
+      - 语音识别
+      - 自然语言处理
+    exclude_keywords:
+      - 销售
+      - 产品经理
+      - 运营
+
+  系统开发:
+    priority: 2
+    include_keywords:
+      - C++工程师
+      - C++开发
+      - 嵌入式工程师
+      - 嵌入式开发
+      - 嵌入式软件
+      - 底层开发
+      - 内核开发
+      - 驱动开发
+      - Linux内核
+      - 系统软件
+      - 音视频开发
+      - 音视频工程师
+      - 基础架构
+      - 存储开发
+      - 数据库内核
+      - 编译器
+    exclude_keywords:
+      - 销售
+      - 测试
+
+  游戏开发:
+    priority: 3
+    include_keywords:
+      - 游戏开发
+      - 游戏程序员
+      - 游戏客户端
+      - 游戏服务端
+      - Unity开发
+      - Unreal开发
+      - 游戏引擎
+      - 端游
+      - 手游开发
+      - 游戏后端
+    exclude_keywords:
+      - 游戏运营
+      - 游戏策划
+      - 游戏测试
+
+  移动开发:
+    priority: 4
+    include_keywords:
+      - Android开发
+      - Android工程师
+      - iOS开发
+      - iOS工程师
+      - 移动开发
+      - App开发
+      - 安卓开发
+      - 苹果开发
+      - Flutter开发
+      - React Native
+    exclude_keywords:
+      - 销售
+      - 测试
+
+  前端开发:
+    priority: 5
+    include_keywords:
+      - 前端工程师
+      - 前端开发
+      - Web前端
+      - H5开发
+      - React开发
+      - Vue开发
+      - JavaScript工程师
+      - TypeScript工程师
+      - 页面开发
+      - 前端架构
+      - 小程序开发
+    exclude_keywords:
+      - 销售
+      - 测试
+      - 产品
+
+  数据:
+    priority: 6
+    include_keywords:
+      - 数据分析师
+      - 数据工程师
+      - 大数据工程师
+      - BI工程师
+      - 数据仓库
+      - ETL工程师
+      - 数据开发
+      - 数据科学家
+      - 数据挖掘
+      - Spark工程师
+      - Flink工程师
+      - 数据平台
+    exclude_keywords:
+      - 销售
+      - 数据录入
+      - 数据采集员
+
+  运维/DevOps:
+    priority: 7
+    include_keywords:
+      - 运维工程师
+      - DevOps工程师
+      - SRE工程师
+      - 云计算工程师
+      - k8s工程师
+      - 容器化
+      - 平台工程师
+      - 基础设施
+      - 系统运维
+      - Linux运维
+      - 网络工程师
+    exclude_keywords:
+      - 销售
+      - 行政
+
+  后端开发:
+    priority: 8
+    include_keywords:
+      - 后端工程师
+      - 后端开发
+      - Java工程师
+      - Java开发
+      - Python工程师
+      - Python开发
+      - Go工程师
+      - Go开发
+      - Golang
+      - PHP工程师
+      - PHP开发
+      - 服务端工程师
+      - 服务端开发
+      - Spring
+      - 微服务
+      - 接口开发
+    exclude_keywords:
+      - 销售
+      - 测试
+
+  质量保障:
+    priority: 9
+    include_keywords:
+      - 测试工程师
+      - QA工程师
+      - 质量保障
+      - 自动化测试
+      - 性能测试
+      - 安全测试
+      - 软件测试
+    exclude_keywords:
+      - 销售
+
+  安全:
+    priority: 10
+    include_keywords:
+      - 安全工程师
+      - 网络安全
+      - 信息安全
+      - 渗透测试
+      - 安全研究员
+      - 漏洞挖掘
+      - 红队
+    exclude_keywords:
+      - 销售
+      - 保安
+
+  产品:
+    priority: 11
+    include_keywords:
+      - 产品经理
+      - 产品总监
+      - 互联网产品
+      - 产品设计
+      - 需求分析
+    exclude_keywords:
+      - 销售
+
+  管理:
+    priority: 12
+    include_keywords:
+      - 技术总监
+      - CTO
+      - 工程总监
+      - 研发总监
+      - 技术负责人
+      - 研发经理
+      - 架构师
+    exclude_keywords:
+      - 销售

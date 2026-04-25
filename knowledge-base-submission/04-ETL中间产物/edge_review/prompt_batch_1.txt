@@ -1,0 +1,212 @@
+你是职业规划专家。请审核以下职业转型候选对，判断是否应该建立转型路径。
+
+对每一对，输出 JSON：
+- edge_type: "promotion"（晋升）/ "adjacent_role"（同级转岗）/ "transition"（跨界转型）/ "none"（不应建立）
+- difficulty: "低"（1-3个月）/ "中"（3-12个月）/ "高"（>1年）
+- gap_skills: 需要补充的技能列表（3-5个）
+- reason: 一句话说明转型逻辑
+
+只输出 JSON 数组，不要其他文字。
+
+候选对：
+
+--- 对 0 ---
+源岗位: 移动端H5工程师（software_development，月薪 18000）
+  技能: HTML5, CSS3, JavaScript, 响应式设计, 移动端适配, Zepto
+目标岗位: PHP工程师（software_development，月薪 18000）
+  技能: PHP, Laravel/ThinkPHP, MySQL, Redis, Nginx, Composer
+技能重叠: 0%
+类型: intra_family
+
+--- 对 1 ---
+源岗位: PHP工程师（software_development，月薪 18000）
+  技能: PHP, Laravel/ThinkPHP, MySQL, Redis, Nginx, Composer
+目标岗位: Vue工程师（software_development，月薪 20000）
+  技能: Vue.js, Vuex, Element UI, Vite, TypeScript, Axios
+技能重叠: 0%
+类型: intra_family
+
+--- 对 2 ---
+源岗位: Vue工程师（software_development，月薪 20000）
+  技能: Vue.js, Vuex, Element UI, Vite, TypeScript, Axios
+目标岗位: Angular工程师（software_development，月薪 21000）
+  技能: Angular, TypeScript, RxJS, NgRx, Webpack, Jasmine
+技能重叠: 9%
+类型: intra_family
+
+--- 对 3 ---
+源岗位: React工程师（software_development，月薪 22000）
+  技能: React, TypeScript, Redux, Next.js, Webpack, CSS-in-JS
+目标岗位: Android开发工程师（software_development，月薪 22000）
+  技能: Kotlin, Java, Android SDK, Jetpack, Gradle, SQLite
+技能重叠: 0%
+类型: intra_family
+
+--- 对 4 ---
+源岗位: Android开发工程师（software_development，月薪 22000）
+  技能: Kotlin, Java, Android SDK, Jetpack, Gradle, SQLite
+目标岗位: Python后端工程师（software_development，月薪 22000）
+  技能: Python, Django/Flask, MySQL, Redis, Celery, RESTful API
+技能重叠: 0%
+类型: intra_family
+
+--- 对 5 ---
+源岗位: Python后端工程师（software_development，月薪 22000）
+  技能: Python, Django/Flask, MySQL, Redis, Celery, RESTful API
+目标岗位: Node.js工程师（software_development，月薪 23000）
+  技能: Node.js, Express/Nest.js, JavaScript/TypeScript, MongoDB, Redis, Socket.io
+技能重叠: 9%
+类型: intra_family
+
+--- 对 6 ---
+源岗位: Node.js工程师（software_development，月薪 23000）
+  技能: Node.js, Express/Nest.js, JavaScript/TypeScript, MongoDB, Redis, Socket.io
+目标岗位: Unity工程师（software_development，月薪 23000）
+  技能: Unity, C#, Shader, 物理引擎, UI系统, 动画系统
+技能重叠: 0%
+类型: intra_family
+
+--- 对 7 ---
+源岗位: Unity工程师（software_development，月薪 23000）
+  技能: Unity, C#, Shader, 物理引擎, UI系统, 动画系统
+目标岗位: iOS开发工程师（software_development，月薪 24000）
+  技能: Swift, Objective-C, CocoaPods, UIKit, SwiftUI, Core Data
+技能重叠: 0%
+类型: intra_family
+
+--- 对 8 ---
+源岗位: iOS开发工程师（software_development，月薪 24000）
+  技能: Swift, Objective-C, CocoaPods, UIKit, SwiftUI, Core Data
+目标岗位: Java后端工程师（software_development，月薪 24000）
+  技能: Java, Spring Boot, MySQL, Redis, MyBatis, Dubbo
+技能重叠: 0%
+类型: intra_family
+
+--- 对 9 ---
+源岗位: Java后端工程师（software_development，月薪 24000）
+  技能: Java, Spring Boot, MySQL, Redis, MyBatis, Dubbo
+目标岗位: Flutter工程师（software_development，月薪 25000）
+  技能: Flutter, Dart, 状态管理, 平台通道, UI组件, 性能优化
+技能重叠: 0%
+类型: intra_family
+
+--- 对 10 ---
+源岗位: Flutter工程师（software_development，月薪 25000）
+  技能: Flutter, Dart, 状态管理, 平台通道, UI组件, 性能优化
+目标岗位: 游戏开发工程师（software_development，月薪 25000）
+  技能: C++, Lua, 游戏引擎, 物理引擎, 图形学, Socket编程
+技能重叠: 0%
+类型: intra_family
+
+--- 对 11 ---
+源岗位: 游戏开发工程师（software_development，月薪 25000）
+  技能: C++, Lua, 游戏引擎, 物理引擎, 图形学, Socket编程
+目标岗位: 全栈工程师（software_development，月薪 26000）
+  技能: JavaScript/TypeScript, React/Vue, Node.js/Python, MySQL, MongoDB, Docker
+技能重叠: 0%
+类型: intra_family
+
+--- 对 12 ---
+源岗位: 全栈工程师（software_development，月薪 26000）
+  技能: JavaScript/TypeScript, React/Vue, Node.js/Python, MySQL, MongoDB, Docker
+目标岗位: Go后端工程师（software_development，月薪 28000）
+  技能: Go, Gin/gorm, MySQL, Redis, Kafka, gRPC
+技能重叠: 9%
+类型: intra_family
+
+--- 对 13 ---
+源岗位: C++后端工程师（software_development，月薪 30000）
+  技能: C++, STL, Linux, Socket编程, MySQL, Redis
+目标岗位: Rust工程师（software_development，月薪 32000）
+  技能: Rust, Tokio, Actix-web, PostgreSQL, Redis, Docker
+技能重叠: 9%
+类型: intra_family
+
+--- 对 14 ---
+源岗位: MLOps工程师（algorithm_ai，月薪 32000）
+  技能: Python, Docker/K8s, Kubeflow, MLflow, CI/CD, 云平台
+目标岗位: NLP工程师（algorithm_ai，月薪 35000）
+  技能: Python, Transformers, BERT/GPT, PyTorch/TensorFlow, NLP基础, 深度学习
+技能重叠: 9%
+类型: intra_family
+
+--- 对 15 ---
+源岗位: NLP工程师（algorithm_ai，月薪 35000）
+  技能: Python, Transformers, BERT/GPT, PyTorch/TensorFlow, NLP基础, 深度学习
+目标岗位: CV工程师（algorithm_ai，月薪 35000）
+  技能: Python, OpenCV, PyTorch/TensorFlow, CNN, 图像处理, 目标检测
+技能重叠: 20%
+类型: intra_family
+
+--- 对 16 ---
+源岗位: CV工程师（algorithm_ai，月薪 35000）
+  技能: Python, OpenCV, PyTorch/TensorFlow, CNN, 图像处理, 目标检测
+目标岗位: 语音算法工程师（algorithm_ai，月薪 35000）
+  技能: Python, 语音识别, 语音合成, 声学模型, Kaldi/WeNet, 深度学习
+技能重叠: 9%
+类型: intra_family
+
+--- 对 17 ---
+源岗位: 语音算法工程师（algorithm_ai，月薪 35000）
+  技能: Python, 语音识别, 语音合成, 声学模型, Kaldi/WeNet, 深度学习
+目标岗位: 深度学习工程师（algorithm_ai，月薪 35000）
+  技能: Python, PyTorch/TensorFlow, CNN/RNN/Transformer, GPU训练, 模型压缩, AutoML
+技能重叠: 9%
+类型: intra_family
+
+--- 对 18 ---
+源岗位: 深度学习工程师（algorithm_ai，月薪 35000）
+  技能: Python, PyTorch/TensorFlow, CNN/RNN/Transformer, GPU训练, 模型压缩, AutoML
+目标岗位: 搜索算法工程师（algorithm_ai，月薪 36000）
+  技能: Python, 信息检索, Elasticsearch, 机器学习, NLP, 相关性排序
+技能重叠: 9%
+类型: intra_family
+
+--- 对 19 ---
+源岗位: 强化学习工程师（algorithm_ai，月薪 38000）
+  技能: Python, 强化学习, PyTorch, OpenAI Gym, 马尔可夫决策, 策略优化
+目标岗位: 大模型工程师（algorithm_ai，月薪 40000）
+  技能: Python, PyTorch, Transformers, LLM微调, Prompt工程, 分布式训练
+技能重叠: 20%
+类型: intra_family
+
+--- 对 20 ---
+源岗位: 大模型工程师（algorithm_ai，月薪 40000）
+  技能: Python, PyTorch, Transformers, LLM微调, Prompt工程, 分布式训练
+目标岗位: 自动驾驶算法工程师（algorithm_ai，月薪 45000）
+  技能: Python, C++, ROS, 感知算法, 规划算法, 传感器融合
+技能重叠: 9%
+类型: intra_family
+
+--- 对 21 ---
+源岗位: ETL工程师（data_engineering，月薪 20000）
+  技能: SQL, Python, ETL工具, Kettle/Informatica, Oracle, 调度系统
+目标岗位: 数据治理工程师（data_engineering，月薪 25000）
+  技能: SQL, 数据标准, 元数据管理, 数据质量, 主数据管理, 数据安全
+技能重叠: 9%
+类型: intra_family
+
+--- 对 22 ---
+源岗位: 商业分析师（data_analysis，月薪 22000）
+  技能: SQL, Excel, 商业分析, 财务分析, 行业研究, PPT
+目标岗位: BI工程师（data_analysis，月薪 22000）
+  技能: SQL, ETL, BI工具, 数据仓库, 数据建模, 报表开发
+技能重叠: 9%
+类型: intra_family
+
+--- 对 23 ---
+源岗位: BI工程师（data_analysis，月薪 22000）
+  技能: SQL, ETL, BI工具, 数据仓库, 数据建模, 报表开发
+目标岗位: 经营分析师（data_analysis，月薪 24000）
+  技能: SQL, Excel, 财务知识, 商业分析, 经营指标, PPT
+技能重叠: 9%
+类型: intra_family
+
+--- 对 24 ---
+源岗位: 经营分析师（data_analysis，月薪 24000）
+  技能: SQL, Excel, 财务知识, 商业分析, 经营指标, PPT
+目标岗位: 数据科学家（data_analysis，月薪 35000）
+  技能: Python, 机器学习, 统计学, SQL, 深度学习
+技能重叠: 10%
+类型: intra_family
+

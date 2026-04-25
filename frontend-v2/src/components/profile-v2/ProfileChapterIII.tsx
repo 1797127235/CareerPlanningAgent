@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Chapter, ChapterOpener } from '@/components/editorial'
 import { SoftSkillRow, SjtCta } from './cards'
 import type { ProfileData } from '@/types/profile'

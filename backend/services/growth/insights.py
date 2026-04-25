@@ -17,15 +17,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def build_growth_insights(user: "User", db: Session) -> dict:
-    """聚合成长洞察卡片数据 — 从各业务表自动拉取，不依赖手动输入。"""
-    profile = db.query(ProjectRecord).filter(ProjectRecord.user_id == user.id).first()
-    # Note: we only need profile_id for some queries; ProjectRecord is not Profile.
-    # The original router used Profile. Let's fix this in the router by passing profile_id.
-    # For now, accept profile_id directly to avoid DB dependency on Profile here.
-    pass  # Placeholder — actual signature below
-
-
 def build_growth_insights_with_profile(user: "User", db: Session, profile_id: int | None) -> dict:
     """Aggregate growth insight cards from business tables."""
     now = datetime.now(timezone.utc)

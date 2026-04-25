@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JD Diagnosis Redesign v0</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f0ebe3; --bg-card: #e8e2d8; --bg-hover: #e2dbd0;
+  --bg-white: #fff;
+  --text-primary: #1a1a1a; --text-secondary: #5c5c5c; --text-tertiary: #8a8a8a;
+  --border: #d5cfc5; --border-light: #ddd7cd;
+  --accent: #c45c3e; --dark: #1a1a1a;
+  --green: #16a34a; --blue: #3b82f6; --orange: #d97706; --purple: #8b5cf6;
+  --radius-lg: 16px; --radius-md: 12px; --radius-pill: 100px;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --font-serif: 'Noto Serif SC', 'Noto Sans SC', serif;
+  --font-sans: 'Noto Sans SC', system-ui, sans-serif;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: var(--font-sans); background: var(--bg); color: var(--text-primary); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scoreReveal { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes barGrow { from { width: 0; } to { width: 65%; } }
+
+.anim { animation: fadeUp 0.5s var(--ease) both; }
+.anim-d1 { animation: fadeUp 0.5s var(--ease) 0.08s both; }
+.anim-d2 { animation: fadeUp 0.5s var(--ease) 0.16s both; }
+.anim-d3 { animation: fadeUp 0.5s var(--ease) 0.24s both; }
+
+.page { padding: 0 clamp(24px, 5vw, 80px); padding-bottom: 120px; }
+.container { max-width: 720px; margin: 0 auto; }
+
+/* ── Header ── */
+.header { padding-top: 24; padding-bottom: 20; }
+.back-btn { display: flex; align-items: center; gap: 4; font-size: 14px; color: var(--text-tertiary); background: none; border: none; cursor: pointer; font-family: inherit; margin-bottom: 16; }
+.title { font-family: var(--font-serif); font-size: clamp(28px, 4vw, 44px); font-weight: 600; margin-bottom: 4; }
+.subtitle { font-size: 14px; color: var(--text-tertiary); }
+
+/* ── Profile strip ── */
+.profile-strip {
+  display: flex; align-items: center; gap: 16; flex-wrap: wrap;
+  padding: 12px 18px; border-radius: var(--radius-md);
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  margin-bottom: 24px;
+}
+.profile-item { display: flex; align-items: center; gap: 6; font-size: 13px; color: var(--text-secondary); }
+.profile-item strong { color: var(--text-primary); font-weight: 600; }
+.profile-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* ── Input area ── */
+.input-section { margin-bottom: 32px; }
+.input-label { font-size: 14px; font-weight: 600; color: var(--text-primary); margin-bottom: 12px; }
+.input-textarea {
+  width: 100%; padding: 18px; border-radius: var(--radius-lg);
+  border: 1.5px solid var(--border); background: var(--bg-white);
+  font-size: 14px; font-family: inherit; outline: none; resize: none; line-height: 1.8;
+  min-height: 160px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.input-textarea:focus {
+  border-color: rgba(196,92,62,0.35);
+  box-shadow: 0 0 0 3px rgba(196,92,62,0.06);
+}
+.input-textarea::placeholder { color: var(--text-tertiary); }
+
+/* ── Quick picks ── */
+.quick-picks { margin-bottom: 20px; }
+.quick-picks-label { font-size: 12px; color: var(--text-tertiary); margin-bottom: 10px; }
+.quick-picks-row { display: flex; flex-wrap: wrap; gap: 8; }
+.quick-pick {
+  padding: 8px 14px; border-radius: var(--radius-md);
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  font-size: 12px; color: var(--text-secondary); cursor: pointer; font-family: inherit;
+  transition: all 0.2s var(--ease);
+}
+.quick-pick:hover { border-color: var(--accent); color: var(--accent); background: var(--bg-hover); }
+
+/* ── Action bar ── */
+.action-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 16; flex-wrap: wrap;
+  padding: 16px 0; border-top: 1px solid var(--border-light);
+}
+.action-status { font-size: 12px; color: var(--text-tertiary); }
+.btn-primary {
+  padding: 12px 28px; border-radius: var(--radius-pill);
+  background: var(--dark); color: #fff;
+  font-size: 14px; font-weight: 600; border: none; cursor: pointer; font-family: inherit;
+  transition: all 0.2s var(--ease);
+}
+.btn-primary:hover { background: #333; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(26,26,26,0.12); }
+
+/* ── History ── */
+.history-section { margin-top: 40px; }
+.history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.history-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.history-count { font-size: 12px; color: var(--text-tertiary); }
+.history-row {
+  display: flex; align-items: center; gap: 12; padding: 12px 14px;
+  border-radius: var(--radius-md); cursor: pointer;
+  transition: background 0.2s ease;
+}
+.history-row:hover { background: var(--bg-hover); }
+.history-badge { font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 6; flex-shrink: 0; }
+.history-name { flex: 1; font-size: 13px; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.history-date { font-size: 12px; color: var(--text-tertiary); flex-shrink: 0; }
+
+/* ── RESULTS ── */
+.result-hero {
+  text-align: center; padding: 40px 24px; border-radius: var(--radius-lg);
+  background: var(--bg-card); border: 1px solid var(--border-light);
+  margin-bottom: 24px;
+}
+.result-qual {
+  display: inline-block; padding: 4px 14px; border-radius: var(--radius-pill);
+  font-size: 13px; font-weight: 700; margin-bottom: 16px;
+}
+.score-big { font-size: 72px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; font-family: var(--font-serif); animation: scoreReveal 0.6s var(--ease) both; }
+.score-bar-track { width: 100%; max-width: 280px; height: 4px; border-radius: 2px; background: var(--border-light); margin: 20px auto 0; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 2px; animation: barGrow 1s var(--ease) both; }
+.score-desc { font-size: 13px; color: var(--text-secondary); margin-top: 12px; line-height: 1.7; }
+
+/* ── Section cards ── */
+.section-card { padding: 24px; border-radius: var(--radius-lg); background: var(--bg-card); border: 1px solid var(--border-light); margin-bottom: 16px; }
+.section-title { font-size: 13px; font-weight: 700; color: var(--text-primary); margin-bottom: 14px; letter-spacing: 0.02em; }
+
+/* Dimension tags */
+.dim-tag { display: inline-flex; align-items: center; gap: 6; padding: 6px 12px; border-radius: 8px; font-size: 12px; }
+
+/* Skill tags */
+.skill-grid { display: flex; flex-wrap: wrap; gap: 6; }
+.skill-tag { font-size: 12px; padding: 4px 10px; border-radius: 8px; }
+
+/* Route card */
+.route-card { padding: 16px; border-radius: var(--radius-md); background: var(--bg-hover); border: 1px solid var(--border-light); }
+.route-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12; margin-bottom: 8; }
+.route-title { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.route-meta { font-size: 12px; color: var(--text-tertiary); }
+
+/* Tips */
+.tip-item { display: flex; align-items: flex-start; gap: 8; font-size: 13px; color: var(--text-secondary); line-height: 1.6; padding: 6px 0; }
+.tip-num { color: var(--accent); font-weight: 600; flex-shrink: 0; }
+
+/* CTA */
+.cta-card { padding: 20px 24px; border-radius: var(--radius-lg); background: var(--bg-card); border: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; gap: 16; flex-wrap: wrap; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .page { padding: 0 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     VIEW 1: JD Input Form
+     ═══════════════════════════════════════════════ -->
+<div class="page">
+  <div class="container">
+    <div class="header anim">
+      <button class="back-btn">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+        返回
+      </button>
+      <h1 class="title">JD 诊断</h1>
+      <p class="subtitle">粘贴招聘要求，分析你与岗位的匹配度和技能缺口</p>
+    </div>
+
+    <!-- Profile strip -->
+    <div class="profile-strip anim-d1">
+      <div class="profile-item"><div class="profile-dot"></div>目标：<strong>Java 后端开发</strong></div>
+      <div style="width:1px;height:14px;background:var(--border-light)"></div>
+      <div class="profile-item">技能：<strong>12 项</strong></div>
+      <div style="width:1px;height:14px;background:var(--border-light)"></div>
+      <div class="profile-item">历史：<strong>3 次</strong></div>
+    </div>
+
+    <!-- Input -->
+    <div class="input-section anim-d1">
+      <p class="input-label">粘贴招聘要求</p>
+
+      <div class="quick-picks">
+        <p class="quick-picks-label">没现成的？选一个示例试试</p>
+        <div class="quick-picks-row">
+          <button class="quick-pick">Java 后端 · 3-5年</button>
+          <button class="quick-pick">产品经理 · 应届</button>
+          <button class="quick-pick">前端开发 · 1-3年</button>
+        </div>
+      </div>
+
+      <textarea class="input-textarea" placeholder="把目标岗位的招聘要求全文粘贴到这里..."></textarea>
+
+      <div class="action-bar">
+        <span class="action-status">粘贴 JD 全文 → 开始诊断</span>
+        <button class="btn-primary">开始诊断</button>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="history-section anim-d2">
+      <div class="history-header">
+        <span class="history-title">历史诊断</span>
+        <span class="history-count">共 5 次</span>
+      </div>
+      <div class="history-row">
+        <span class="history-badge" style="background:rgba(59,130,246,0.08);color:#3b82f6;">基础匹配</span>
+        <span class="history-name">产品经理 · 应届</span>
+        <span class="history-date">2026.04.20</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+      <div class="history-row">
+        <span class="history-badge" style="background:rgba(34,197,94,0.08);color:#16a34a;">高度匹配</span>
+        <span class="history-name">前端开发 · 1-3年</span>
+        <span class="history-date">2026.04.18</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     VIEW 2: Diagnosis Result
+     ═══════════════════════════════════════════════ -->
+<div style="padding: 60px clamp(24px, 5vw, 80px) 120px; border-top: 2px dashed var(--border-light); margin-top: 40px;">
+  <p style="font-size: 12px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 32px;">Result View v0 Reference ↓</p>
+
+  <div class="container">
+    <!-- Hero score -->
+    <div class="result-hero anim">
+      <span class="result-qual" style="background:rgba(217,119,6,0.08);color:#d97706;border:1px solid rgba(217,119,6,0.15);">需补强</span>
+      <div class="score-big" style="color:#d97706;">65</div>
+      <div class="score-bar-track">
+        <div class="score-bar-fill" style="width:65%;background:#d97706;"></div>
+      </div>
+      <p class="score-desc">有一定基础，但核心缺口较多。<br>已具备 <strong style="color:var(--green)">8</strong> 项核心技能，缺口 <strong style="color:var(--orange)">5</strong> 项。</p>
+    </div>
+
+    <!-- Dimensions -->
+    <div class="section-card anim-d1">
+      <p class="section-title">四维评估</p>
+      <div style="display:flex;flex-wrap:wrap;gap:8;">
+        <span class="dim-tag" style="background:rgba(34,197,94,0.08);color:#16a34a;">基础素养 <strong>强</strong></span>
+        <span class="dim-tag" style="background:rgba(59,130,246,0.08);color:#3b82f6;">技能匹配 <strong>中</strong></span>
+        <span class="dim-tag" style="background:rgba(217,119,6,0.08);color:#d97706;">成长潜力 <strong>弱</strong></span>
+        <span class="dim-tag" style="background:rgba(34,197,94,0.08);color:#16a34a;">软技能 <strong>强</strong></span>
+      </div>
+    </div>
+
+    <!-- Matched + Gaps -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;">
+      <div class="section-card anim-d2" style="margin-bottom:0;">
+        <p class="section-title" style="color:var(--green);">已匹配技能 8</p>
+        <div class="skill-grid">
+          <span class="skill-tag" style="background:rgba(34,197,94,0.08);color:#16a34a;border:1px solid rgba(34,197,94,0.12);">React</span>
+          <span class="skill-tag" style="background:rgba(34,197,94,0.08);color:#16a34a;border:1px solid rgba(34,197,94,0.12);">TypeScript</span>
+          <span class="skill-tag" style="background:rgba(34,197,94,0.08);color:#16a34a;border:1px solid rgba(34,197,94,0.12);">Webpack</span>
+          <span class="skill-tag" style="background:rgba(34,197,94,0.08);color:#16a34a;border:1px solid rgba(34,197,94,0.12);">Git</span>
+        </div>
+      </div>
+      <div class="section-card anim-d2" style="margin-bottom:0;">
+        <p class="section-title" style="color:var(--orange);">技能缺口 5</p>
+        <div class="skill-grid">
+          <span class="skill-tag" style="background:rgba(217,119,6,0.08);color:#d97706;border:1px solid rgba(217,119,6,0.12);">微服务</span>
+          <span class="skill-tag" style="background:rgba(217,119,6,0.08);color:#d97706;border:1px solid rgba(217,119,6,0.12);">Kubernetes</span>
+          <span class="skill-tag" style="background:rgba(220,38,38,0.06);color:#dc2626;border:1px solid rgba(220,38,38,0.12);">分布式系统</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI Impact -->
+    <div class="section-card anim-d2">
+      <p class="section-title">AI 影响分析</p>
+      <div style="display:flex;align-items:center;gap:8;margin-bottom:8;flex-wrap:wrap;">
+        <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:8px;background:rgba(217,119,6,0.08);color:#d97706;">替代警惕区</span>
+        <span style="font-size:12px;color:var(--text-tertiary);">图谱定位：前端开发工程师</span>
+      </div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:12;">AI 替代压力较高，建议提前准备。</p>
+      <div style="display:flex;align-items:center;gap:16;font-size:12px;color:var(--text-tertiary);flex-wrap:wrap;">
+        <span>替代压力 <strong style="color:var(--text-primary);">72</strong>/100</span>
+        <span style="width:1px;height:12px;background:var(--border-light)"></span>
+        <span>人+AI 协同 <strong style="color:var(--text-primary);">58</strong>/100</span>
+      </div>
+    </div>
+
+    <!-- Escape routes -->
+    <div class="section-card anim-d3">
+      <p class="section-title">推荐转岗路线</p>
+      <div style="display:flex;flex-direction:column;gap:12;">
+        <div class="route-card">
+          <div class="route-header">
+            <div style="display:flex;align-items:center;gap:8;flex-wrap:wrap;">
+              <span class="route-title">全栈开发工程师</span>
+              <span style="font-size:11px;font-weight:500;padding:2px 8px;border-radius:6px;background:rgba(34,197,94,0.08);color:#16a34a;">协同优势区</span>
+            </div>
+            <span class="route-meta">预估 120 小时</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6;flex-wrap:wrap;">
+            <span style="font-size:12px;color:var(--text-tertiary);">需补：</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:6px;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light);">Node.js</span>
+            <span style="font-size:11px;padding:2px 8px;border-radius:6px;background:var(--bg-card);color:var(--text-secondary);border:1px solid var(--border-light);">数据库设计</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resume tips -->
+    <div class="section-card anim-d3">
+      <p class="section-title">简历优化建议</p>
+      <div class="tip-item"><span class="tip-num">1.</span>补充微服务相关项目经验，尤其是服务拆分和治理实践</div>
+      <div class="tip-item"><span class="tip-num">2.</span>在技能栈中明确标注 Kubernetes 和 Docker 的使用深度</div>
+      <div class="tip-item"><span class="tip-num">3.</span>量化过往项目的性能优化成果，如首屏加载时间、接口响应延迟</div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-card anim-d3">
+      <div style="display:flex;align-items:center;gap:12;">
+        <div style="width:40px;height:40px;border-radius:12px;background:rgba(196,92,62,0.08);display:flex;align-items:center;justify-content:center;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        </div>
+        <div>
+          <p style="font-size:14px;font-weight:600;color:var(--text-primary);">针对这份 JD 模拟面试</p>
+          <p style="font-size:12px;color:var(--text-tertiary);">重点考察 5 项技能缺口</p>
+        </div>
+      </div>
+      <button class="btn-primary" style="flex-shrink:0;">开始面试</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

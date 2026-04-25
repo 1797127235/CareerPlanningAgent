@@ -256,59 +256,7 @@ class JDService:
 
         return result
 
-    def generate_greeting(
-        self,
-        jd_title: str,
-        extracted_skills: list[str],
-        matched_skills: list[str],
-        match_score: int,
-        profile: dict,
-    ) -> str:
-        """Generate a personalized job-application greeting message."""
-        edu = profile.get("education", {})
-        if isinstance(edu, dict):
-            edu_text = f"{edu.get('degree', '')} {edu.get('major', '')} {edu.get('school', '')}".strip()
-        else:
-            edu_text = str(edu) if edu else "无"
-
-        projects = profile.get("projects", [])
-        project_names = []
-        for p in projects[:2]:
-            if isinstance(p, dict):
-                project_names.append(p.get("name", "") or p.get("description", "")[:20])
-            else:
-                project_names.append(str(p)[:20])
-
-        prompt = (
-            "你是一个职场求职顾问，请根据以下信息生成一条简洁、自然的求职打招呼消息"
-            "（适用于招聘网站站内信/微信/邮件首次联系HR）。\n\n"
-            f"岗位名称：{jd_title}\n"
-            f"JD核心技能要求：{', '.join(extracted_skills[:8]) or '无'}\n"
-            f"候选人已匹配技能：{', '.join(matched_skills[:6]) or '无'}\n"
-            f"候选人教育背景：{edu_text or '无'}\n"
-            f"候选人主要项目：{', '.join(project_names) or '无'}\n"
-            f"与岗位匹配度：{match_score}分\n\n"
-            "生成要求：\n"
-            "- 长度80-120字，自然口语，不要官僚腔\n"
-            "- 第一句点明应聘岗位\n"
-            "- 核心亮出1-2个最强匹配点（用具体技能名而非泛泛描述）\n"
-            "- 结尾表达希望沟通/约面试的意愿\n"
-            "- 禁止使用：贵公司、不胜感激、冒昧打扰、诚挚等过时措辞\n"
-            "- 直接输出打招呼文本，不要加任何前缀或解释"
-        )
-        try:
-            from backend.llm import llm_chat
-            text = llm_chat(
-                [{"role": "user", "content": prompt}],
-                temperature=0.7,
-                timeout=90,
-            )
-            return text.strip() or "生成失败，请重试。"
-        except Exception as e:
-            logger.error("generate_greeting failed: %s", e)
-            return "生成失败，请重试。"
-
-    def match_to_graph_node(
+def match_to_graph_node(
         self, jd_skills: list[str], graph_service: Any
     ) -> dict | None:
         """Jaccard-style overlap to find the closest graph node."""

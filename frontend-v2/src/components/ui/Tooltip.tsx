@@ -9,19 +9,23 @@ export function Tooltip({
   storageKey: string
   children: React.ReactNode
 }) {
-  const [flashing, setFlashing] = useState(false)
+  const [dismissedKeys, setDismissedKeys] = useState<Record<string, true>>({})
+
+  const flashing =
+    typeof window !== 'undefined' &&
+    !dismissedKeys[storageKey] &&
+    !window.localStorage.getItem(`tooltip-seen-${storageKey}`)
 
   useEffect(() => {
-    const seen = localStorage.getItem(`tooltip-seen-${storageKey}`)
-    if (!seen) {
-      setFlashing(true)
-      const t = setTimeout(() => {
-        setFlashing(false)
-        localStorage.setItem(`tooltip-seen-${storageKey}`, '1')
-      }, 1500)
-      return () => clearTimeout(t)
-    }
-  }, [storageKey])
+    if (!flashing) return
+
+    const timer = window.setTimeout(() => {
+      setDismissedKeys((prev) => ({ ...prev, [storageKey]: true }))
+      window.localStorage.setItem(`tooltip-seen-${storageKey}`, '1')
+    }, 1500)
+
+    return () => window.clearTimeout(timer)
+  }, [flashing, storageKey])
 
   return (
     <span className="relative inline-flex items-center gap-1 group/tooltip">

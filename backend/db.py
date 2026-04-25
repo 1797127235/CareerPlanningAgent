@@ -42,16 +42,13 @@ def init_db() -> None:
     """Create all tables if they don't exist."""
     from backend.models import (  # noqa: F401
         User, Report, Profile, CareerGoal,
-        Skill, AiToolMapping, JobNode, JobEdge, JobScore,
-        OnetJob, OnetTask, TaskAutomation, TaskMatching,
-        ScoreChangelog, RescoreRun,
+        JobNode, JobEdge, JobScore,
         GrowthSnapshot, SkillUpdate, ActionProgress,
         ActionPlanV2, PlanWeekProgress,
         ChatSession, ChatMessage,
         JobApplication, InterviewDebrief,
         JobNodeIntro, InterviewQuestionBank,
         UserNotification, CoachResult, MockInterview, GrowthEntry,
-        MarketSignal, CityMarketSignal,
     )
     Base.metadata.create_all(bind=engine)
     # Migrate: add routine_score column if missing

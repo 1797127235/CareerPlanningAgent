@@ -99,7 +99,7 @@ export default function GraphPage() {
     initialData: isMock ? mockProfile : undefined,
   })
 
-  const nodes = mapQ.data?.nodes || []
+  const nodes = useMemo(() => mapQ.data?.nodes ?? [], [mapQ.data?.nodes])
   const gp = profileQ.data?.graph_position
   const fromNodeId = gp?.from_node_id
   const targetNodeId = gp?.target_node_id !== gp?.from_node_id ? gp?.target_node_id : undefined

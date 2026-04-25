@@ -6,7 +6,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -58,26 +58,6 @@ def _get_industry_signals() -> dict[str, list]:
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-# ── Market signals endpoint ───────────────────────────────────────────────────
-
-@router.get("/market-signals")
-def get_market_signals(user: User = Depends(get_current_user)):
-    """Return precomputed market decision signals for all role_families.
-
-    Used by GraphPage to color-code nodes and by RoleDetailPage for timing panel.
-    Data is precomputed by etl/03_signals.py — zero DB query, JSON file read.
-    """
-    signals = _get_market_signals()
-    industry = _get_industry_signals()
-    # Attach top-3 industry breakdown to each family signal
-    result = {}
-    for fam, sig in signals.items():
-        entry = dict(sig)
-        entry["top_industries"] = industry.get(fam, [])[:3]
-        result[fam] = entry
-    return result
 
 
 # ── Full map ─────────────────────────────────────────────────────────────────
@@ -387,54 +367,6 @@ def patch_career_goal_gaps(
 
 # ── Multi-goal CRUD ──────────────────────────────────────────────────────────
 
-@router.get("/career-goals")
-def list_career_goals(
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Return all active career goals for the current user's profile."""
-    from backend.models import CareerGoal, Profile, JobNode
-
-    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
-    if not profile:
-        return {"goals": []}
-
-    goals = (
-        db.query(CareerGoal)
-        .filter_by(profile_id=profile.id, user_id=user.id, is_active=True)
-        .order_by(CareerGoal.is_primary.desc(), CareerGoal.set_at.desc())
-        .all()
-    )
-
-    graph_svc = get_graph_service(db)
-    result = []
-    for g in goals:
-        # Resolve from_node label: try graph first, then DB, then raw ID
-        graph_from = graph_svc.get_node(g.from_node_id)
-        from_label = (
-            graph_from.get("label") if graph_from
-            else (lambda n: n.label if n else g.from_node_id)(
-                db.query(JobNode).filter(JobNode.node_id == g.from_node_id).first()
-            )
-        )
-        result.append({
-            "id": g.id,
-            "target_node_id": g.target_node_id,
-            "target_label": g.target_label,
-            "target_zone": g.target_zone,
-            "from_node_id": g.from_node_id,
-            "from_node_label": from_label,
-            "gap_skills": g.gap_skills or [],
-            "total_hours": g.total_hours or 0,
-            "safety_gain": g.safety_gain or 0.0,
-            "salary_p50": g.salary_p50 or 0,
-            "is_primary": g.is_primary,
-            "set_at": g.set_at.isoformat() if g.set_at else None,
-        })
-
-    return {"goals": result}
-
-
 class AddCareerGoalRequest(BaseModel):
     target_node_id: str
     target_label: str
@@ -514,79 +446,6 @@ def add_career_goal(
     db.refresh(new_goal)
 
     return {"ok": True, "goal_id": new_goal.id, "target_label": req.target_label}
-
-
-@router.delete("/career-goals/{goal_id}")
-def remove_career_goal(
-    goal_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Deactivate a career goal direction."""
-    from backend.models import CareerGoal
-    from datetime import datetime, timezone
-
-    goal = db.query(CareerGoal).filter_by(id=goal_id, user_id=user.id, is_active=True).first()
-    if not goal:
-        raise HTTPException(404, "目标不存在")
-
-    # 不允许删除唯一的active goal（防止空状态）
-    active_count = (
-        db.query(CareerGoal)
-        .filter_by(profile_id=goal.profile_id, user_id=user.id, is_active=True)
-        .count()
-    )
-    if active_count <= 1:
-        raise HTTPException(400, "至少保留一个目标方向")
-
-    goal.is_active = False
-    goal.cleared_at = datetime.now(timezone.utc)
-
-    # 若删除的是主目标，自动将最新的goal设为主目标
-    if goal.is_primary:
-        next_goal = (
-            db.query(CareerGoal)
-            .filter(
-                CareerGoal.profile_id == goal.profile_id,
-                CareerGoal.user_id == user.id,
-                CareerGoal.is_active == True,
-                CareerGoal.id != goal_id,
-            )
-            .order_by(CareerGoal.set_at.desc())
-            .first()
-        )
-        if next_goal:
-            next_goal.is_primary = True
-
-    db.commit()
-    return {"ok": True}
-
-
-@router.put("/career-goals/{goal_id}/primary")
-def set_primary_career_goal(
-    goal_id: int,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Set a career goal as the primary direction."""
-    from backend.models import CareerGoal
-
-    goal = db.query(CareerGoal).filter_by(id=goal_id, user_id=user.id, is_active=True).first()
-    if not goal:
-        raise HTTPException(404, "目标不存在")
-
-    # 取消其他主目标
-    db.query(CareerGoal).filter(
-        CareerGoal.profile_id == goal.profile_id,
-        CareerGoal.user_id == user.id,
-        CareerGoal.is_active == True,
-        CareerGoal.id != goal_id,
-    ).update({"is_primary": False})
-
-    goal.is_primary = True
-    db.commit()
-
-    return {"ok": True, "primary_label": goal.target_label}
 
 
 # ── Node intro (LLM-generated, cached) ───────────────────────────────────────

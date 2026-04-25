@@ -166,7 +166,6 @@ def _safety_score(node: dict) -> float:
 
 
 def _edge_cost(
-    current_node: dict,
     from_node: dict,
     to_node: dict,
     edge: dict,

@@ -14,7 +14,6 @@ if _env_path.is_file():
 # ── LLM / DashScope ──────────────────────────────────────────────────────
 DASHSCOPE_API_KEY: str = os.getenv("DASHSCOPE_API_KEY") or os.getenv("OPENAI_API_KEY", "")
 LLM_BASE_URL: str = os.getenv("LLM_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
-DASHSCOPE_BASE_URL: str = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 # ── Mem0 (Coach Memory) ──────────────────────────────────────────────────
 MEM0_LLM_MODEL: str = os.getenv("MEM0_LLM_MODEL", "qwen-plus")
@@ -32,8 +31,6 @@ JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "career-planning-agent-dev-sec
 #   认证方式: uid + pwd
 RESUMESDK_ENABLED: bool = os.getenv("RESUMESDK_ENABLED", "true").lower() in ("1", "true", "yes")
 RESUMESDK_APPCODE: str = os.getenv("RESUMESDK_APPCODE", "")
-RESUMESDK_APPKEY: str = os.getenv("RESUMESDK_APPKEY", "")
-RESUMESDK_APPSECRET: str = os.getenv("RESUMESDK_APPSECRET", "")
 RESUMESDK_UID: str = os.getenv("RESUMESDK_UID", "")
 RESUMESDK_PWD: str = os.getenv("RESUMESDK_PWD", "")
 RESUMESDK_BASE_URL: str = os.getenv(

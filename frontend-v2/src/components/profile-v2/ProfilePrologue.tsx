@@ -1,12 +1,13 @@
 import { Upload, PenLine } from 'lucide-react'
 import { UploadCta } from './UploadCta'
 
+const DAY_IN_MS = 1000 * 60 * 60 * 24
+const PAGE_LOADED_AT = Date.now()
+
 export function ProfilePrologue({
   hasProfile,
-  name,
   createdAt,
   updatedAt,
-  uploading,
   uploadStep,
   uploadError,
   onUpload,
@@ -23,7 +24,7 @@ export function ProfilePrologue({
   onManual: () => void
 }) {
   const daysSince = createdAt
-    ? Math.max(1, Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+    ? Math.max(1, Math.floor((PAGE_LOADED_AT - new Date(createdAt).getTime()) / DAY_IN_MS))
     : 1
 
   return (

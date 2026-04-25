@@ -22,7 +22,6 @@ from backend.models import User
 
 _DEFAULT_KEY = "career-planning-agent-dev-secret-change-in-prod"
 if SECRET_KEY == _DEFAULT_KEY:
-    import sys
     # Dev mode: auto-generate a random key per-process (sessions reset on restart, acceptable for dev)
     if os.getenv("ENV", "development").lower() in ("production", "prod"):
         raise RuntimeError(

@@ -1,0 +1,478 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CareerPlan v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f0ebe3;
+  --bg-card: #e8e2d8;
+  --bg-hover: #e2dbd0;
+  --text-primary: #1a1a1a;
+  --text-secondary: #5c5c5c;
+  --text-tertiary: #8a8a8a;
+  --border: #d5cfc5;
+  --border-light: #ddd7cd;
+  --accent: #c45c3e;
+  --radius-lg: 16px;
+  --radius-pill: 100px;
+  --ease: cubic-bezier(0.23, 1, 0.32, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Noto Sans SC', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text-primary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.container { max-width: 1200px; margin: 0 auto; padding: 0 48px; }
+@media (max-width: 768px) { .container { padding: 0 24px; } }
+
+/* ====== Typography ====== */
+.serif { font-family: 'Noto Serif SC', 'Noto Sans SC', serif; }
+.display {
+  font-family: 'Noto Serif SC', 'Noto Sans SC', serif;
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+.display .underline {
+  text-decoration: underline;
+  text-decoration-thickness: 3px;
+  text-underline-offset: 6px;
+  text-decoration-color: var(--text-primary);
+}
+.headline {
+  font-family: 'Noto Serif SC', 'Noto Sans SC', serif;
+  font-size: clamp(22px, 3vw, 32px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+.body { font-size: 15px; font-weight: 400; line-height: 1.7; color: var(--text-secondary); }
+.body-large { font-size: 17px; font-weight: 400; line-height: 1.7; color: var(--text-secondary); }
+.caption {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+/* ====== Layout ====== */
+.section { padding: 80px 0; }
+@media (max-width: 768px) { .section { padding: 56px 0; } }
+
+/* ====== Nav ====== */
+.nav {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-brand {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.nav-links { display: flex; gap: 32px; align-items: center; }
+.nav-links a {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+.nav-links a:hover { color: var(--text-primary); }
+@media (max-width: 768px) { .nav-links { display: none; } }
+
+/* ====== Buttons ====== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  text-decoration: none;
+  border: none;
+}
+.btn-primary {
+  background: var(--text-primary);
+  color: #fff;
+}
+.btn-primary:hover { background: #333; }
+.btn-ghost {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover { background: rgba(0,0,0,0.04); }
+
+/* ====== Tags ====== */
+.tag {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  background: transparent;
+}
+.tag-solid {
+  background: var(--text-primary);
+  color: #fff;
+  border-color: var(--text-primary);
+}
+
+/* ====== Cards ====== */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  transition: background 0.3s var(--ease);
+}
+.card:hover { background: var(--bg-hover); }
+@media (max-width: 768px) { .card { padding: 24px; } }
+
+/* ====== Divider ====== */
+.divider {
+  height: 1px;
+  background: var(--border-light);
+  border: none;
+}
+
+/* ====== List rows ====== */
+.list-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border-light);
+  transition: opacity 0.2s ease;
+  cursor: default;
+}
+.list-row:hover { opacity: 0.7; }
+.list-row-left { flex: 1; }
+.list-row-title { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.list-row-desc { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.list-row-right {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* ====== Meta row (DATE / CATEGORY) ====== */
+.meta-row {
+  display: flex;
+  gap: 16px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  margin: 24px 0;
+}
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meta-label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.meta-value {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ====== Two column ====== */
+.cols-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 768px) { .cols-2 { grid-template-columns: 1fr; } }
+
+.cols-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+}
+@media (max-width: 768px) { .cols-3 { grid-template-columns: 1fr; } }
+
+/* ====== Hero stat ====== */
+.stat-row {
+  display: flex;
+  gap: 48px;
+  margin-top: 40px;
+}
+.stat-num {
+  font-family: 'Noto Serif SC', serif;
+  font-size: 36px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.stat-label {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+}
+@media (max-width: 768px) { .stat-row { gap: 32px; flex-wrap: wrap; } }
+
+/* ====== Entrance animations ====== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.anim { animation: fadeUp 0.5s var(--ease) both; }
+.anim-d1 { animation-delay: 0.08s; }
+.anim-d2 { animation-delay: 0.16s; }
+
+/* ====== Back link ====== */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-tertiary);
+  text-decoration: none;
+  margin-bottom: 40px;
+  transition: color 0.2s ease;
+}
+.back:hover { color: var(--text-primary); }
+
+/* ====== Skill items in cards ====== */
+.skill-item {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+.skill-item:last-child { border-bottom: none; }
+.skill-name { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+.skill-reason { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+/* ====== Gap priority badge ====== */
+.prio { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+.prio-high { color: #b45309; }
+.prio-med { color: var(--text-tertiary); }
+</style>
+</head>
+<body>
+
+<!-- Nav -->
+<nav class="nav">
+  <div class="container nav-inner">
+    <div class="nav-brand">CareerPlan</div>
+    <div class="nav-links">
+      <a href="#">岗位匹配</a>
+      <a href="#">成长档案</a>
+      <a href="#">技能图谱</a>
+      <a href="#" class="btn btn-primary" style="padding: 8px 20px; font-size: 13px;">开始分析</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Back -->
+  <div class="section" style="padding-bottom: 0;">
+    <a href="#" class="back anim">&#8592; 返回画像</a>
+  </div>
+
+  <!-- Hero -->
+  <section class="section" style="padding-top: 24px; padding-bottom: 60px;">
+    <div class="anim">
+      <div style="display: flex; gap: 10px; margin-bottom: 28px; flex-wrap: wrap;">
+        <span class="tag">起步岗位</span>
+        <span class="tag tag-solid">杠杆区</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 80px; align-items: start;">
+        <div>
+          <h1 class="display">
+            与你匹配的<br>
+            <span class="underline">高级前端工程师</span>
+          </h1>
+        </div>
+
+        <div style="padding-top: 12px;">
+          <p class="body-large">
+            基于你的项目经验和技术栈，这个岗位与你的匹配度处于杠杆区。
+            核心框架你已掌握，主要缺口在性能优化和工程化深度。
+          </p>
+        </div>
+      </div>
+
+      <div class="stat-row anim anim-d1">
+        <div>
+          <div class="stat-num">5</div>
+          <div class="stat-label">已掌握模块</div>
+        </div>
+        <div>
+          <div class="stat-num">4</div>
+          <div class="stat-label">需补强</div>
+        </div>
+        <div>
+          <div class="stat-num">3</div>
+          <div class="stat-label">建议关注</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- Two column cards -->
+  <section class="section">
+    <div class="cols-2">
+      <!-- Mastered -->
+      <div class="card anim">
+        <div class="caption" style="margin-bottom: 6px;">已掌握</div>
+        <h2 class="headline" style="margin-bottom: 32px;">基础扎实</h2>
+
+        <div class="skill-item">
+          <div class="skill-name">React / TypeScript</div>
+          <div class="skill-reason">3 年实际项目经验</div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-name">组件化设计</div>
+          <div class="skill-reason">独立搭建过 Design System</div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-name">状态管理</div>
+          <div class="skill-reason">Zustand / Redux 实战</div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-name">响应式布局</div>
+          <div class="skill-reason">复杂自适应界面经验</div>
+        </div>
+        <div class="skill-item">
+          <div class="skill-name">构建工具</div>
+          <div class="skill-reason">Vite / Webpack 配置调优</div>
+        </div>
+
+        <div class="meta-row">
+          <div class="meta-item" style="flex: 1;">
+            <span class="meta-label">数量</span>
+            <span class="meta-value">5 项</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Gaps -->
+      <div class="card anim anim-d1">
+        <div class="caption" style="margin-bottom: 6px;">建议学习</div>
+        <h2 class="headline" style="margin-bottom: 32px;">核心缺口</h2>
+
+        <div class="list-row">
+          <div class="list-row-left">
+            <div class="list-row-title">性能优化深度</div>
+            <div class="list-row-desc">Bundle 分析、懒加载策略、渲染优化</div>
+          </div>
+          <div class="list-row-right prio prio-high">HIGH</div>
+        </div>
+        <div class="list-row">
+          <div class="list-row-left">
+            <div class="list-row-title">微前端架构</div>
+            <div class="list-row-desc">Module Federation、qiankun 实战经验</div>
+          </div>
+          <div class="list-row-right prio prio-high">HIGH</div>
+        </div>
+        <div class="list-row">
+          <div class="list-row-left">
+            <div class="list-row-title">测试策略</div>
+            <div class="list-row-desc">E2E、组件测试覆盖</div>
+          </div>
+          <div class="list-row-right prio prio-med">MED</div>
+        </div>
+        <div class="list-row">
+          <div class="list-row-left">
+            <div class="list-row-title">CI/CD 流水线</div>
+            <div class="list-row-desc">GitHub Actions、自动化部署</div>
+          </div>
+          <div class="list-row-right prio prio-med">MED</div>
+        </div>
+
+        <div class="meta-row">
+          <div class="meta-item" style="flex: 1;">
+            <span class="meta-label">数量</span>
+            <span class="meta-value">4 项</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- Optional list section -->
+  <section class="section">
+    <div class="anim">
+      <div style="display: grid; grid-template-columns: 280px 1fr; gap: 80px;">
+        <div>
+          <div class="caption" style="margin-bottom: 8px;">锦上添花</div>
+          <h2 class="headline">可选补充</h2>
+        </div>
+
+        <div style="padding-top: 8px;">
+          <div class="list-row" style="border-top: 1px solid var(--border-light);">
+            <div class="list-row-title">Webpack 深度调优</div>
+            <div class="list-row-right">工程化</div>
+          </div>
+          <div class="list-row">
+            <div class="list-row-title">WebAssembly</div>
+            <div class="list-row-right">前沿技术</div>
+          </div>
+          <div class="list-row">
+            <div class="list-row-title">无障碍设计</div>
+            <div class="list-row-right">用户体验</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <!-- CTA -->
+  <section class="section" style="padding-bottom: 120px;">
+    <div class="anim">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: end;">
+        <div>
+          <h2 class="headline" style="margin-bottom: 12px;">下一步</h2>
+          <p class="body-large" style="max-width: 440px;">
+            在技能图谱中查看完整路径，或在成长档案中追踪学习进度。
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;">
+          <a href="#" class="btn btn-ghost">去图谱查看</a>
+          <a href="#" class="btn btn-primary">去成长档案追踪</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+</body>
+</html>

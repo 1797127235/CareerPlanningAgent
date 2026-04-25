@@ -45,11 +45,6 @@ def login(req: AuthRequest, db: Session = Depends(get_db)):
     return ok({"token": token, "user": {"id": user.id, "username": user.username}})
 
 
-@router.get("/me")
-def me(user: User = Depends(get_current_user)):
-    return ok({"id": user.id, "username": user.username})
-
-
 from backend.services.growth.stage import determine_stage
 
 @router.get("/me/stage")
