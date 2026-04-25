@@ -536,10 +536,10 @@ export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
 
       {/* ── Recommendation Banner ── */}
       <motion.section custom={5} variants={fadeUp} initial="hidden" animate="visible" className="mb-8">
-        <div className="rounded-xl border p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-5" style={{ borderColor: 'var(--line)', background: 'var(--bg-card)' }}>
+        <div className="relative rounded-xl border overflow-hidden p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-5" style={{ borderColor: '#EBDDD0', background: '#FAF0E6' }}>
           <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: '#FDF0EA' }}>
-              <Target className="w-6 h-6" style={{ color: 'var(--chestnut)' }} />
+            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: '#FDF0EA', border: '1px solid #EBDDD0' }}>
+              <Target className="w-6 h-6" style={{ color: '#B85C38' }} />
             </div>
             <div>
               <p className="text-[11px] font-medium mb-1" style={{ ...sans, color: ink(3) }}>当前推荐方向</p>
@@ -564,7 +564,7 @@ export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
           {onReport && (
             <button
               onClick={onReport}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98] shrink-0"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98] shrink-0 relative z-10"
               style={{ background: '#6B3E2E', ...sans }}
             >
               <FileText className="w-4 h-4" />

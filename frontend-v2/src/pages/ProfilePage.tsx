@@ -325,16 +325,16 @@ export default function ProfilePage() {
                   <h1
                     style={{
                       fontFamily: 'var(--font-serif)',
-                      fontSize: 'clamp(36px, 4.5vw, 56px)',
-                      lineHeight: 1.15,
+                      fontSize: 'clamp(40px, 5vw, 64px)',
+                      lineHeight: 1.12,
                       letterSpacing: '0.01em',
                       color: 'var(--ink-1)',
-                      fontWeight: 600,
                     }}
                   >
-                    创建你的
+                    <span style={{ fontWeight: 400 }}>创建你的</span>
                     <br />
-                    AI 职业能力档案
+                    <span style={{ fontWeight: 600 }}>AI </span>
+                    <span style={{ fontWeight: 600, color: '#B85C38' }}>职业能力档案</span>
                   </h1>
 
                   <p

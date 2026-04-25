@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 const t = {
-  bg: '#F9F4EE',
   ink: '#1F1F1F',
   inkSecondary: '#6B6560',
   inkMuted: '#9A9590',
@@ -30,7 +29,7 @@ export default function Navbar() {
   return (
     <nav
       className="fixed left-0 right-0 top-0 z-50"
-      style={{ background: t.bg, borderBottom: `1px solid ${t.line}` }}
+      style={{ background: 'var(--bg-paper)', borderBottom: `1px solid ${t.line}` }}
     >
       <div className={`${containerClass} flex h-[64px] items-center justify-between`}>
         <button

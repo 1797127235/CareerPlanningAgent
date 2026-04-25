@@ -119,10 +119,10 @@ body::before {
 /* v3 Design Tokens — from .impeccable.md v3 */
 :root {
   /* Colors */
-  --bg-paper: oklch(0.98 0.008 80);
-  --bg-paper-2: oklch(0.965 0.010 80);
-  --bg-card: oklch(0.995 0.005 80);
-  --bg-card-hover: oklch(0.985 0.008 80);
+  --bg-paper: #F9F4EE;
+  --bg-paper-2: #F5F0E8;
+  --bg-card: #FCFAF7;
+  --bg-card-hover: #FAF8F5;
 
   --ink-1: oklch(0.22 0.010 50);
   --ink-2: oklch(0.48 0.010 50);
