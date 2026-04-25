@@ -491,44 +491,18 @@ function CTASection({ isAuthenticated }: { isAuthenticated: boolean }) {
             )}
           </div>
 
-          {/* Right — Abstract path illustration */}
-          <div className="flex items-center justify-center">
-            <svg
-              viewBox="0 0 400 220"
-              className="w-full max-w-[360px]"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              {/* Curved paths */}
-              <path
-                d="M 20 110 C 80 60 140 140 200 110 C 260 80 320 40 380 70"
-                stroke={t.line}
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <path
-                d="M 20 140 C 100 100 160 160 200 110 C 240 60 300 90 380 50"
-                stroke={t.line}
-                strokeWidth="1"
-                strokeLinecap="round"
-              />
-              <path
-                d="M 20 80 C 90 120 150 80 200 110 C 250 140 310 100 380 130"
-                stroke={t.line}
-                strokeWidth="1"
-                strokeLinecap="round"
-              />
-              <path
-                d="M 20 170 C 70 150 130 180 200 110 C 270 40 330 60 380 30"
-                stroke={t.line}
-                strokeWidth="1"
-                strokeLinecap="round"
-                opacity="0.6"
-              />
-              {/* Node dot */}
-              <circle cx="200" cy="110" r="7" fill={t.accent} />
-              <circle cx="200" cy="110" r="4" fill={t.bgAlt} />
-            </svg>
+          {/* Right — Illustration */}
+          <div className="flex items-center justify-center overflow-hidden">
+            <img
+              src="/cta-landscape.png"
+              alt="职业旅程"
+              className="w-full"
+              style={{
+                objectFit: 'cover',
+                objectPosition: 'center 30%',
+                height: 'clamp(280px, 36vw, 400px)',
+              }}
+            />
           </div>
         </div>
       </div>
