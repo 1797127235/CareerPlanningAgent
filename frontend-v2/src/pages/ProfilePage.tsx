@@ -449,7 +449,7 @@ export default function ProfilePage() {
                   <img
                     src="/profile-hero.png"
                     alt="AI 职业能力档案"
-                    className="w-full max-w-[420px]"
+                    className="w-full max-w-[380px] md:max-w-[430px]"
                     style={{ objectFit: 'contain' }}
                   />
                 </div>
