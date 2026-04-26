@@ -426,7 +426,7 @@ function CTASection({ isAuthenticated }: { isAuthenticated: boolean }) {
 const footerColumns = [
   [
     { label: '能力画像', route: '/profile' },
-    { label: '方法论', route: '/coach/chat' },
+    { label: '成长手札', route: '/growth-log' },
   ],
   [
     { label: '成长路径', route: '/growth-log' },

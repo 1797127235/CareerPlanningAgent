@@ -1,14 +1,14 @@
-import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect, useLayoutEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ToastProvider } from '@/components/ui'
+import { ChatPanel } from '@/components/ChatPanel'
+import { MessageSquare } from 'lucide-react'
 import HomePage from './pages/HomePage'
 import DemoPage from './pages/DemoPage'
 import ReportPage from './pages/ReportPage'
 import ProfilePage from './pages/ProfilePage'
 import LoginPage from './pages/LoginPage'
-import CoachResultPage from './pages/CoachResultPage'
-import CoachResultsListPage from './pages/CoachResultsListPage'
-import CoachChatPage from './pages/CoachChatPage'
 import GraphPage from './pages/GraphPage'
 import GrowthLogPage from './pages/GrowthLogPage'
 import MatchDetailPage from './pages/MatchDetailPage'
@@ -21,7 +21,19 @@ import PursuitDetailPage from './pages/PursuitDetailPage'
 import ReportPrintPage from './pages/ReportPrintPage'
 import NotFoundPage from './pages/NotFoundPage'
 
+function ScrollReset() {
+  const { pathname } = useLocation()
+
+  useLayoutEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }, [pathname])
+
+  return null
+}
+
 function App() {
+  const [coachOpen, setCoachOpen] = useState(false)
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const theme = params.get('theme')
@@ -30,9 +42,26 @@ function App() {
   }, [])
 
   return (
-    <ToastProvider>
-      <BrowserRouter>
-        <Routes>
+    <>
+      {/* Global coach button — portal to body, guaranteed viewport-fixed */}
+      {createPortal(
+        !coachOpen && (
+          <button
+            onClick={() => setCoachOpen(true)}
+            className="z-[9999] w-12 h-12 rounded-full bg-[#6B3E2E] text-white shadow-lg hover:bg-[#5a3324] transition-all active:scale-95 flex items-center justify-center"
+            style={{ position: 'fixed', bottom: '24px', right: '24px' }}
+            title="智析教练"
+          >
+            <MessageSquare className="w-5 h-5" />
+          </button>
+        ),
+        document.body
+      )}
+      <ToastProvider>
+        <BrowserRouter>
+          <ScrollReset />
+          {coachOpen && <ChatPanel open={coachOpen} onClose={() => setCoachOpen(false)} mode="float" />}
+          <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/__demo" element={<DemoPage />} />
           <Route path="/login" element={<LoginPage />} />
@@ -40,9 +69,10 @@ function App() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/match/:roleId" element={<MatchDetailPage />} />
           <Route path="/graph" element={<GraphPage />} />
-          <Route path="/coach/chat" element={<CoachChatPage />} />
-          <Route path="/coach/results" element={<CoachResultsListPage />} />
-          <Route path="/coach/result/:id" element={<CoachResultPage />} />
+          {/* 旧教练路由已废弃 — 教练现为全局浮动入口 */}
+          <Route path="/coach/chat" element={<Navigate to="/" replace />} />
+          <Route path="/coach/results" element={<Navigate to="/" replace />} />
+          <Route path="/coach/result/:id" element={<Navigate to="/" replace />} />
           <Route path="/roles/:roleId" element={<RoleDetailPage />} />
           <Route path="/growth-log" element={<GrowthLogPage />} />
           <Route path="/growth-log/projects/:id" element={<ProjectGraphPage />} />
@@ -62,6 +92,7 @@ function App() {
         </Routes>
       </BrowserRouter>
     </ToastProvider>
+  </>
   )
 }
 

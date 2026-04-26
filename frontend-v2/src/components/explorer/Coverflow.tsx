@@ -593,17 +593,18 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
       </div>
 
       {/* ── Coverflow Area ── */}
-      <div
-        className="flex-1 relative flex items-center justify-center overflow-hidden"
-        style={{
-          perspective: '1200px',
-          filter: focusPhase === 'blur' ? 'blur(6px)' : 'blur(0px)',
-          transform: focusPhase === 'blur' ? 'scale(0.92)' : 'scale(1)',
-          opacity: focusPhase === 'blur' ? 0.3 : 1,
-          transition: 'filter 0.6s ease-out, transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease-out',
-        }}
-      >
-        {/* Nav arrows */}
+      <div className="flex-1 relative flex items-center justify-center overflow-hidden">
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{
+            perspective: '1200px',
+            filter: focusPhase === 'blur' ? 'blur(6px)' : 'blur(0px)',
+            transform: focusPhase === 'blur' ? 'scale(0.92)' : 'scale(1)',
+            opacity: focusPhase === 'blur' ? 0.3 : 1,
+            transition: 'filter 0.6s ease-out, transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.5s ease-out',
+          }}
+        >
+        {/* Nav arrows -- moved outside to avoid containing-block for fixed elements */}
         <button onClick={() => navigate(currentIdx - 1)} disabled={currentIdx === 0}
           className="absolute left-[max(16px,calc(50%-280px))] z-20 w-11 h-11 rounded-full bg-white/40 backdrop-blur-[10px] border-[1.5px] border-white/45 flex items-center justify-center cursor-pointer hover:border-[var(--chestnut)]/30 hover:text-[var(--chestnut)] transition-all disabled:opacity-30 disabled:cursor-default text-[var(--text-2)]">
           <ChevronLeft className="w-5 h-5" />
@@ -893,6 +894,7 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
             </div>
           )
         })}
+        </div>
       </div>
 
       {/* ── Bottom: counter + mini nav ── */}

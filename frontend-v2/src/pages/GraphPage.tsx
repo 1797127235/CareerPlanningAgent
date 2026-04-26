@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { fetchGraphMap } from '@/api/graph'
@@ -45,6 +45,25 @@ const mockProfile: ProfileData = {
 /* ── Main Page ── */
 export default function GraphPage() {
   const [isMock] = useState(() => new URLSearchParams(window.location.search).get('mock') === '1')
+
+  useLayoutEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const previousHtmlOverflow = html.style.overflow
+    const previousBodyOverflow = body.style.overflow
+    const previousBodyOverscroll = body.style.overscrollBehavior
+
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+    html.style.overflow = 'hidden'
+    body.style.overflow = 'hidden'
+    body.style.overscrollBehavior = 'none'
+
+    return () => {
+      html.style.overflow = previousHtmlOverflow
+      body.style.overflow = previousBodyOverflow
+      body.style.overscrollBehavior = previousBodyOverscroll
+    }
+  }, [])
 
   const mapQ = useQuery({
     queryKey: ['graph-map'],
