@@ -1,4 +1,5 @@
 """Graph router — terrain map, node detail, escape routes."""
+
 from __future__ import annotations
 
 import json
@@ -17,11 +18,13 @@ from backend.models import JobNode, JobNodeIntro, Profile, User
 from backend.llm import get_llm_client, get_model
 from backend.services.graph import get_graph_service
 
-_ROLE_INTROS_PATH   = Path(__file__).resolve().parent.parent.parent / "data" / "role_intros.json"
-_SIGNALS_PATH       = Path(__file__).resolve().parent.parent.parent / "data" / "market_signals.json"
-_INDUSTRY_PATH      = Path(__file__).resolve().parent.parent.parent / "data" / "industry_signals.json"
-_role_intros:   dict[str, dict] | None = None
-_market_signals: dict[str, dict] | None = None
+_ROLE_INTROS_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "data" / "role_intros.json"
+)
+_INDUSTRY_PATH = (
+    Path(__file__).resolve().parent.parent.parent / "data" / "industry_signals.json"
+)
+_role_intros: dict[str, dict] | None = None
 _industry_signals: dict[str, list] | None = None
 
 
@@ -36,13 +39,9 @@ def _get_role_intros() -> dict[str, dict]:
 
 
 def _get_market_signals() -> dict[str, dict]:
-    global _market_signals
-    if _market_signals is None:
-        try:
-            _market_signals = json.loads(_SIGNALS_PATH.read_text(encoding="utf-8"))
-        except Exception:
-            _market_signals = {}
-    return _market_signals
+    from backend.services.graph.query import get_market_signals
+
+    return get_market_signals()
 
 
 def _get_industry_signals() -> dict[str, list]:
@@ -61,6 +60,7 @@ router = APIRouter()
 
 
 # ── Full map ─────────────────────────────────────────────────────────────────
+
 
 @router.get("/map")
 def get_map(
@@ -82,28 +82,36 @@ def get_map(
         if node:
             raw_skills = node.get("must_skills") or []
             must_skills = raw_skills[:4] if isinstance(raw_skills, list) else []
-            nodes.append({
-                "node_id": node.get("node_id"),
-                "label": node.get("label"),
-                "role_family": node.get("role_family"),
-                "zone": node.get("zone", "transition"),
-                "replacement_pressure": node.get("replacement_pressure", 50),
-                "human_ai_leverage": node.get("human_ai_leverage", 50),
-                "contextual_narrative": node.get("contextual_narrative"),
-                "salary_p50": node.get("salary_p50"),
-                "career_level": node.get("career_level", 2),
-                "must_skills": must_skills,
-                "skill_count": node.get("skill_count", 0),
-                "degree": degree.get(nid, 0),
-                "soft_skills": node.get("soft_skills", {}),
-                "promotion_path": node.get("promotion_path", []),
-            })
+            nodes.append(
+                {
+                    "node_id": node.get("node_id"),
+                    "label": node.get("label"),
+                    "role_family": node.get("role_family"),
+                    "zone": node.get("zone", "transition"),
+                    "replacement_pressure": node.get("replacement_pressure", 50),
+                    "human_ai_leverage": node.get("human_ai_leverage", 50),
+                    "contextual_narrative": node.get("contextual_narrative"),
+                    "salary_p50": node.get("salary_p50"),
+                    "career_level": node.get("career_level", 2),
+                    "must_skills": must_skills,
+                    "skill_count": node.get("skill_count", 0),
+                    "degree": degree.get(nid, 0),
+                    "soft_skills": node.get("soft_skills", {}),
+                    "promotion_path": node.get("promotion_path", []),
+                }
+            )
     edges = [{"source": s, "target": t, "edge_type": et} for s, t, et in edge_list]
     info = g.info()
-    return {"nodes": nodes, "edges": edges, "node_count": info["node_count"], "edge_count": info["edge_count"]}
+    return {
+        "nodes": nodes,
+        "edges": edges,
+        "node_count": info["node_count"],
+        "edge_count": info["edge_count"],
+    }
 
 
 # ── Node detail ──────────────────────────────────────────────────────────────
+
 
 @router.get("/node/{node_id}")
 def get_node(
@@ -169,6 +177,7 @@ def get_node(
 
         # Multi-dimensional matching
         from backend.services.jd.matching import compute_match
+
         match_result = compute_match(profile_data, node)
 
     # Attach market signal for this node's role_family
@@ -198,6 +207,7 @@ def get_node(
 
 # ── Escape routes ────────────────────────────────────────────────────────────
 
+
 @router.get("/escape-routes")
 def get_escape_routes(
     node_id: str = Query(..., description="起点节点 ID"),
@@ -207,31 +217,41 @@ def get_escape_routes(
     """Compute escape routes from a node, personalized to user's actual skills."""
     import json
     from backend.models import Profile
+
     profile = db.query(Profile).filter(Profile.user_id == user.id).first()
     profile_skills: list[str] = []
     if profile:
         data = json.loads(profile.profile_json or "{}")
-        profile_skills = [s.get("name", "") for s in data.get("skills", []) if s.get("name")]
+        profile_skills = [
+            s.get("name", "") for s in data.get("skills", []) if s.get("name")
+        ]
     g = get_graph_service(db)
-    raw_routes = g.find_escape_routes(node_id, profile_skills=profile_skills, db_session=db)
+    raw_routes = g.find_escape_routes(
+        node_id, profile_skills=profile_skills, db_session=db
+    )
     # Transform to match frontend EscapeRoute type
     routes = []
     for r in raw_routes:
         gap = r.get("gap_skills", [])
-        routes.append({
-            "target_node_id": r.get("target", ""),
-            "target_label": r.get("target_label", ""),
-            "gap_skills": [g["name"] if isinstance(g, dict) else str(g) for g in gap],
-            "estimated_hours": r.get("total_hours", 0),
-            "safety_gain": r.get("safety_gain", 0),
-            "tag": r.get("tag", ""),
-            "target_zone": r.get("target_zone", "transition"),
-            "salary_p50": r.get("salary_p50", 0),
-        })
+        routes.append(
+            {
+                "target_node_id": r.get("target", ""),
+                "target_label": r.get("target_label", ""),
+                "gap_skills": [
+                    g["name"] if isinstance(g, dict) else str(g) for g in gap
+                ],
+                "estimated_hours": r.get("total_hours", 0),
+                "safety_gain": r.get("safety_gain", 0),
+                "tag": r.get("tag", ""),
+                "target_zone": r.get("target_zone", "transition"),
+                "salary_p50": r.get("salary_p50", 0),
+            }
+        )
     return {"node_id": node_id, "routes": routes}
 
 
 # ── Set career goal ─────────────────────────────────────────────────────────
+
 
 class SetCareerGoalRequest(BaseModel):
     target_node_id: str
@@ -296,7 +316,11 @@ def set_career_goal(
         )
         db.add(goal)
         db.commit()
-        return {"ok": True, "target_label": req.target_label, "target_zone": req.target_zone}
+        return {
+            "ok": True,
+            "target_label": req.target_label,
+            "target_zone": req.target_zone,
+        }
 
     goal.target_node_id = req.target_node_id
     goal.target_label = req.target_label
@@ -307,10 +331,15 @@ def set_career_goal(
     goal.salary_p50 = req.salary_p50
     goal.set_at = datetime.now(timezone.utc)
     db.commit()
-    return {"ok": True, "target_label": req.target_label, "target_zone": req.target_zone}
+    return {
+        "ok": True,
+        "target_label": req.target_label,
+        "target_zone": req.target_zone,
+    }
 
 
 # ── Patch career-goal gaps only ──────────────────────────────────────────────
+
 
 class PatchGapsRequest(BaseModel):
     gap_skills: list[str]
@@ -336,7 +365,9 @@ def patch_career_goal_gaps(
 
     goal = (
         db.query(CareerGoal)
-        .filter_by(profile_id=profile.id, user_id=user.id, is_active=True, is_primary=True)
+        .filter_by(
+            profile_id=profile.id, user_id=user.id, is_active=True, is_primary=True
+        )
         .first()
     )
 
@@ -367,6 +398,7 @@ def patch_career_goal_gaps(
 
 # ── Multi-goal CRUD ──────────────────────────────────────────────────────────
 
+
 class AddCareerGoalRequest(BaseModel):
     target_node_id: str
     target_label: str
@@ -395,7 +427,9 @@ def add_career_goal(
     # 获取 from_node_id（从现有主目标或任意active goal）
     primary = (
         db.query(CareerGoal)
-        .filter_by(profile_id=profile.id, user_id=user.id, is_active=True, is_primary=True)
+        .filter_by(
+            profile_id=profile.id, user_id=user.id, is_active=True, is_primary=True
+        )
         .first()
     )
     any_goal = primary or (
@@ -450,6 +484,7 @@ def add_career_goal(
 
 # ── Node intro (LLM-generated, cached) ───────────────────────────────────────
 
+
 @router.get("/node/{node_id}/intro")
 def get_node_intro(
     node_id: str,
@@ -471,7 +506,9 @@ def get_node_intro(
         raise HTTPException(404, "节点不存在")
 
     # Prefer graph data (roadmap), fall back to DB (legacy)
-    node_label = (graph_node or {}).get("label") or (db_node.label if db_node else node_id)
+    node_label = (graph_node or {}).get("label") or (
+        db_node.label if db_node else node_id
+    )
     skills_raw = (graph_node or {}).get("must_skills") or (
         db_node.must_skills if db_node and isinstance(db_node.must_skills, list) else []
     )
@@ -479,7 +516,9 @@ def get_node_intro(
         db_node.core_tasks if db_node and isinstance(db_node.core_tasks, list) else []
     )
     industries_raw = (
-        db_node.top_industries if db_node and isinstance(db_node.top_industries, list) else []
+        db_node.top_industries
+        if db_node and isinstance(db_node.top_industries, list)
+        else []
     )
     skills = ", ".join(str(s) for s in skills_raw[:5]) or "通用技能"
     tasks = "、".join(str(t) for t in tasks_raw[:3]) or "日常工作"
@@ -506,7 +545,9 @@ def get_node_intro(
             raise ValueError("empty response")
     except Exception as e:
         logger.warning("node intro LLM failed for %s: %s", node_id, e)
-        role_family = (graph_node or {}).get("role_family") or (db_node.role_family if db_node else "技术")
+        role_family = (graph_node or {}).get("role_family") or (
+            db_node.role_family if db_node else "技术"
+        )
         intro = f"{node_label}是一个{role_family}方向的岗位，负责{tasks}，需要掌握{skills}等核心技能。"
 
     # Cache — guard against concurrent insert on same node_id (UNIQUE constraint)
@@ -523,6 +564,7 @@ def get_node_intro(
 
 
 # ── Search ───────────────────────────────────────────────────────────────────
+
 
 @router.get("/search")
 def search_nodes(
@@ -545,5 +587,3 @@ def search_nodes(
             for n in results[:20]
         ],
     }
-
-

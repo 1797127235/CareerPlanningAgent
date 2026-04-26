@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Static data loaders and shared utilities for report service."""
+
 from __future__ import annotations
 
 import json
@@ -16,77 +17,66 @@ _DATA_DIR = _PROJECT_ROOT / "data"
 # ── Static data (loaded once per process) ───────────────────────────────────
 
 _GRAPH_NODES: dict[str, dict] = {}
-_MARKET: dict[str, dict] = {}        # family_name -> signal dict
-_NODE_TO_FAMILY: dict[str, str] = {} # node_id -> family_name
+_MARKET: dict[str, dict] = {}  # family_name -> signal dict
+_NODE_TO_FAMILY: dict[str, str] = {}  # node_id -> family_name
 
 _SKILL_FILL_PATH_PATH = _PROJECT_ROOT / "data" / "skill_fill_path_tags.json"
 _SKILL_FILL_PATH_CACHE: dict[str, str] | None = None
 
 _PROJECT_SKILL_HINTS: dict[str, list[str]] = {
-    "性能优化": ["性能", "高性能", "压测", "benchmark", "qps", "延迟", "吞吐", "profile", "热点", "优化"],
-    "高并发":   ["并发", "高并发", "多线程", "线程池", "epoll", "reactor", "内存池", "qps", "压测"],
-    "系统编程": ["系统编程", "系统调用", "内核", "epoll", "reactor", "内存池", "多线程", "linux系统", "io_uring"],
+    "性能优化": [
+        "性能",
+        "高性能",
+        "压测",
+        "benchmark",
+        "qps",
+        "延迟",
+        "吞吐",
+        "profile",
+        "热点",
+        "优化",
+    ],
+    "高并发": [
+        "并发",
+        "高并发",
+        "多线程",
+        "线程池",
+        "epoll",
+        "reactor",
+        "内存池",
+        "qps",
+        "压测",
+    ],
+    "系统编程": [
+        "系统编程",
+        "系统调用",
+        "内核",
+        "epoll",
+        "reactor",
+        "内存池",
+        "多线程",
+        "linux系统",
+        "io_uring",
+    ],
     "网络编程": ["网络", "socket", "tcp", "epoll", "reactor", "网络库", "网络框架"],
     "内存管理": ["内存", "内存池", "tcmalloc", "jemalloc", "malloc", "分配器"],
-    "GDB":      ["gdb", "调试", "core dump", "断点"],
-    "CMake":    ["cmake", "makefile", "构建", "编译系统"],
-    "Linux":    ["linux", "系统调用", "epoll", "内核", "posix"],
-    "STL":      ["stl", "标准库", "容器", "迭代器", "模板"],
-    "多线程":   ["多线程", "线程池", "并发", "锁", "mutex", "原子操作"],
-    "C++":      ["c++", "cpp", "stl", "模板", "虚函数"],
+    "GDB": ["gdb", "调试", "core dump", "断点"],
+    "CMake": ["cmake", "makefile", "构建", "编译系统"],
+    "Linux": ["linux", "系统调用", "epoll", "内核", "posix"],
+    "STL": ["stl", "标准库", "容器", "迭代器", "模板"],
+    "多线程": ["多线程", "线程池", "并发", "锁", "mutex", "原子操作"],
+    "C++": ["c++", "cpp", "stl", "模板", "虚函数"],
 }
 
 _PROFICIENCY_MULTIPLIER = {"completed": 1.2, "practiced": 1.0, "claimed": 0.7}
 
 
-def _norm_skill(s: str) -> str:
-    return s.lower().strip().replace(" ", "").replace("-", "").replace("_", "")
-
-
-def _user_skill_set(profile_data: dict) -> set[str]:
-    raw = profile_data.get("skills", [])
-    if not raw:
-        return set()
-    if isinstance(raw[0], dict):
-        return {s.get("name", "").lower().strip() for s in raw if s.get("name")}
-    return {s.lower().strip() for s in raw if isinstance(s, str) and s.strip()}
-
-
-def _skill_matches(skill_name: str, user_skills: set[str]) -> bool:
-    """Reuse same matching logic as growth_log_service."""
-    name = skill_name.lower().strip()
-    name_norm = _norm_skill(skill_name)
-    if not name:
-        return False
-    if name in user_skills:
-        return True
-    if len(name_norm) <= 2:
-        return False
-    for us in user_skills:
-        if not us:
-            continue
-        us_norm = _norm_skill(us)
-        if name_norm == us_norm:
-            return True
-        if len(us_norm) > 2 and (name_norm in us_norm or us_norm in name_norm):
-            return True
-    return False
-
-
-def _skill_in_set(skill_name: str, skill_set: set[str]) -> bool:
-    """Fuzzy-check whether skill_name appears in a given set (e.g. practiced skills from projects)."""
-    if not skill_set:
-        return False
-    name_norm = _norm_skill(skill_name)
-    if not name_norm:
-        return False
-    for s in skill_set:
-        s_norm = _norm_skill(s)
-        if name_norm == s_norm:
-            return True
-        if len(name_norm) > 2 and len(s_norm) > 2 and (name_norm in s_norm or s_norm in name_norm):
-            return True
-    return False
+from backend.services._shared.skill_match import (
+    norm_skill as _norm_skill,
+    skill_matches as _skill_matches,
+    skill_in_set as _skill_in_set,
+    user_skill_set as _user_skill_set,
+)
 
 
 def _skill_proficiency(
@@ -142,6 +132,7 @@ def _batch_embed(texts: list[str]) -> list[list[float]] | None:
         return []
     try:
         from backend.llm import get_llm_client
+
         client = get_llm_client(timeout=60)
         _CHUNK = 10
         out: list[list[float]] = []
@@ -158,20 +149,48 @@ def _batch_embed(texts: list[str]) -> list[list[float]] | None:
         logger.warning("_batch_embed failed: %s", e)
         return None
 
+
 _LEARN_KEYWORDS = {
-    "数据结构", "算法", "操作系统", "计算机网络", "计算机组成",
-    "数据库原理", "编译原理", "离散数学", "概率", "线性代数",
-    "设计模式", "计算机体系", "机器学习原理",
+    "数据结构",
+    "算法",
+    "操作系统",
+    "计算机网络",
+    "计算机组成",
+    "数据库原理",
+    "编译原理",
+    "离散数学",
+    "概率",
+    "线性代数",
+    "设计模式",
+    "计算机体系",
+    "机器学习原理",
 }
 _PRACTICE_KEYWORDS = {
-    "高并发", "分布式", "性能优化", "架构", "微服务",
-    "消息队列", "中间件", "负载均衡", "系统设计",
-    "容灾", "秒杀", "限流",
+    "高并发",
+    "分布式",
+    "性能优化",
+    "架构",
+    "微服务",
+    "消息队列",
+    "中间件",
+    "负载均衡",
+    "系统设计",
+    "容灾",
+    "秒杀",
+    "限流",
 }
 _BOTH_KEYWORDS = {
-    "Docker", "Kubernetes", "K8s", "Git", "CI/CD",
-    "单元测试", "集成测试", "Code Review", "Terraform",
-    "Prometheus", "Grafana",
+    "Docker",
+    "Kubernetes",
+    "K8s",
+    "Git",
+    "CI/CD",
+    "单元测试",
+    "集成测试",
+    "Code Review",
+    "Terraform",
+    "Prometheus",
+    "Grafana",
 }
 
 
@@ -184,7 +203,9 @@ def _load_skill_fill_path_cache() -> dict[str, str]:
         return _SKILL_FILL_PATH_CACHE
     try:
         data = json.loads(_SKILL_FILL_PATH_PATH.read_text(encoding="utf-8"))
-        _SKILL_FILL_PATH_CACHE = {k: v for k, v in data.items() if v in {"learn", "practice", "both"}}
+        _SKILL_FILL_PATH_CACHE = {
+            k: v for k, v in data.items() if v in {"learn", "practice", "both"}
+        }
     except Exception as e:
         logger.warning("Failed to load skill_fill_path_tags.json: %s", e)
         _SKILL_FILL_PATH_CACHE = {}
@@ -214,20 +235,22 @@ def _load_static() -> None:
         return
 
     try:
-        raw = json.loads((_DATA_DIR / "graph.json").read_text(encoding="utf-8"))
-        _GRAPH_NODES = {n["node_id"]: n for n in raw.get("nodes", [])}
+        from backend.services.graph.query import get_graph_nodes as _get_graph_nodes
+
+        _GRAPH_NODES = _get_graph_nodes()
     except Exception as e:
         logger.warning("graph.json load failed: %s", e)
 
     try:
-        raw_market = json.loads((_DATA_DIR / "market_signals.json").read_text(encoding="utf-8"))
-        _MARKET = raw_market if isinstance(raw_market, dict) else {}
+        from backend.services.graph.query import get_market_signals
+
+        _MARKET = get_market_signals()
         for family, info in _MARKET.items():
             for nid in info.get("node_ids", []):
                 _NODE_TO_FAMILY[nid] = family
         # Fallback: nodes missing from market_signals → alias to nearest family
         _FAMILY_ALIASES = {
-            "systems-cpp": "cpp",   # 系统C++归属系统编程族
+            "systems-cpp": "cpp",  # 系统C++归属系统编程族
         }
         for node, alias in _FAMILY_ALIASES.items():
             if node not in _NODE_TO_FAMILY and alias in _NODE_TO_FAMILY:
@@ -237,6 +260,7 @@ def _load_static() -> None:
 
 
 # ── Getter functions (sub-modules must use these instead of direct imports) ───
+
 
 def get_graph_nodes() -> dict[str, dict]:
     _load_static()
@@ -251,4 +275,3 @@ def get_market() -> dict[str, dict]:
 def get_node_to_family() -> dict[str, str]:
     _load_static()
     return _NODE_TO_FAMILY
-

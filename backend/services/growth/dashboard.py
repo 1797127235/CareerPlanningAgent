@@ -1,4 +1,5 @@
 """Growth dashboard data aggregation."""
+
 from __future__ import annotations
 
 import json
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from backend.models import CareerGoal, GrowthSnapshot, Profile
 from backend.services.graph import GraphService
-from backend.services.growth.service import _skill_matches
+from backend.services._shared.skill_match import skill_matches as _skill_matches
 
 if TYPE_CHECKING:
     from backend.models import User
@@ -51,9 +52,13 @@ def build_growth_dashboard(user: "User", db: Session) -> dict:
         profile_data = {}
     raw_skills = profile_data.get("skills", [])
     if raw_skills and isinstance(raw_skills[0], dict):
-        user_skills = {s.get("name", "").lower().strip() for s in raw_skills if s.get("name")}
+        user_skills = {
+            s.get("name", "").lower().strip() for s in raw_skills if s.get("name")
+        }
     else:
-        user_skills = {s.lower().strip() for s in raw_skills if isinstance(s, str) and s.strip()}
+        user_skills = {
+            s.lower().strip() for s in raw_skills if isinstance(s, str) and s.strip()
+        }
 
     # Tiered skill coverage
     tiers = node.get("skill_tiers", {}) or {}
@@ -62,7 +67,9 @@ def build_growth_dashboard(user: "User", db: Session) -> dict:
     bonus_list = tiers.get("bonus", []) or []
 
     def _count_matched(skills_list):
-        matched_items = [s for s in skills_list if _skill_matches(s.get("name", ""), user_skills)]
+        matched_items = [
+            s for s in skills_list if _skill_matches(s.get("name", ""), user_skills)
+        ]
         return len(matched_items), [s.get("name") for s in matched_items]
 
     core_cnt, core_matched = _count_matched(core_list)
@@ -72,8 +79,16 @@ def build_growth_dashboard(user: "User", db: Session) -> dict:
     def _pct(cnt: int, total: int) -> int:
         return int(round(cnt / total * 100)) if total > 0 else 0
 
-    core_missing = [s.get("name") for s in core_list if not _skill_matches(s.get("name", ""), user_skills)]
-    imp_missing = [s.get("name") for s in imp_list if not _skill_matches(s.get("name", ""), user_skills)]
+    core_missing = [
+        s.get("name")
+        for s in core_list
+        if not _skill_matches(s.get("name", ""), user_skills)
+    ]
+    imp_missing = [
+        s.get("name")
+        for s in imp_list
+        if not _skill_matches(s.get("name", ""), user_skills)
+    ]
 
     # Readiness curve from GrowthSnapshot (up to last 12 points)
     snapshots = (
@@ -92,7 +107,11 @@ def build_growth_dashboard(user: "User", db: Session) -> dict:
     ]
 
     start_date = profile.created_at
-    days_since_start = (datetime.now(timezone.utc) - start_date.replace(tzinfo=timezone.utc)).days if start_date else 0
+    days_since_start = (
+        (datetime.now(timezone.utc) - start_date.replace(tzinfo=timezone.utc)).days
+        if start_date
+        else 0
+    )
 
     return {
         "has_goal": True,

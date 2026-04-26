@@ -3,6 +3,7 @@
 Old token-matching recommendation endpoints have been removed.
 Role matching is now done via LLM in profiles._llm_match_role.
 """
+
 from __future__ import annotations
 
 import json
@@ -23,6 +24,7 @@ router = APIRouter()
 
 # ── Gap analysis DB cache helpers ─────────────────────────────────────────
 
+
 def _load_gap_cache(profile: Profile, p_hash: str, role_id: str) -> dict | None:
     """Load cached gap analysis from DB for a specific role."""
     try:
@@ -34,7 +36,9 @@ def _load_gap_cache(profile: Profile, p_hash: str, role_id: str) -> dict | None:
     return cached.get("roles", {}).get(role_id)
 
 
-def _save_gap_cache(profile: Profile, p_hash: str, role_id: str, result: dict, db: Session):
+def _save_gap_cache(
+    profile: Profile, p_hash: str, role_id: str, result: dict, db: Session
+):
     """Persist gap analysis result to DB."""
     try:
         cached = json.loads(profile.cached_gaps_json or "{}")
@@ -45,6 +49,7 @@ def _save_gap_cache(profile: Profile, p_hash: str, role_id: str, result: dict, d
     cached.setdefault("roles", {})[role_id] = result
     profile.cached_gaps_json = json.dumps(cached, ensure_ascii=False)
     db.commit()
+
 
 # ── Role data loader (replaces SkillMatchService for role lookup) ─────────
 
@@ -66,9 +71,9 @@ def _get_role(role_id: str) -> dict | None:
     return _get_roles_data().get(role_id)
 
 
-
-
-def _ensure_job_target_first(profile_data: dict, recs: list[dict]) -> tuple[list[dict], str]:
+def _ensure_job_target_first(
+    profile_data: dict, recs: list[dict]
+) -> tuple[list[dict], str]:
     """API-layer insurance: ensure job_target role ranks #1 with high affinity.
 
     Also attempts regex fallback on raw_text if job_target is missing from parsed data.
@@ -83,14 +88,15 @@ def _ensure_job_target_first(profile_data: dict, recs: list[dict]) -> tuple[list
         raw_text = (profile_data.get("raw_text") or "").strip()
         if raw_text:
             import re as _re
+
             for pat in [
-                r'(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s*[：:]\s*([^\n\r]{1,40})',
-                r'(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s+([^\n\r]{1,40})',
+                r"(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s*[：:]\s*([^\n\r]{1,40})",
+                r"(?:求职意向|期望职位|求职目标|意向岗位|期望岗位|目标职位|应聘职位)\s+([^\n\r]{1,40})",
             ]:
                 m = _re.search(pat, raw_text, _re.IGNORECASE)
                 if m:
                     jt = m.group(1).strip()
-                    jt = _re.sub(r'[\s,，;.；。]+$', '', jt)
+                    jt = _re.sub(r"[\s,，;.；。]+$", "", jt)
                     if jt and jt not in {"面议", "不限", "待定", "无", "—", "-", "/"}:
                         job_target = jt
                         source = "raw_text_fallback"
@@ -103,15 +109,9 @@ def _ensure_job_target_first(profile_data: dict, recs: list[dict]) -> tuple[list
     if not target_role_id:
         return recs, f"unmapped: {job_target}"
 
-    # Use absolute path (same resolution strategy as _auto_locate_on_graph)
-    graph_path = Path(__file__).resolve().parent.parent.parent / "data" / "graph.json"
-    graph_nodes = {}
-    try:
-        with open(graph_path, "r", encoding="utf-8") as f:
-            for n in json.load(f).get("nodes", []):
-                graph_nodes[n["node_id"]] = n
-    except Exception:
-        pass
+    from backend.services.graph.query import get_graph_nodes
+
+    graph_nodes = get_graph_nodes()
 
     if target_role_id not in graph_nodes:
         return recs, f"no_graph_node: {target_role_id}"
@@ -121,28 +121,33 @@ def _ensure_job_target_first(profile_data: dict, recs: list[dict]) -> tuple[list
         idx = existing_ids.index(target_role_id)
         rec = recs.pop(idx)
         top_affinity = max((r.get("affinity_pct", 0) for r in recs), default=60)
-        rec["affinity_pct"] = max(rec.get("affinity_pct", 0), min(99, top_affinity + 5), 88)
+        rec["affinity_pct"] = max(
+            rec.get("affinity_pct", 0), min(99, top_affinity + 5), 88
+        )
         rec["channel"] = "entry"
         rec["reason"] = rec.get("reason") or f"与求职意向「{job_target}」高度吻合"
         recs.insert(0, rec)
     else:
         node = graph_nodes[target_role_id]
         top_affinity = max((r.get("affinity_pct", 0) for r in recs), default=60)
-        recs.insert(0, {
-            "role_id": target_role_id,
-            "label": node.get("label", target_role_id),
-            "affinity_pct": max(min(99, top_affinity + 5), 88),
-            "matched_skills": [],
-            "gap_skills": node.get("must_skills", [])[:4],
-            "gap_hours": 0,
-            "zone": node.get("zone", "safe"),
-            "salary_p50": node.get("salary_p50", 0),
-            "reason": f"与求职意向「{job_target}」高度吻合",
-            "channel": "entry",
-            "career_level": node.get("career_level", 0),
-            "replacement_pressure": node.get("replacement_pressure", 50),
-            "human_ai_leverage": node.get("human_ai_leverage", 50),
-        })
+        recs.insert(
+            0,
+            {
+                "role_id": target_role_id,
+                "label": node.get("label", target_role_id),
+                "affinity_pct": max(min(99, top_affinity + 5), 88),
+                "matched_skills": [],
+                "gap_skills": node.get("must_skills", [])[:4],
+                "gap_hours": 0,
+                "zone": node.get("zone", "safe"),
+                "salary_p50": node.get("salary_p50", 0),
+                "reason": f"与求职意向「{job_target}」高度吻合",
+                "channel": "entry",
+                "career_level": node.get("career_level", 0),
+                "replacement_pressure": node.get("replacement_pressure", 50),
+                "human_ai_leverage": node.get("human_ai_leverage", 50),
+            },
+        )
     return recs, f"boosted: {job_target} -> {target_role_id}"
 
 
@@ -176,11 +181,18 @@ def get_recommendations_endpoint(
         data = cached.get("data")
         if data and data.get("recommendations"):
             profile_data = json.loads(profile.profile_json or "{}")
-            recs, jt_diag = _ensure_job_target_first(profile_data, data["recommendations"])
+            recs, jt_diag = _ensure_job_target_first(
+                profile_data, data["recommendations"]
+            )
             data["recommendations"] = recs[:top_k]
             data["_job_target"] = profile_data.get("job_target", "")
             data["_jt_diag"] = jt_diag  # diagnostic
-            logger.info("[GET-REC] job_target=%r diag=%s top_rec=%r", profile_data.get("job_target"), jt_diag, recs[0]["label"] if recs else "none")
+            logger.info(
+                "[GET-REC] job_target=%r diag=%s top_rec=%r",
+                profile_data.get("job_target"),
+                jt_diag,
+                recs[0]["label"] if recs else "none",
+            )
             return data
     except (json.JSONDecodeError, TypeError):
         pass
@@ -189,6 +201,7 @@ def get_recommendations_endpoint(
 
 
 # ── Gap analysis detail (for MatchDetailPage) ─────────────────────────────
+
 
 @router.get("/match-analysis/{role_id}")
 def get_match_analysis_detail(

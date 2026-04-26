@@ -1,47 +1,13 @@
 """成长档案服务 — readiness 估算、面试分析。"""
+
 from __future__ import annotations
 
 import json
 import logging
 
+from backend.services._shared.skill_match import skill_matches as _skill_matches
 
 logger = logging.getLogger(__name__)
-
-
-def _skill_matches(skill_name: str, user_skills: set[str]) -> bool:
-    """Case-insensitive substring match for a skill keyword against user skill set.
-
-    Handles variants like "Spring Boot" vs "SpringBoot", "Redis缓存" vs "Redis".
-    Normalization removes spaces/hyphens/underscores before comparison.
-    Short keywords (≤2 chars) require exact match to avoid false positives.
-    """
-    def _norm(s: str) -> str:
-        return s.lower().strip().replace(" ", "").replace("-", "").replace("_", "")
-
-    name = skill_name.lower().strip()
-    name_norm = _norm(skill_name)
-    if not name:
-        return False
-
-    # Exact match (raw lowercase)
-    if name in user_skills:
-        return True
-
-    # Short keyword: only exact match allowed
-    if len(name_norm) <= 2:
-        return False
-
-    for us in user_skills:
-        if not us:
-            continue
-        us_norm = _norm(us)
-        # Normalized exact match (handles SpringBoot vs spring boot)
-        if name_norm == us_norm:
-            return True
-        # Substring match (both directions, normalized)
-        if len(us_norm) > 2 and (name_norm in us_norm or us_norm in name_norm):
-            return True
-    return False
 
 
 def generate_interview_analysis(
@@ -56,6 +22,7 @@ def generate_interview_analysis(
     """用 LLM 生成面试复盘分析，返回 JSON 字符串。"""
     try:
         from backend.llm import get_llm_client, get_model
+
         client = get_llm_client(timeout=30)
         model = get_model("fast")
 
@@ -92,12 +59,11 @@ def generate_interview_analysis(
         return text
     except Exception as e:
         logger.warning("Interview analysis generation failed: %s", e)
-        return json.dumps({
-            "strengths": [],
-            "weaknesses": [],
-            "action_items": ["继续练习，下次会更好"],
-            "overall": "面试经历已记录，保持积累。"
-        })
-
-
-
+        return json.dumps(
+            {
+                "strengths": [],
+                "weaknesses": [],
+                "action_items": ["继续练习，下次会更好"],
+                "overall": "面试经历已记录，保持积累。",
+            }
+        )
