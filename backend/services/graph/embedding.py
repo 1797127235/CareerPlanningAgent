@@ -132,23 +132,8 @@ def embedding_prefilter(
     # skill list (Python/SQL) causes embedding similarity to drown the signal.
     # We scan user text against each node's core_tasks and force-match nodes
     # with >= 2 task hits into the candidate pool so the LLM sees them.
-    user_text_parts: list[str] = []
-    raw_text = (profile_data.get("raw_text") or "").lower()
-    if raw_text:
-        user_text_parts.append(raw_text)
-    for p in profile_data.get("projects", []):
-        if isinstance(p, dict):
-            user_text_parts.append(str(p.get("name", "")).lower())
-            user_text_parts.append(str(p.get("description", "") or p.get("highlights", "")).lower())
-        elif isinstance(p, str):
-            user_text_parts.append(p.lower())
-    for i in profile_data.get("internships", []):
-        if isinstance(i, dict):
-            user_text_parts.append(str(i.get("role", "")).lower())
-            user_text_parts.append(str(i.get("description", "") or i.get("highlights", "")).lower())
-        elif isinstance(i, str):
-            user_text_parts.append(i.lower())
-    user_text_combined = " ".join(user_text_parts)
+    from backend.services._shared.text_extract import build_user_text
+    user_text_combined = build_user_text(profile_data)
 
     graph_nodes = _get_graph_nodes()
     task_forced: list[str] = []

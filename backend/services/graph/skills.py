@@ -85,33 +85,8 @@ def _extract_implied_skills_from_text(profile_data: dict) -> set[str]:
     Dynamically discovers skill signals from raw_text, projects, internships,
     and work experiences without hard-coding tool→skill mappings.
     """
-    parts: list[str] = []
-
-    raw_text = (profile_data.get("raw_text") or "").lower()
-    if raw_text:
-        parts.append(raw_text)
-
-    for proj in profile_data.get("projects", []):
-        if isinstance(proj, dict):
-            parts.append(str(proj.get("name", "")).lower())
-            parts.append(str(proj.get("description", "") or proj.get("highlights", "")).lower())
-        elif isinstance(proj, str):
-            parts.append(proj.lower())
-
-    for intern in profile_data.get("internships", []):
-        if isinstance(intern, dict):
-            parts.append(str(intern.get("role", "")).lower())
-            parts.append(str(intern.get("description", "") or intern.get("highlights", "")).lower())
-        elif isinstance(intern, str):
-            parts.append(intern.lower())
-
-    for work in profile_data.get("work_experiences", []):
-        if isinstance(work, dict):
-            parts.append(str(work.get("description", "")).lower())
-        elif isinstance(work, str):
-            parts.append(work.lower())
-
-    combined = " ".join(parts)
+    from backend.services._shared.text_extract import build_user_text
+    combined = build_user_text(profile_data)
     if not combined.strip():
         return set()
 
@@ -133,23 +108,8 @@ def _build_work_content_summary(profile_data: dict) -> str:
     This gives the LLM an objective, data-driven signal of what the user
     actually does (as opposed to what skills they claim to have).
     """
-    parts: list[str] = []
-    rt = (profile_data.get("raw_text") or "").lower()
-    if rt:
-        parts.append(rt)
-    for p in profile_data.get("projects", []):
-        if isinstance(p, dict):
-            parts.append(str(p.get("name", "")).lower())
-            parts.append(str(p.get("description", "") or p.get("highlights", "")).lower())
-        elif isinstance(p, str):
-            parts.append(p.lower())
-    for i in profile_data.get("internships", []):
-        if isinstance(i, dict):
-            parts.append(str(i.get("role", "")).lower())
-            parts.append(str(i.get("description", "") or i.get("highlights", "")).lower())
-        elif isinstance(i, str):
-            parts.append(i.lower())
-    user_text = " ".join(parts)
+    from backend.services._shared.text_extract import build_user_text
+    user_text = build_user_text(profile_data)
     if not user_text.strip():
         return "未提取到工作内容关键词"
 

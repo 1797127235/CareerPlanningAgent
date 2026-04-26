@@ -156,27 +156,9 @@ def _auto_locate_on_graph(
             existing_ids = {r["role_id"] for r in enriched}
 
             # Build user text for task matching (same logic as prefilter)
-            text_parts: list[str] = []
-            rt = (profile_data.get("raw_text") or "").lower()
-            if rt:
-                text_parts.append(rt)
-            for p in profile_data.get("projects", []):
-                if isinstance(p, dict):
-                    text_parts.append(str(p.get("name", "")).lower())
-                    text_parts.append(
-                        str(p.get("description", "") or p.get("highlights", "")).lower()
-                    )
-                elif isinstance(p, str):
-                    text_parts.append(p.lower())
-            for i in profile_data.get("internships", []):
-                if isinstance(i, dict):
-                    text_parts.append(str(i.get("role", "")).lower())
-                    text_parts.append(
-                        str(i.get("description", "") or i.get("highlights", "")).lower()
-                    )
-                elif isinstance(i, str):
-                    text_parts.append(i.lower())
-            user_text_combined = " ".join(text_parts)
+            from backend.services._shared.text_extract import build_user_text
+
+            user_text_combined = build_user_text(profile_data)
 
             from backend.services._shared.backfill import (
                 compute_backfill_candidates,
@@ -211,27 +193,7 @@ def _auto_locate_on_graph(
                 if isinstance(s, dict) and s.get("name")
             }
             user_skill_set |= _extract_implied_skills_from_text(profile_data)
-            text_parts = []
-            rt = (profile_data.get("raw_text") or "").lower()
-            if rt:
-                text_parts.append(rt)
-            for p in profile_data.get("projects", []):
-                if isinstance(p, dict):
-                    text_parts.append(str(p.get("name", "")).lower())
-                    text_parts.append(
-                        str(p.get("description", "") or p.get("highlights", "")).lower()
-                    )
-                elif isinstance(p, str):
-                    text_parts.append(p.lower())
-            for i in profile_data.get("internships", []):
-                if isinstance(i, dict):
-                    text_parts.append(str(i.get("role", "")).lower())
-                    text_parts.append(
-                        str(i.get("description", "") or i.get("highlights", "")).lower()
-                    )
-                elif isinstance(i, str):
-                    text_parts.append(i.lower())
-            user_text_combined = " ".join(text_parts)
+            user_text_combined = build_user_text(profile_data)
             exp_years = profile_data.get("experience_years", 0) or 0
 
             backfill_candidates = compute_backfill_candidates(
