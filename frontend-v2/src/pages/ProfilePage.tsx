@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Upload, PenLine } from 'lucide-react'
+import { Plus, Upload, PenLine, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useProfileData, type ManualProfilePayload } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { setProfileName, updateProfile } from '@/api/profiles'
 import { fetchRecommendations, type Recommendation as ApiRecommendation } from '@/api/recommendations'
+import { setCareerGoal } from '@/api/graph'
 import { Block, BlockGrid, Tooltip, useToast } from '@/components/ui'
 import { GLOSSARY } from '@/lib/glossary'
 import Navbar from '@/components/shared/Navbar'
@@ -28,7 +29,7 @@ import {
 } from '@/components/profile-v2/forms'
 import { SjtQuiz } from '@/components/profile-v2/SjtQuiz'
 import { ManualProfileForm } from '@/components/profile-v2/ManualProfileForm'
-import { UploadCta } from '@/components/profile-v2/UploadCta'
+import { CeremonyUpload } from '@/components/profile-v2/CeremonyUpload'
 import { mockProfileData } from '@/components/profile-v2/mockData'
 import ProfileReadonlyView from '@/components/profile-v2/ProfileReadonlyView'
 import type { Education, Internship, Skill } from '@/types/profile'
@@ -76,13 +77,19 @@ export default function ProfilePage() {
   const { toast } = useToast()
 
   const { profile, loading, loadError, loadProfile, savingEdit, handleSaveEdit } = useProfileData(!isMock)
-  const { uploadStep, uploadError, justUploaded, fileInputRef, triggerFileDialog, onFileSelected } = useResumeUpload(loadProfile)
+  const { uploadStep, uploadError, justUploaded, selectedFileName, fileInputRef, triggerFileDialog, onFileSelected } = useResumeUpload(loadProfile)
+
+  const [ceremonyAnimating, setCeremonyAnimating] = useState(false)
+  useEffect(() => {
+    if (justUploaded) setCeremonyAnimating(true)
+  }, [justUploaded])
 
   const [showManual, setShowManual] = useState(false)
   const [sjtOpen, setSjtOpen] = useState(false)
   const [showNamePrompt, setShowNamePrompt] = useState(false)
   const [pendingName, setPendingName] = useState('')
   const [isEditing, setIsEditing] = useState(false)
+  const [showChangeGoalConfirm, setShowChangeGoalConfirm] = useState(false)
   const namePromptShown = useRef(false)
 
   /* Toggle back to readonly after a fresh upload */
@@ -259,6 +266,17 @@ export default function ProfilePage() {
                   data={data}
                   onEdit={() => setIsEditing(true)}
                   onReport={() => navigate('/report')}
+                  onSetGoal={() => {
+                    document.getElementById('recs-section')?.scrollIntoView({ behavior: 'smooth' })
+                  }}
+                  onChangeGoal={() => setShowChangeGoalConfirm(true)}
+                  recommendations={recommendations.map((r) => ({
+                    role_id: r.role_id,
+                    label: r.label,
+                    reason: r.reason,
+                    zone: r.zone,
+                    replacement_pressure: r.replacement_pressure,
+                  }))}
                 />
               ) : (
                 <>
@@ -310,7 +328,7 @@ export default function ProfilePage() {
             </>
           ) : (
             <>
-              {/* Empty State — v2 Design */}
+              {/* Empty State — Ceremony Upload */}
               <div className="grid gap-8 md:grid-cols-2 md:gap-12 items-center" style={{ minHeight: 'calc(100vh - 180px)' }}>
                 {/* Left — Copy */}
                 <div>
@@ -349,86 +367,20 @@ export default function ProfilePage() {
                     上传简历或补充关键经历，CareerPlan 将自动识别你的技能结构、项目亮点与潜在优势，生成一份专属成长分析。
                   </p>
 
-                  {/* Entry Cards */}
-                  <div className="mt-8 grid gap-4 sm:grid-cols-2 max-w-[500px]">
-                    {/* Upload Card */}
-                    <button
-                      onClick={triggerFileDialog}
-                      className="group relative text-center p-6 transition-all duration-200"
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--line)',
-                        borderRadius: '12px',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#B85C38'
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(184,92,56,0.08)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--line)'
-                        e.currentTarget.style.boxShadow = 'none'
-                      }}
-                    >
-                      {/* 推荐角标 */}
-                      <span
-                        className="absolute top-0 left-0 px-2.5 py-1 text-[10px] font-medium text-white"
-                        style={{
-                          background: '#B85C38',
-                          borderRadius: '12px 0 12px 0',
-                        }}
-                      >
-                        推荐
-                      </span>
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(184,92,56,0.06)' }}>
-                        <Upload size={22} style={{ color: '#B85C38' }} />
-                      </div>
-                      <p className="text-[15px] font-semibold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-sans)' }}>
-                        上传简历
-                      </p>
-                      <p className="mt-1 text-[12px]" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
-                        推荐方式 · 1 分钟完成
-                      </p>
-                      <div className="my-3 mx-auto w-8 h-px" style={{ background: 'var(--line)' }} />
-                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
-                        支持 PDF / Word / TXT，AI 自动提取经历、技能与项目亮点。
-                      </p>
-                    </button>
-
-                    {/* Manual Card */}
-                    <button
-                      onClick={() => setShowManual(true)}
-                      className="group text-center p-6 transition-all duration-200"
-                      style={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--line)',
-                        borderRadius: '12px',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.borderColor = '#B85C38'
-                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(184,92,56,0.08)'
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.borderColor = 'var(--line)'
-                        e.currentTarget.style.boxShadow = 'none'
-                      }}
-                    >
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3" style={{ background: 'rgba(0,0,0,0.03)' }}>
-                        <PenLine size={22} style={{ color: 'var(--ink-2)' }} />
-                      </div>
-                      <p className="text-[15px] font-semibold" style={{ color: 'var(--ink-1)', fontFamily: 'var(--font-sans)' }}>
-                        手动填写
-                      </p>
-                      <p className="mt-1 text-[12px]" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
-                        灵活补充 · 随时补充
-                      </p>
-                      <div className="my-3 mx-auto w-8 h-px" style={{ background: 'var(--line)' }} />
-                      <p className="text-[12px] leading-relaxed" style={{ color: 'var(--ink-3)', fontFamily: 'var(--font-sans)' }}>
-                        没有简历也可以，从教育经历、项目经验和目标岗位开始建立档案。
-                      </p>
-                    </button>
+                  {/* Ceremony Upload */}
+                  <div className="mt-8 max-w-[560px]">
+                    <CeremonyUpload
+                      uploadStep={uploadStep}
+                      uploadError={uploadError}
+                      justUploaded={justUploaded}
+                      fileName={selectedFileName}
+                      onUpload={triggerFileDialog}
+                      onManual={() => setShowManual(true)}
+                      onCeremonyComplete={() => setCeremonyAnimating(false)}
+                    />
                   </div>
 
-                  {uploadError && (
+                  {uploadError && !ceremonyAnimating && (
                     <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700 max-w-[500px]">
                       {uploadError}
                     </div>
@@ -642,10 +594,19 @@ export default function ProfilePage() {
                         <div className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--bg-card)] p-4">
                           <p className="text-[var(--text-base)] text-[var(--ink-1)]">还没有明确的目标</p>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <button className="px-3 py-1.5 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-xs)] font-medium hover:opacity-90 transition-opacity duration-200 active:scale-[0.98]">
+                            <button
+                              onClick={() => {
+                                const el = document.getElementById('recs-section')
+                                el?.scrollIntoView({ behavior: 'smooth' })
+                              }}
+                              className="px-3 py-1.5 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-xs)] font-medium hover:opacity-90 transition-opacity duration-200 active:scale-[0.98]"
+                            >
                               让 AI 帮我推荐
                             </button>
-                            <button className="px-3 py-1.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] text-[var(--text-xs)] font-medium hover:bg-[var(--line)]/10 transition-colors duration-200 active:scale-[0.98]">
+                            <button
+                              onClick={() => navigate('/explore')}
+                              className="px-3 py-1.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] text-[var(--text-xs)] font-medium hover:bg-[var(--line)]/10 transition-colors duration-200 active:scale-[0.98]"
+                            >
                               我去图谱探索
                             </button>
                           </div>
@@ -668,7 +629,7 @@ export default function ProfilePage() {
                                   transition={{ duration: 0.2, ease: EASE_OUT }}
                                 >
                                   <RecommendationCard
-                                    rec={{ role_id: rec.role_id, label: rec.label, reason: rec.reason }}
+                                    rec={{ role_id: rec.role_id, label: rec.label, reason: rec.reason, zone: rec.zone, replacement_pressure: rec.replacement_pressure }}
                                     onExplore={() => { /* navigate to role */ }}
                                   />
                                 </motion.div>
@@ -737,6 +698,64 @@ export default function ProfilePage() {
           </>
         )}
       </div>
+
+      {/* Change goal confirmation modal */}
+      <AnimatePresence>
+        {showChangeGoalConfirm && goal && (
+          <motion.div
+            {...MODAL_BACKDROP}
+            className="fixed inset-0 bg-[var(--ink-1)]/20 backdrop-blur-sm z-[999] flex items-center justify-center p-6"
+            onClick={() => setShowChangeGoalConfirm(false)}
+          >
+            <motion.div
+              {...MODAL_CARD}
+              className="bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-[var(--shadow-float)] p-6 max-w-sm w-full border border-[var(--line)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-4" style={{ background: '#FDF5E8' }}>
+                <AlertTriangle className="w-6 h-6" style={{ color: '#C4853F' }} />
+              </div>
+              <h3 className="text-[var(--text-lg)] font-semibold text-[var(--ink-1)] text-center mb-2">确认更换目标方向？</h3>
+              <div className="text-[var(--text-sm)] text-[var(--ink-2)] space-y-1.5 mb-5">
+                <p>你当前的目标方向是「{goal.target_label}」。</p>
+                <p style={{ color: 'var(--ink-3)' }}>更换目标后：</p>
+                <ul className="text-[12px] space-y-1 pl-1" style={{ color: 'var(--ink-3)' }}>
+                  <li>已掌握的技能会保留在画像中</li>
+                  <li>差距分析将基于新目标重新计算</li>
+                  <li>学习路径将切换到新方向</li>
+                </ul>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowChangeGoalConfirm(false)}
+                  className="flex-[2] py-2.5 rounded-full text-[var(--text-sm)] font-medium border border-[var(--line)] text-[var(--ink-1)] hover:bg-[var(--line)]/10 transition-colors duration-200 active:scale-[0.98]"
+                >
+                  继续当前目标
+                </button>
+                <button
+                  onClick={async () => {
+                    setShowChangeGoalConfirm(false)
+                    await setCareerGoal({
+                      profile_id: data!.id,
+                      target_node_id: '',
+                      target_label: '',
+                      target_zone: '',
+                      gap_skills: [],
+                      estimated_hours: 0,
+                      safety_gain: 0,
+                      salary_p50: 0,
+                    })
+                    await loadProfile()
+                  }}
+                  className="flex-1 py-2.5 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
+                >
+                  确认更换
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Name prompt modal */}
       <AnimatePresence>

@@ -1,25 +1,13 @@
 import { useState, useCallback, useEffect } from 'react'
-import { fetchProfile, updateProfile, resetProfile } from '@/api/profiles'
-import type { ProfileData } from '@/types/profile'
-
-export interface ManualProfilePayload {
-  name: string
-  education: { degree: string; major: string; school: string }
-  experience_years: number
-  job_target: string
-  skills: Array<{ name: string; level: string }>
-  knowledge_areas: string[]
-  projects: Array<string | Record<string, unknown>>
-  internships: Array<Record<string, unknown>>
-  certificates: string[]
-  awards: string[]
-}
+import { fetchProfile, updateProfile, resetProfile, reparseProfile } from '@/api/profiles'
+import type { ProfileData, ManualProfilePayload } from '@/types/profile'
 
 export function useProfileData(enabled = true) {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(enabled)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [savingEdit, setSavingEdit] = useState(false)
+  const [reparsing, setReparsing] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const loadProfile = useCallback(async () => {
@@ -68,6 +56,19 @@ export function useProfileData(enabled = true) {
     }
   }, [profile, loadProfile])
 
+  const handleReparse = useCallback(async () => {
+    setReparsing(true)
+    setActionError(null)
+    try {
+      await reparseProfile()
+      await loadProfile()
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : '重新解析失败')
+    } finally {
+      setReparsing(false)
+    }
+  }, [loadProfile])
+
   const handleDelete = useCallback(async () => {
     try {
       await resetProfile()
@@ -85,6 +86,8 @@ export function useProfileData(enabled = true) {
     savingEdit,
     handleSaveEdit,
     handleDelete,
+    handleReparse,
+    reparsing,
     actionError,
   }
 }

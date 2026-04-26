@@ -313,3 +313,82 @@ body::before {
   100% { opacity: 0; transform: translateX(-50%) translateY(-6px); }
 }
 
+/* ── 裁切标记（排版稿纸四角，伪元素实现，零 DOM 开销） ── */
+.corner-crops::before,
+.corner-crops::after {
+  content: '';
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+  z-index: 1;
+}
+.corner-crops::before {
+  background:
+    /* 左上角 */ linear-gradient(to right, var(--line) 1px, transparent 12px),
+                 linear-gradient(to bottom, var(--line) 1px, transparent 12px),
+    /* 右下角 */ linear-gradient(to left, var(--line) 1px, transparent 12px),
+                 linear-gradient(to top, var(--line) 1px, transparent 12px);
+  background-position: top left, top left, bottom right, bottom right;
+  background-size: 12px 1px, 1px 12px, 12px 1px, 1px 12px;
+  background-repeat: no-repeat;
+}
+.corner-crops::after {
+  background:
+    /* 右上角 */ linear-gradient(to left, var(--line) 1px, transparent 12px),
+                 linear-gradient(to bottom, var(--line) 1px, transparent 12px),
+    /* 左下角 */ linear-gradient(to right, var(--line) 1px, transparent 12px),
+                 linear-gradient(to top, var(--line) 1px, transparent 12px);
+  background-position: top right, top right, bottom left, bottom left;
+  background-size: 12px 1px, 1px 12px, 12px 1px, 1px 12px;
+  background-repeat: no-repeat;
+}
+
+/* ── 稿纸网格底纹（静态层） ── */
+.baseline-grid {
+  background-image:
+    linear-gradient(var(--line) 0.5px, transparent 0.5px);
+  background-size: 100% 28px;
+  background-position: 0 14px;
+}
+
+/* ── 呼吸光晕（极淡的网格脉动，避免闪烁） ── */
+@keyframes grid-glow {
+  0%, 100% { opacity: 0.015; }
+  50%      { opacity: 0.035; }
+}
+.baseline-grid-glow {
+  background-image: linear-gradient(var(--line) 0.5px, transparent 0.5px);
+  background-size: 100% 28px;
+  background-position: 0 14px;
+  animation: grid-glow 4s ease-in-out infinite;
+}
+
+/* ── 校对红线 ── */
+@keyframes proof-line-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+.proof-line {
+  height: 1px;
+  background: var(--chestnut);
+  transform-origin: left center;
+  box-shadow: 0 0 4px oklch(0.32 0.05 30 / 0.3);
+}
+.proof-line-appear {
+  animation: proof-line-grow 0.8s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── 打字机光标闪烁 ── */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--chestnut);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: blink 1s step-end infinite;
+}

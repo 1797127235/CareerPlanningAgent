@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import {
   PenLine,
   Sparkles,
@@ -19,6 +20,7 @@ import {
   FileText,
   ShieldCheck,
   Zap,
+  RefreshCw,
 } from 'lucide-react'
 import type { ProfileData, Skill, Internship } from '@/types/profile'
 
@@ -98,16 +100,29 @@ function Card({ children, className = '' }: { children: React.ReactNode; classNa
 
 /* ── Main View ── */
 
+interface RecommendationItem {
+  role_id: string
+  label: string
+  reason: string
+  zone?: string
+  replacement_pressure?: number
+}
+
 interface Props {
   data: ProfileData
   onEdit: () => void
   onReport?: () => void
+  onSetGoal?: () => void
+  onChangeGoal?: () => void
+  recommendations?: RecommendationItem[]
 }
 
-export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
+export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal, onChangeGoal, recommendations = [] }: Props) {
+  const navigate = useNavigate()
   const profile = data.profile
   const gp = data.graph_position
   const primaryGoal = data.career_goals?.find((g) => g.is_primary)
+  const hasGoal = !!primaryGoal && !!primaryGoal.target_node_id
 
   /* Derived data */
   const matchRate = useMemo(() => {
@@ -295,23 +310,55 @@ export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={onReport}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
-              style={{ background: '#6B3E2E', ...sans }}
-            >
-              查看成长路径
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={onEdit}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium border transition-colors hover:bg-[var(--bg-card-hover)] active:scale-[0.98]"
-              style={{ borderColor: 'var(--line)', color: ink(2), ...sans }}
-            >
-              <PenLine className="w-3.5 h-3.5" />
-              编辑档案
-            </button>
+            {hasGoal ? (
+              <>
+                <button
+                  onClick={onReport}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: '#6B3E2E', ...sans }}
+                >
+                  查看成长路径
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={onEdit}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium border transition-colors hover:bg-[var(--bg-card-hover)] active:scale-[0.98]"
+                  style={{ borderColor: 'var(--line)', color: ink(2), ...sans }}
+                >
+                  <PenLine className="w-3.5 h-3.5" />
+                  编辑档案
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={onSetGoal}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: '#6B3E2E', ...sans }}
+                >
+                  设定目标岗位
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  onClick={onEdit}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium border transition-colors hover:bg-[var(--bg-card-hover)] active:scale-[0.98]"
+                  style={{ borderColor: 'var(--line)', color: ink(2), ...sans }}
+                >
+                  <PenLine className="w-3.5 h-3.5" />
+                  编辑档案
+                </button>
+              </>
+            )}
           </div>
+          {hasGoal && onChangeGoal && (
+            <button
+              onClick={onChangeGoal}
+              className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 text-[11px] transition-colors hover:text-[var(--ink-1)] active:scale-[0.98]"
+              style={{ color: ink(3), ...sans }}
+            >
+              <RefreshCw className="w-3 h-3" /> 更换目标方向
+            </button>
+          )}
         </Card>
       </motion.header>
 
@@ -369,8 +416,105 @@ export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
         </div>
       </motion.section>
 
+      {/* ── Direction / Recommendations ── */}
+      <div id="recs-section">
+        <motion.section custom={3} variants={fadeUp} initial="hidden" animate="visible" className="mb-8">
+          {hasGoal ? (
+            <Card>
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] mb-1.5" style={{ ...sans, color: ink(3) }}>目标方向</p>
+                  <h3 className="text-[20px] font-semibold" style={{ ...serif, color: ink(1) }}>{primaryGoal?.target_label}</h3>
+                  <p className="text-[13px] mt-1" style={{ ...sans, color: ink(2) }}>
+                    {primaryGoal?.gap_skills && primaryGoal.gap_skills.length > 0
+                      ? `差距技能 ${primaryGoal.gap_skills.length} 项待补 · 通过实战项目逐项跨过`
+                      : '技能已全部覆盖，继续深化经验'}
+                  </p>
+                  {primaryGoal?.gap_skills && primaryGoal.gap_skills.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {primaryGoal.gap_skills.slice(0, 8).map((s) => (
+                        <span
+                          key={s}
+                          className="text-[11px] px-2 py-0.5 rounded-md font-medium border"
+                          style={{ background: '#FDF0EA', color: '#B85C38', borderColor: '#EBDDD0' }}
+                        >
+                          {s}
+                        </span>
+                      ))}
+                      {primaryGoal.gap_skills.length > 8 && (
+                        <span className="text-[11px]" style={{ color: ink(3) }}>+{primaryGoal.gap_skills.length - 8} 项</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button
+                  onClick={() => navigate('/growth-log')}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: '#6B3E2E', ...sans }}
+                >
+                  去成长档案追踪 <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </Card>
+          ) : recommendations.length > 0 ? (
+            <>
+              <div className="flex items-center gap-2 mb-4">
+                <Target className="w-4 h-4" style={{ color: ink(3) }} />
+                <h2 className="text-[16px] font-semibold" style={{ ...sans, color: ink(1) }}>推荐方向</h2>
+              </div>
+              <p className="text-[13px] mb-4" style={{ ...sans, color: ink(2) }}>
+                基于你的技能背景，以下方向与你的经历最为契合。点击了解详情，不急着做决定。
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {recommendations.slice(0, 4).map((rec) => {
+                  const rp = rec.replacement_pressure ?? 50
+                  const rpLabel = rp < 30 ? 'AI安全' : rp < 55 ? 'AI中等' : 'AI风险'
+                  const rpColor = rp < 30 ? '#5A8F6E' : rp < 55 ? '#C4853F' : '#B85C38'
+                  const zoneMap: Record<string, string> = { safe: '安全区', leverage: '杠杆区', transition: '过渡区', danger: '危险区' }
+                  return (
+                    <div
+                      key={rec.role_id}
+                      onClick={() => navigate(`/roles/${rec.role_id}`)}
+                      className="rounded-xl border border-[var(--line)] bg-[var(--bg-card)] p-5 cursor-pointer hover:shadow-[var(--shadow-paper)] transition-all duration-200 active:scale-[0.98]"
+                    >
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <h3 className="text-[14px] font-semibold truncate" style={{ ...sans, color: ink(1) }}>{rec.label}</h3>
+                      </div>
+                      <div className="flex items-center gap-2 mb-2">
+                        {rec.zone && (
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full" style={{ background: '#FDF5E8', color: '#C4853F' }}>
+                            {zoneMap[rec.zone] || rec.zone}
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white" style={{ background: rpColor }}>
+                          {rpLabel}
+                        </span>
+                      </div>
+                      <p className="text-[12px] line-clamp-2" style={{ ...sans, color: ink(3) }}>{rec.reason}</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </>
+          ) : (
+            <Card>
+              <div className="flex flex-col items-center gap-3 py-6">
+                <p className="text-[13px]" style={{ ...sans, color: ink(2) }}>推荐方向还在生成中，你可以先去图谱探索。</p>
+                <button
+                  onClick={() => navigate('/explore')}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium border transition-colors hover:bg-[var(--line)]/10 active:scale-[0.98]"
+                  style={{ borderColor: 'var(--line)', color: ink(1), ...sans }}
+                >
+                  去图谱探索 <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </Card>
+          )}
+        </motion.section>
+      </div>
+
       {/* ── Skills Gap + Soft Skills ── */}
-      <motion.section custom={3} variants={fadeUp} initial="hidden" animate="visible" className="grid gap-6 md:grid-cols-2 mb-8">
+      <motion.section custom={4} variants={fadeUp} initial="hidden" animate="visible" className="grid gap-6 md:grid-cols-2 mb-8">
         {/* Skills Table */}
         <Card className="p-0 overflow-hidden">
           <div className="p-5 border-b border-[var(--line)]">
@@ -417,7 +561,7 @@ export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
                     innovation: '创新意识',
                     resilience: '抗压韧性',
                   }
-                  return { key, label: labelMap[key] || key, advice: val.advice || '' }
+                  return { key, label: labelMap[key] || key, advice: val?.advice || '' }
                 })
                 .filter((i) => i.advice)
               return items.map((item, idx) => (
@@ -434,7 +578,7 @@ export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
       </motion.section>
 
       {/* ── Experience Timeline ── */}
-      <motion.section custom={4} variants={fadeUp} initial="hidden" animate="visible" className="mb-8">
+      <motion.section custom={6} variants={fadeUp} initial="hidden" animate="visible" className="mb-8">
         <h2 className="text-[16px] font-semibold mb-4" style={{ ...sans, color: ink(1) }}>经历与项目</h2>
         <div className="relative">
           {/* Horizontal connector line */}
@@ -561,22 +705,36 @@ export default function ProfileReadonlyView({ data, onEdit, onReport }: Props) {
               </div>
             </div>
           </div>
-          {onReport && (
-            <button
-              onClick={onReport}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98] shrink-0 relative z-10"
-              style={{ background: '#6B3E2E', ...sans }}
-            >
-              <FileText className="w-4 h-4" />
-              生成成长报告
-              <ArrowRight className="w-4 h-4" />
-            </button>
+          {hasGoal ? (
+            onReport && (
+              <button
+                onClick={onReport}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-medium text-white transition-opacity hover:opacity-90 active:scale-[0.98] shrink-0 relative z-10"
+                style={{ background: '#6B3E2E', ...sans }}
+              >
+                <FileText className="w-4 h-4" />
+                生成成长报告
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )
+          ) : (
+            onSetGoal && (
+              <button
+                onClick={onSetGoal}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-[13px] font-medium border transition-colors hover:bg-[var(--line)]/10 active:scale-[0.98] shrink-0 relative z-10"
+                style={{ borderColor: 'var(--line)', color: ink(1), ...sans }}
+              >
+                <Target className="w-4 h-4" />
+                去图谱探索
+                <ArrowRight className="w-4 h-4" />
+              </button>
+            )
           )}
         </div>
       </motion.section>
 
       {/* ── Footer ── */}
-      <motion.footer custom={6} variants={fadeUp} initial="hidden" animate="visible">
+      <motion.footer custom={7} variants={fadeUp} initial="hidden" animate="visible">
         <p className="text-center text-[11px]" style={{ ...sans, color: ink(3) }}>
           档案仅用于系统分析，不会分享给任何第三方。
         </p>

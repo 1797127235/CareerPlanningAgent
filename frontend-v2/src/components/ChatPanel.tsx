@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowUp, Compass, X, MessageSquare, Plus, Trash2, Volume2, VolumeX, PanelRightClose, RotateCcw, Search, CheckCircle2 } from 'lucide-react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -279,14 +280,14 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
     ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }
     : {}
 
-  return (
+  const panel = (
     <div
       data-chat-panel
       style={isPanel ? undefined : floatStyle}
       className={
         isPanel
           ? 'flex flex-col h-full w-full bg-white/90'
-          : `fixed z-50 w-[380px] h-[560px] max-h-[calc(100vh-48px)] flex flex-col bg-white/70 backdrop-blur-[24px] backdrop-saturate-[140%] border border-white/50 rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] ${pos ? '' : 'bottom-6 right-6'}`
+          : `fixed z-[9999] w-[380px] h-[560px] max-h-[calc(100vh-48px)] flex flex-col bg-white/70 backdrop-blur-[24px] backdrop-saturate-[140%] border border-white/50 rounded-2xl shadow-[0_8px_40px_rgba(0,0,0,0.12),0_0_0_1px_rgba(0,0,0,0.04)] ${pos ? '' : 'bottom-6 right-6'}`
       }
     >
       {/* ── Header ── */}
@@ -557,6 +558,9 @@ export function ChatPanel({ open, onClose, mode = 'float' }: ChatPanelProps) {
       </div>
     </div>
   )
+
+  if (isPanel) return panel
+  return createPortal(panel, document.body)
 }
 
 /* ── Compact message bubble for panel ── */
@@ -669,6 +673,9 @@ function MarketCards({ cards }: { cards: MarketCardData[] }) {
       </div>
     </div>
   )
+
+  if (isPanel) return panel
+  return createPortal(panel, document.body)
 }
 
 /* ── JD Search Result Cards ── */
@@ -725,6 +732,9 @@ function JdSearchCards({ cards, onDiagnose }: { cards: JdCardData[]; onDiagnose:
       ))}
     </div>
   )
+
+  if (isPanel) return panel
+  return createPortal(panel, document.body)
 }
 
 
@@ -904,4 +914,7 @@ function PanelBubble({
       )}
     </div>
   )
+
+  if (isPanel) return panel
+  return createPortal(panel, document.body)
 }

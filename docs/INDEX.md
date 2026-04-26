@@ -7,6 +7,7 @@
 | 文件 | 说明 |
 |---|---|
 | [PROJECT_GUIDE.md](./PROJECT_GUIDE.md) | 项目指南（新人入口） |
+| [upload-ceremony-ux-spec.md](./upload-ceremony-ux-spec.md) | 上传仪式感 UX 增强规范（杂志排版室方向，待实施） |
 | [coach-skill-progressive-disclosure.md](./coach-skill-progressive-disclosure.md) | Coach 当前架构：Progressive Disclosure 模式 + 13 skill |
 | [backend-slimdown-phase1-profile-service.md](./backend-slimdown-phase1-profile-service.md) | Backend 瘦身 Phase 1：profile_service.py 拆分（Kimi 进行中） |
 

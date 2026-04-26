@@ -1,19 +1,6 @@
 import { useState, useCallback } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import type { Skill, Internship } from '@/types/profile'
-
-export interface ManualProfilePayload {
-  name: string
-  education: { degree: string; major: string; school: string }
-  experience_years: number
-  job_target: string
-  skills: Skill[]
-  knowledge_areas: string[]
-  projects: Array<string | Record<string, unknown>>
-  internships: Internship[]
-  certificates: string[]
-  awards: string[]
-}
+import type { Skill, Internship, ManualProfilePayload } from '@/types/profile'
 
 interface ManualProfileFormProps {
   onSave: (data: ManualProfilePayload) => void

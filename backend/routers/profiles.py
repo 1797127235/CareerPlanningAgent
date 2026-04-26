@@ -13,7 +13,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
-from backend.db import get_db
+from backend.db import get_db, SessionLocal
 from backend.models import Profile, User
 from backend.services.graph.locator import _auto_locate_on_graph
 from backend.routers._profiles_helpers import (
@@ -201,10 +201,20 @@ def update_profile(
     return ok(_profile_to_dict(profile, db, user.id), message="画像已更新")
 
 
+def _auto_locate_bg(profile_id: int, user_id: int, profile_data: dict) -> None:
+    """Background wrapper for graph auto-locate with its own DB session."""
+    db = SessionLocal()
+    try:
+        _auto_locate_on_graph(profile_id, user_id, profile_data, db)
+    finally:
+        db.close()
+
+
 # ── POST /profiles/reparse — re-run LLM on stored raw_text ──────────────────
 
 @router.post("/reparse")
 def reparse_profile(
+    background_tasks: BackgroundTasks,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -223,11 +233,9 @@ def reparse_profile(
     db.commit()
     db.refresh(profile)
 
-    graph_position = _auto_locate_on_graph(profile.id, user.id, profile_data, db)
+    background_tasks.add_task(_auto_locate_bg, profile.id, user.id, profile_data)
     result = _profile_to_dict(profile, db, user.id)
-    if graph_position:
-        result["graph_position"] = graph_position
-    return ok(result, message="重新解析完成")
+    return ok(result, message="重新解析完成，岗位定位将在后台异步更新")
 
 
 # ── PATCH /profiles/name — lightweight name update ────────────────────────────

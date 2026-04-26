@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, Check, AlertCircle, RefreshCw, Target, TrendingUp, Compass } from 'lucide-react'
 import { fetchMatchDetail, type MatchDetail } from '@/api/recommendations'
+import { SkillRadar } from '@/components/match/SkillRadar'
 
 const CHANNEL_LABEL: Record<string, { icon: React.ReactNode; label: string }> = {
   entry: { icon: <Target style={{ width: 12, height: 12, display: 'inline-block', marginRight: 2 }} />, label: '起步岗位' },
@@ -184,7 +185,11 @@ export default function MatchDetailPage() {
                   查看详细分析 →
                 </button>
               </div>
-              <div className="placeholder">[image: 技能雷达图或可视化]</div>
+              <SkillRadar
+                mastered={data.mastered}
+                gaps={data.gaps}
+                coveragePct={data.coverage_pct}
+              />
             </div>
           </div>
         </section>

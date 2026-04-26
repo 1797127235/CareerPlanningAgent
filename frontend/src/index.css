@@ -81,7 +81,7 @@
 
 /* ── Glass Tier 1: Navigation ── */
 @utility glass-nav {
-  background: rgba(255,255,255, 0.70);
+  background: oklch(0.975 0 0 / 0.85);
   backdrop-filter: blur(12px) saturate(150%);
   -webkit-backdrop-filter: blur(12px) saturate(150%);
   border-right: 1px solid rgba(255,255,255, 0.30);

@@ -94,3 +94,16 @@ export interface CheckItem {
   label: string
   done: boolean
 }
+
+export interface ManualProfilePayload {
+  name: string
+  education: { degree: string; major: string; school: string }
+  experience_years: number
+  job_target: string
+  skills: Skill[]
+  knowledge_areas: string[]
+  projects: Array<string | Record<string, unknown>>
+  internships: Internship[]
+  certificates: string[]
+  awards: string[]
+}

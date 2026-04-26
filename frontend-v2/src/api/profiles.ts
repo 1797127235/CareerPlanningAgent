@@ -58,6 +58,11 @@ export async function resetProfile(): Promise<void> {
   await apiFetch('/profiles', { method: 'DELETE' })
 }
 
+/** Re-run LLM extraction on stored raw_text */
+export async function reparseProfile(): Promise<void> {
+  await apiFetch('/profiles/reparse', { method: 'POST' })
+}
+
 // ── SJT v2 types ─────────────────────────────────────────────
 
 export interface SjtQuestion {

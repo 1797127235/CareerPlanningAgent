@@ -5,7 +5,7 @@ import type {
   ProjectData,
   AiSuggestion,
   GrowthEntry,
-} from '@/components/growth-log-v2/mockData'
+} from '@/components/growth-log/mockData'
 
 const BASE = '/growth-log'
 

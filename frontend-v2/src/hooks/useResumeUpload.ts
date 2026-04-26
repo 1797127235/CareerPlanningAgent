@@ -7,6 +7,7 @@ interface UseResumeUploadReturn {
   uploadError: string | null
   justUploaded: boolean
   clearJustUploaded: () => void
+  selectedFileName: string
   fileInputRef: React.RefObject<HTMLInputElement | null>
   triggerFileDialog: () => void
   onFileSelected: (e: React.ChangeEvent<HTMLInputElement>) => void
@@ -16,6 +17,7 @@ let _uploading = false
 let _step = 0
 let _error: string | null = null
 let _justUploaded = false
+let _fileName = ''
 const _listeners = new Set<() => void>()
 
 function _set(uploading: boolean, step: number, error: string | null, justUploaded?: boolean) {
@@ -31,6 +33,7 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
   const [uploadStep, setUploadStep] = useState(_step)
   const [uploadError, setUploadError] = useState(_error)
   const [justUploaded, setJustUploaded] = useState(_justUploaded)
+  const [selectedFileName, setSelectedFileName] = useState(_fileName)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -39,6 +42,7 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
       setUploadStep(_step)
       setUploadError(_error)
       setJustUploaded(_justUploaded)
+      setSelectedFileName(_fileName)
     }
     sync()
     _listeners.add(sync)
@@ -47,7 +51,9 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
 
   const clearJustUploaded = useCallback(() => {
     _justUploaded = false
+    _fileName = ''
     setJustUploaded(false)
+    setSelectedFileName('')
   }, [])
 
   const triggerFileDialog = useCallback(() => {
@@ -59,6 +65,8 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
       const file = e.target.files?.[0]
       if (!file) return
       e.target.value = ''
+      _fileName = file.name
+      _listeners.forEach((fn) => fn())
       _set(true, 1, null)
       try {
         _set(true, 2, null)
@@ -86,6 +94,7 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
     uploadError,
     justUploaded,
     clearJustUploaded,
+    selectedFileName,
     fileInputRef,
     triggerFileDialog,
     onFileSelected,
