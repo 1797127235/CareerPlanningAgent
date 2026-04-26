@@ -22,7 +22,7 @@ import {
 const serif = { fontFamily: 'var(--font-serif), Georgia, "Noto Serif SC", serif' }
 const sans = { fontFamily: 'var(--font-sans), "Noto Sans SC", system-ui, sans-serif' }
 
-const cardBase = 'rounded-2xl bg-[var(--bg-card)] border border-[var(--line)]'
+const cardBase = 'rounded-2xl border border-[rgba(107,62,46,0.10)]'
 
 /* ═══════════════════════════════════════════
    TYPES
@@ -291,7 +291,7 @@ function FilterChips({ value, onChange }: { value: FilterKey; onChange: (v: Filt
             className={`px-4 py-1.5 rounded-full text-[13px] font-medium transition-all cursor-pointer ${
               active
                 ? 'bg-[#6B3E2E] text-white shadow-sm'
-                : 'bg-[var(--bg-card)] border border-[var(--line)] text-[var(--ink-2)] hover:text-[var(--ink-1)] hover:border-[var(--ink-2)]'
+                : 'bg-[#F2EDE4] border border-[rgba(107,62,46,0.10)] text-[var(--ink-2)] hover:text-[var(--ink-1)] hover:border-[rgba(107,62,46,0.18)]'
             }`}
           >
             {f.label}
@@ -468,9 +468,18 @@ function ProjectKanban({ projects, onRefresh, onAddEntry }: { projects: ProjectR
       </div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(31,31,31,0.18)', backdropFilter: 'blur(4px)' }} onClick={() => setShowAdd(false)}>
-          <div className={`${cardBase} w-full max-w-[420px] mx-4 p-6`} onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[18px] font-bold mb-5" style={{ ...serif, color: 'var(--ink-1)' }}>新建项目</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: 'rgba(60,50,40,0.18)' }} onClick={() => setShowAdd(false)}>
+          <div
+            className="w-full max-w-[460px] rounded-[24px] p-8 md:p-10"
+            style={{
+              background: '#F5F0E8',
+              border: '1px solid rgba(107,62,46,0.10)',
+              boxShadow: '0 24px 64px rgba(60,50,40,0.12), 0 2px 8px rgba(60,50,40,0.06)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-[22px] font-bold tracking-tight mb-1.5" style={{ fontFamily: 'var(--font-serif)', color: '#2A2118' }}>新建项目</h2>
+            <p className="text-[13px] mb-8" style={{ color: '#9A8B7A' }}>记录一个新项目，追踪它的进展</p>
             <ProjectForm
               onClose={() => setShowAdd(false)}
               onSaved={() => { onRefresh(); }}
@@ -538,9 +547,16 @@ function InterviewKanban({ interviews, onRefresh, onAddEntry }: { interviews: In
       </div>
 
       {showAdd && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(31,31,31,0.18)', backdropFilter: 'blur(4px)' }} onClick={() => setShowAdd(false)}>
-          <div className={`${cardBase} w-full max-w-[480px] mx-4 p-6`} onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-[18px] font-bold mb-5" style={{ ...serif, color: 'var(--ink-1)' }}>新增面试记录</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-6" style={{ background: 'rgba(60,50,40,0.18)' }} onClick={() => setShowAdd(false)}>
+          <div
+            className="w-full max-w-[520px] rounded-[24px] p-8 md:p-10"
+            style={{
+              background: '#F5F0E8',
+              border: '1px solid rgba(107,62,46,0.10)',
+              boxShadow: '0 24px 64px rgba(60,50,40,0.12), 0 2px 8px rgba(60,50,40,0.06)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <InterviewForm
               onClose={() => setShowAdd(false)}
               onSaved={() => { onRefresh(); }}
@@ -626,13 +642,13 @@ export default function GrowthLogPage() {
           <div className="flex items-center justify-between flex-wrap gap-2">
             <FilterChips value={filter} onChange={setFilter} />
             {filter === 'interview' && (
-              <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--line)] rounded-lg p-0.5">
+              <div className="flex items-center gap-1 bg-[#F2EDE4] border border-[rgba(107,62,46,0.10)] rounded-lg p-0.5">
                 <button onClick={() => setInterviewView('list')} className={`p-1.5 rounded-md transition-all cursor-pointer ${interviewView === 'list' ? 'bg-[var(--bg-paper-2)] shadow-sm text-[var(--ink-1)]' : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'}`}><LayoutList className="w-3.5 h-3.5" /></button>
                 <button onClick={() => setInterviewView('kanban')} className={`p-1.5 rounded-md transition-all cursor-pointer ${interviewView === 'kanban' ? 'bg-[var(--bg-paper-2)] shadow-sm text-[var(--ink-1)]' : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'}`}><Kanban className="w-3.5 h-3.5" /></button>
               </div>
             )}
             {filter === 'project' && (
-              <div className="flex items-center gap-1 bg-[var(--bg-card)] border border-[var(--line)] rounded-lg p-0.5">
+              <div className="flex items-center gap-1 bg-[#F2EDE4] border border-[rgba(107,62,46,0.10)] rounded-lg p-0.5">
                 <button onClick={() => setProjectView('list')} className={`p-1.5 rounded-md transition-all cursor-pointer ${projectView === 'list' ? 'bg-[var(--bg-paper-2)] shadow-sm text-[var(--ink-1)]' : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'}`}><LayoutList className="w-3.5 h-3.5" /></button>
                 <button onClick={() => setProjectView('kanban')} className={`p-1.5 rounded-md transition-all cursor-pointer ${projectView === 'kanban' ? 'bg-[var(--bg-paper-2)] shadow-sm text-[var(--ink-1)]' : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'}`}><Kanban className="w-3.5 h-3.5" /></button>
               </div>

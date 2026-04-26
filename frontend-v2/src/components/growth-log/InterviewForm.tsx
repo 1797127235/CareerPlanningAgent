@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { X, Building2, Briefcase, RefreshCw, MessagesSquare, Star, Flag, FileText, Plus } from 'lucide-react'
+import {
+  X, Building2, Briefcase, RefreshCw, MessagesSquare,
+  Star, Flag, FileText, Plus,
+} from 'lucide-react'
 import type { InterviewData, GrowthEntry } from './mockData'
 
 interface InterviewFormProps {
@@ -92,80 +95,102 @@ export function InterviewForm({
     }
   }
 
-  const inputCls =
-    'w-full px-4 py-3 text-[14px] rounded-2xl outline-none transition-all bg-[var(--bg-paper)] border placeholder:text-[var(--ink-3)] focus:border-[var(--chestnut)] focus:ring-2 focus:ring-[var(--chestnut)]/10'
-  const qaCls =
-    'w-full px-3.5 py-2.5 text-[13px] rounded-xl outline-none transition-all bg-[var(--bg-paper)] border placeholder:text-[var(--ink-3)] focus:border-[var(--chestnut)] focus:ring-2 focus:ring-[var(--chestnut)]/10'
+  const inputStyle: React.CSSProperties = {
+    background: '#EDE8DE',
+    border: '1px solid rgba(107,62,46,0.08)',
+    color: '#3A3028',
+    borderRadius: 16,
+    boxShadow: 'inset 0 1px 3px rgba(60,50,40,0.06)',
+  }
 
-  const Label = ({ icon: Icon, children }: { icon: any; children: React.ReactNode }) => (
-    <label className="flex items-center gap-2 text-[13px] font-semibold mb-2" style={{ color: 'var(--ink-1)' }}>
-      <Icon className="w-4 h-4" style={{ color: 'var(--ink-3)' }} />
-      {children}
-    </label>
-  )
+  const sectionStyle: React.CSSProperties = {
+    background: '#EDE8DE',
+    border: '1px solid rgba(107,62,46,0.08)',
+    borderRadius: 18,
+    boxShadow: 'inset 0 1px 3px rgba(60,50,40,0.06)',
+  }
 
   return (
-    <div className="space-y-5 max-h-[70vh] overflow-y-auto pr-1">
-      <div className="space-y-1">
-        <h3 className="text-[20px] font-bold" style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink-1)' }}>
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="space-y-1.5">
+        <h2
+          className="text-[22px] font-bold tracking-tight"
+          style={{ fontFamily: 'var(--font-serif)', color: '#2A2118' }}
+        >
           {isEdit ? '编辑面试复盘' : '新增面试记录'}
-        </h3>
-        <p className="text-[13px]" style={{ color: 'var(--ink-3)' }}>
+        </h2>
+        <p className="text-[13px]" style={{ color: '#9A8B7A' }}>
           记录每一次面试，沉淀成长与收获
         </p>
       </div>
 
-      <div>
-        <Label icon={Building2}>公司名称 *</Label>
+      {/* 公司名称 */}
+      <div className="space-y-2.5">
+        <label className="flex items-center gap-2 text-[13px]" style={{ color: '#5A4D3F' }}>
+          <Building2 className="w-4 h-4" style={{ color: '#9A8B7A' }} />
+          <span className="font-medium">公司名称</span>
+          <span style={{ color: '#B85C38' }}>*</span>
+        </label>
         <input
           value={company}
           onChange={(e) => setCompany(e.target.value)}
           placeholder="例如：字节跳动"
-          className={inputCls}
-          style={{ color: 'var(--ink-1)', borderColor: 'var(--line)' }}
+          className="w-full px-5 py-3.5 text-[14px] outline-none transition-all placeholder:text-[#C4B8A8] focus:border-[#B85C38]/40"
+          style={inputStyle}
         />
       </div>
 
-      <div>
-        <Label icon={Briefcase}>岗位</Label>
+      {/* 岗位 */}
+      <div className="space-y-2.5">
+        <label className="flex items-center gap-2 text-[13px]" style={{ color: '#5A4D3F' }}>
+          <Briefcase className="w-4 h-4" style={{ color: '#9A8B7A' }} />
+          <span className="font-medium">岗位</span>
+        </label>
         <input
           value={position}
           onChange={(e) => setPosition(e.target.value)}
           placeholder="例如：后端开发实习"
-          className={inputCls}
-          style={{ color: 'var(--ink-1)', borderColor: 'var(--line)' }}
+          className="w-full px-5 py-3.5 text-[14px] outline-none transition-all placeholder:text-[#C4B8A8] focus:border-[#B85C38]/40"
+          style={inputStyle}
         />
       </div>
 
-      <div>
-        <Label icon={RefreshCw}>轮次</Label>
+      {/* 轮次 */}
+      <div className="space-y-2.5">
+        <label className="flex items-center gap-2 text-[13px]" style={{ color: '#5A4D3F' }}>
+          <RefreshCw className="w-4 h-4" style={{ color: '#9A8B7A' }} />
+          <span className="font-medium">轮次</span>
+        </label>
         <select
           value={round}
           onChange={(e) => setRound(e.target.value)}
-          className={inputCls}
-          style={{ color: 'var(--ink-1)', borderColor: 'var(--line)' }}
+          className="w-full px-5 py-3.5 text-[14px] outline-none transition-all appearance-none cursor-pointer focus:border-[#B85C38]/40"
+          style={inputStyle}
         >
           {ROUND_OPTIONS.map((r) => (
-            <option key={r} value={r}>
-              {r}
-            </option>
+            <option key={r} value={r}>{r}</option>
           ))}
         </select>
       </div>
 
-      <div>
-        <Label icon={MessagesSquare}>问了什么 · 我怎么答的</Label>
+      {/* Q&A */}
+      <div className="space-y-3">
+        <label className="flex items-center gap-2 text-[13px]" style={{ color: '#5A4D3F' }}>
+          <MessagesSquare className="w-4 h-4" style={{ color: '#9A8B7A' }} />
+          <span className="font-medium">问了什么 · 我怎么答的</span>
+        </label>
         <div className="space-y-3">
           {questions.map((qa, idx) => (
             <div
               key={idx}
-              className="p-3.5 rounded-2xl relative"
-              style={{ background: 'var(--bg-paper)', border: '1px solid var(--line)' }}
+              className="p-4 relative"
+              style={sectionStyle}
             >
               <button
                 onClick={() => removeQuestion(idx)}
                 className="absolute right-3 top-3 transition-colors cursor-pointer"
-                style={{ color: 'var(--ink-3)' }}
+                style={{ color: '#C4B8A8' }}
                 aria-label="删除"
               >
                 <X className="w-3.5 h-3.5" />
@@ -173,33 +198,37 @@ export function InterviewForm({
               <input
                 value={qa.q}
                 onChange={(e) => updateQuestion(idx, 'q', e.target.value)}
-                className={qaCls + ' mb-2 pr-8'}
-                style={{ color: 'var(--ink-1)', borderColor: 'var(--line)' }}
-                placeholder="Q: 面试问题"
+                placeholder="面试问题"
+                className="w-full pr-8 px-4 py-2.5 text-[13px] outline-none transition-all placeholder:text-[#C4B8A8] focus:border-[#B85C38]/40 mb-2"
+                style={inputStyle}
               />
               <input
                 value={qa.a}
                 onChange={(e) => updateQuestion(idx, 'a', e.target.value)}
-                className={qaCls}
-                style={{ color: 'var(--ink-1)', borderColor: 'var(--line)' }}
-                placeholder="A: 我的回答"
+                placeholder="我的回答"
+                className="w-full px-4 py-2.5 text-[13px] outline-none transition-all placeholder:text-[#C4B8A8] focus:border-[#B85C38]/40"
+                style={inputStyle}
               />
             </div>
           ))}
         </div>
         <button
           onClick={addQuestion}
-          className="mt-3 flex items-center gap-1 text-[13px] font-medium cursor-pointer transition-colors"
-          style={{ color: 'var(--chestnut)' }}
+          className="flex items-center gap-1.5 text-[13px] font-medium cursor-pointer transition-colors px-3 py-1.5 rounded-xl"
+          style={{ color: '#6B3E2E', background: 'rgba(107,62,46,0.06)' }}
         >
           <Plus className="w-3.5 h-3.5" /> 加一题
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        <div>
-          <Label icon={Star}>自评</Label>
-          <div className="flex items-center gap-4">
+      {/* 自评 + 结果 */}
+      <div className="grid grid-cols-2 gap-8">
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-[13px]" style={{ color: '#5A4D3F' }}>
+            <Star className="w-4 h-4" style={{ color: '#9A8B7A' }} />
+            <span className="font-medium">自评</span>
+          </label>
+          <div className="flex items-center gap-5">
             {[
               { key: 'good' as const, label: '好' },
               { key: 'medium' as const, label: '一般' },
@@ -207,24 +236,27 @@ export function InterviewForm({
             ].map((o) => (
               <label
                 key={o.key}
-                className="flex items-center gap-1.5 text-[13px] cursor-pointer"
-                style={{ color: 'var(--ink-1)' }}
+                className="flex items-center gap-2 text-[14px] cursor-pointer"
+                style={{ color: '#3A3028' }}
               >
                 <input
                   type="radio"
                   name="self_rating"
                   checked={selfRating === o.key}
                   onChange={() => setSelfRating(o.key)}
-                  className="cursor-pointer"
+                  className="cursor-pointer accent-[#B85C38]"
                 />
                 {o.label}
               </label>
             ))}
           </div>
         </div>
-        <div>
-          <Label icon={Flag}>结果</Label>
-          <div className="flex items-center gap-4">
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-[13px]" style={{ color: '#5A4D3F' }}>
+            <Flag className="w-4 h-4" style={{ color: '#9A8B7A' }} />
+            <span className="font-medium">结果</span>
+          </label>
+          <div className="flex items-center gap-5">
             {[
               { key: 'passed' as const, label: '通过' },
               { key: 'failed' as const, label: '未通过' },
@@ -232,15 +264,15 @@ export function InterviewForm({
             ].map((o) => (
               <label
                 key={o.key}
-                className="flex items-center gap-1.5 text-[13px] cursor-pointer"
-                style={{ color: 'var(--ink-1)' }}
+                className="flex items-center gap-2 text-[14px] cursor-pointer"
+                style={{ color: '#3A3028' }}
               >
                 <input
                   type="radio"
                   name="result"
                   checked={result === o.key}
                   onChange={() => setResult(o.key)}
-                  className="cursor-pointer"
+                  className="cursor-pointer accent-[#B85C38]"
                 />
                 {o.label}
               </label>
@@ -249,40 +281,50 @@ export function InterviewForm({
         </div>
       </div>
 
-      <div>
-        <Label icon={FileText}>复盘感受</Label>
+      {/* 复盘感受 */}
+      <div className="space-y-2.5">
+        <label className="flex items-center gap-2 text-[13px]" style={{ color: '#5A4D3F' }}>
+          <FileText className="w-4 h-4" style={{ color: '#9A8B7A' }} />
+          <span className="font-medium">复盘感受</span>
+        </label>
         <textarea
           value={reflection}
           onChange={(e) => setReflection(e.target.value)}
           rows={3}
-          className={inputCls + ' resize-none'}
-          style={{ color: 'var(--ink-1)', borderColor: 'var(--line)' }}
+          className="w-full px-5 py-3.5 text-[14px] outline-none transition-all resize-none placeholder:text-[#C4B8A8] focus:border-[#B85C38]/40"
+          style={inputStyle}
           placeholder="总结一下这次面试的得失..."
         />
       </div>
 
       {err && (
         <div
-          className="px-3 py-2 text-[12px] rounded-lg border"
-          style={{ color: '#B85C38', background: 'rgba(184,92,56,0.06)', borderColor: 'rgba(184,92,56,0.15)' }}
+          className="px-4 py-2.5 text-[13px] rounded-xl"
+          style={{
+            color: '#B85C38',
+            background: 'rgba(184,92,56,0.06)',
+            border: '1px solid rgba(184,92,56,0.12)',
+          }}
         >
           {err}
         </div>
       )}
+
+      {/* Actions */}
       <div className="flex items-center justify-end gap-3 pt-2">
         <button
           onClick={onClose}
           disabled={saving}
-          className="px-5 py-2.5 rounded-2xl text-[14px] font-medium transition-all cursor-pointer disabled:opacity-40"
-          style={{ color: 'var(--ink-2)' }}
+          className="px-6 py-2.5 rounded-2xl text-[14px] font-medium transition-all cursor-pointer disabled:opacity-40"
+          style={{ color: '#9A8B7A' }}
         >
           取消
         </button>
         <button
           onClick={handleSave}
           disabled={saving || !company.trim()}
-          className="px-6 py-2.5 rounded-2xl text-[14px] font-semibold text-white transition-all cursor-pointer disabled:opacity-40"
-          style={{ background: 'var(--chestnut)' }}
+          className="px-7 py-2.5 rounded-2xl text-[14px] font-semibold text-white transition-all cursor-pointer disabled:opacity-40"
+          style={{ background: '#B85C38', boxShadow: '0 2px 8px rgba(184,92,56,0.25)' }}
         >
           {saving ? '保存中…' : '保存'}
         </button>
