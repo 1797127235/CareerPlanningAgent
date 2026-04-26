@@ -45,14 +45,6 @@ export async function refineProject(originalText: string, newDescription: string
   })
 }
 
-/** Update project by index (legacy) */
-export async function updateProject(projIndex: number, description: string): Promise<void> {
-  await apiFetch(`/profiles/me/projects/${projIndex}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ description }),
-  })
-}
-
 /** Reset profile to empty */
 export async function resetProfile(): Promise<void> {
   await apiFetch('/profiles', { method: 'DELETE' })
@@ -94,9 +86,28 @@ export interface SjtSubmitResult {
   overall_level: string
 }
 
+export interface SjtProgress {
+  session_id: string
+  questions: SjtQuestion[]
+  answers: SjtAnswer[]
+  current_idx: number
+}
+
 export async function generateSjt(): Promise<SjtGenerateResult> {
   const res = await rawFetch('/profiles/sjt/generate', { method: 'POST' })
   return res.data
+}
+
+export async function getSjtProgress(): Promise<SjtProgress | null> {
+  const res = await rawFetch('/profiles/sjt/progress')
+  return res.data
+}
+
+export async function saveSjtProgress(sessionId: string, answers: SjtAnswer[], currentIdx: number): Promise<void> {
+  await rawFetch('/profiles/sjt/save', {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId, answers, current_idx: currentIdx }),
+  })
 }
 
 export async function submitSjt(sessionId: string, answers: SjtAnswer[]): Promise<SjtSubmitResult> {
@@ -105,4 +116,32 @@ export async function submitSjt(sessionId: string, answers: SjtAnswer[]): Promis
     body: JSON.stringify({ session_id: sessionId, answers }),
   })
   return res.data
+}
+
+// ── Project CRUD ──
+
+export interface ProjectPayload {
+  name: string
+  description?: string
+  tech_stack?: string[]
+}
+
+export async function addProject(project: ProjectPayload): Promise<void> {
+  await apiFetch('/profiles/projects', {
+    method: 'POST',
+    body: JSON.stringify(project),
+  })
+}
+
+export async function updateProject(index: number, project: ProjectPayload): Promise<void> {
+  await apiFetch(`/profiles/projects/${index}`, {
+    method: 'PATCH',
+    body: JSON.stringify(project),
+  })
+}
+
+export async function deleteProject(index: number): Promise<void> {
+  await apiFetch(`/profiles/projects/${index}`, {
+    method: 'DELETE',
+  })
 }

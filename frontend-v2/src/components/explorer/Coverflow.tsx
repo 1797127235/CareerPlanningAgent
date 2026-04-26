@@ -923,72 +923,77 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
         const ab = computeAbilities(detailNode)
         const intro = introCache.get(detailNode.node_id)
         return (
-          <div className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm z-50 flex items-center justify-center p-6"
+          <div className="fixed inset-0 bg-[#2C1810]/25 backdrop-blur-md z-50 flex items-center justify-center p-6"
             onClick={() => setDetailNode(null)}>
-            <div className="bg-white/95 backdrop-blur-xl max-w-[420px] w-full rounded-2xl shadow-2xl p-6 relative"
+            <div className="bg-[#FDFBF9] max-w-[520px] w-full rounded-[24px] shadow-[0_24px_64px_rgba(44,24,16,0.18)] p-8 relative border border-[#F0E8E0]"
               onClick={e => e.stopPropagation()}
-              style={{ animation: 'popoverIn .2s ease-out' }}>
+              style={{ animation: 'modalIn .25s cubic-bezier(.16,1,.3,1)' }}>
               <button onClick={() => setDetailNode(null)}
-                className="absolute top-4 right-4 text-[var(--ink-3)] hover:text-[var(--ink-2)] p-1.5 rounded-full hover:bg-[var(--bg-paper-2)] cursor-pointer transition-colors">
-                <X className="w-4 h-4" />
+                className="absolute top-5 right-5 text-[var(--ink-3)] hover:text-[var(--ink-1)] p-2 rounded-full hover:bg-[#F5EDE5] cursor-pointer transition-colors">
+                <X className="w-5 h-5" />
               </button>
 
               {/* Header */}
-              <div className="flex items-center gap-2 mb-4">
-                <h3 className="text-lg font-extrabold text-[var(--ink-1)]">{detailNode.label}</h3>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${ZONE_CLS[detailNode.zone] ?? ZONE_CLS[DEFAULT_ZONE]}`}>
-                  {ZONE_LABEL[detailNode.zone] ?? detailNode.zone}
-                </span>
+              <div className="mb-6">
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <h3 className="text-[26px] font-bold text-[var(--ink-1)] leading-tight tracking-tight">{detailNode.label}</h3>
+                  <span className={`text-[11px] font-bold px-2.5 py-1 rounded-lg shrink-0 mt-1.5 ${ZONE_CLS[detailNode.zone] ?? ZONE_CLS[DEFAULT_ZONE]}`}>
+                    {ZONE_LABEL[detailNode.zone] ?? detailNode.zone}
+                  </span>
+                </div>
+                {intro ? (
+                  <p className="text-[14px] text-[var(--ink-2)] leading-[1.75]">{intro}</p>
+                ) : (
+                  <p className="text-[13px] text-[var(--ink-3)] italic">暂无介绍</p>
+                )}
               </div>
 
-              {/* Intro */}
-              {intro ? (
-                <p className="text-[13px] text-[var(--ink-2)] leading-relaxed mb-4">{intro}</p>
-              ) : (
-                <p className="text-[12px] text-[var(--ink-3)] italic mb-4">暂无介绍</p>
-              )}
-
               {/* Stats */}
-              <div className="flex items-center gap-4 mb-4 pb-4 border-b border-[var(--line)]">
+              <div className="flex items-stretch gap-0 mb-6 p-4 rounded-2xl bg-[#F7F2EE]">
                 {detailNode.salary_p50 != null && (
-                  <div>
-                    <div className="text-[18px] font-black text-[#5A7D5A]">{(detailNode.salary_p50 / 1000).toFixed(0)}K</div>
-                    <div className="text-[10px] text-[var(--ink-3)]">月薪 P50</div>
-                  </div>
+                  <>
+                    <div className="flex-1 text-center">
+                      <div className="text-[24px] font-bold text-[#5A7D5A] leading-none tracking-tight">{(detailNode.salary_p50 / 1000).toFixed(0)}K</div>
+                      <div className="text-[11px] text-[var(--ink-3)] mt-1.5 font-medium">月薪 P50</div>
+                    </div>
+                    <div className="w-px bg-[var(--line)] mx-2" />
+                  </>
                 )}
-                <div>
-                  <div className="text-[18px] font-black text-[var(--chestnut)]">L{detailNode.career_level}</div>
-                  <div className="text-[10px] text-[var(--ink-3)]">职级</div>
+                <div className="flex-1 text-center">
+                  <div className="text-[24px] font-bold text-[var(--chestnut)] leading-none tracking-tight">L{detailNode.career_level}</div>
+                  <div className="text-[11px] text-[var(--ink-3)] mt-1.5 font-medium">职级</div>
                 </div>
-                <div>
-                  <div className="text-[18px] font-black text-[var(--ink-2)]">{ROLE_FAMILY_LABEL[detailNode.role_family] ?? detailNode.role_family}</div>
-                  <div className="text-[10px] text-[var(--ink-3)]">方向</div>
+                <div className="w-px bg-[var(--line)] mx-2" />
+                <div className="flex-1 text-center">
+                  <div className="text-[16px] font-bold text-[var(--ink-2)] leading-none tracking-tight mt-1">{ROLE_FAMILY_LABEL[detailNode.role_family] ?? detailNode.role_family}</div>
+                  <div className="text-[11px] text-[var(--ink-3)] mt-1.5 font-medium">方向</div>
                 </div>
               </div>
 
               {/* Abilities */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 mb-4">
-                {Object.entries(ab).map(([k, v]) => (
-                  <div key={k} className="flex items-center justify-between">
-                    <span className="text-[12px] text-[var(--ink-3)]">{k}</span>
-                    <div className="flex items-center gap-2">
-                      <div className="w-16 h-1.5 rounded-full bg-[var(--bg-paper-2)] overflow-hidden">
-                        <div className={`h-full rounded-full ${v >= 70 ? 'bg-[#E8F0E8]0' : v >= 40 ? 'bg-amber-400' : 'bg-red-400'}`}
+              <div className="mb-6">
+                <div className="text-[12px] font-bold text-[var(--ink-3)] uppercase tracking-wider mb-3">能力维度</div>
+                <div className="grid grid-cols-4 gap-3">
+                  {Object.entries(ab).map(([k, v]) => (
+                    <div key={k} className="text-center p-2.5 rounded-xl bg-[#F7F2EE]">
+                      <div className="text-[11px] text-[var(--ink-3)] mb-1.5 font-medium">{k}</div>
+                      <div className={`text-[20px] font-bold leading-none mb-2 ${v >= 70 ? 'text-[#5A7D5A]' : v >= 40 ? 'text-[#B8860B]' : 'text-[#A0522D]'}`}>{v}</div>
+                      <div className="w-full h-1.5 rounded-full bg-[#EDE5DD] overflow-hidden">
+                        <div className={`h-full rounded-full ${v >= 70 ? 'bg-[#5A7D5A]' : v >= 40 ? 'bg-[#B8860B]' : 'bg-[#A0522D]'}`}
                           style={{ width: `${v}%` }} />
                       </div>
-                      <span className={`text-[11px] font-bold w-6 text-right ${v >= 70 ? 'text-[#5A7D5A]' : v >= 40 ? 'text-[#B8860B]' : 'text-[#A0522D]'}`}>{v}</span>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
               {/* Skills */}
               {detailNode.must_skills && detailNode.must_skills.length > 0 && (
-                <div className="mb-4">
-                  <div className="text-[11px] font-semibold text-[var(--ink-3)] mb-1.5">核心技能</div>
-                  <div className="flex flex-wrap gap-1.5">
+                <div className="mb-5">
+                  <div className="text-[12px] font-bold text-[var(--ink-3)] uppercase tracking-wider mb-3">核心技能</div>
+                  <div className="flex flex-wrap gap-2">
                     {detailNode.must_skills.map(s => (
-                      <span key={s} className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[var(--bg-paper-2)] text-[var(--ink-2)] border border-[var(--line)]">{s}</span>
+                      <span key={s} className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-white text-[var(--ink-2)] border border-[#E8DDD4] shadow-sm">{s}</span>
                     ))}
                   </div>
                 </div>
@@ -996,16 +1001,22 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
 
               {/* Promotion Path */}
               {detailNode.promotion_path && detailNode.promotion_path.length > 0 && (
-                <div className="mb-4">
-                  <div className="text-[11px] font-semibold text-[var(--ink-3)] mb-1.5">晋升路径</div>
-                  <div className="flex items-center gap-0.5 overflow-x-auto pb-1">
+                <div className="mb-5">
+                  <div className="text-[12px] font-bold text-[var(--ink-3)] uppercase tracking-wider mb-3">晋升路径</div>
+                  <div className="flex items-center px-1 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                     {detailNode.promotion_path.map((p, i) => (
                       <div key={p.level} className="flex items-center shrink-0">
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded ${p.level === detailNode.career_level ? 'bg-[#EAD4C8] text-[var(--chestnut)] font-bold border border-blue-300' : 'bg-[var(--bg-paper)] text-[var(--ink-3)]'}`}>
-                          L{p.level} {p.title}
-                        </span>
+                        <div className={`flex flex-col items-center px-2 py-2 rounded-xl transition-colors ${p.level === detailNode.career_level ? 'bg-[#F5E8E0]' : 'bg-transparent'}`}>
+                          <div className={`w-2 h-2 rounded-full mb-2 ${p.level === detailNode.career_level ? 'bg-[var(--chestnut)]' : 'bg-[#D4C8BE]'}`} />
+                          <span className={`text-[11px] whitespace-nowrap font-semibold ${p.level === detailNode.career_level ? 'text-[var(--chestnut)]' : 'text-[var(--ink-3)]'}`}>
+                            L{p.level}
+                          </span>
+                          <span className={`text-[10px] whitespace-nowrap mt-0.5 ${p.level === detailNode.career_level ? 'text-[var(--chestnut)] font-medium' : 'text-[var(--ink-3)]'}`}>
+                            {p.title}
+                          </span>
+                        </div>
                         {i < detailNode.promotion_path!.length - 1 && (
-                          <span className="text-[var(--ink-3)] text-[10px] mx-0.5">→</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-[#D4C8BE] shrink-0 mx-0.5 mt-[-8px]" />
                         )}
                       </div>
                     ))}
@@ -1018,15 +1029,16 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
                 const DIM_ZH: Record<string, string> = { communication: '沟通', learning: '学习', resilience: '抗压', innovation: '创新', collaboration: '协作' }
                 const DIM_ORDER = ['communication', 'learning', 'resilience', 'innovation', 'collaboration']
                 return (
-                  <div className="mb-4">
-                    <div className="text-[11px] font-semibold text-[var(--ink-3)] mb-1.5">软技能要求</div>
+                  <div className="mb-6">
+                    <div className="text-[12px] font-bold text-[var(--ink-3)] uppercase tracking-wider mb-3">软技能要求</div>
                     <div className="flex gap-2 flex-wrap">
                       {DIM_ORDER.filter(d => detailNode.soft_skills?.[d] != null).map(d => {
                         const v = detailNode.soft_skills![d]
-                        const color = v >= 4 ? 'bg-[#EAD4C8] text-[var(--chestnut)] border-blue-200' : v >= 3 ? 'bg-[var(--bg-paper-2)] text-[var(--ink-2)] border-[var(--line)]' : 'bg-[var(--bg-paper)] text-[var(--ink-3)] border-[var(--line)]'
+                        const isHigh = v >= 4
                         return (
-                          <span key={d} className={`text-[11px] font-semibold px-2 py-0.5 rounded-md border ${color}`}>
-                            {DIM_ZH[d] ?? d} {'★'.repeat(v)}
+                          <span key={d} className={`text-[12px] font-semibold px-3 py-1.5 rounded-lg border ${isHigh ? 'bg-[#F5E8E0] text-[var(--chestnut)] border-[#EAD4C8]' : 'bg-white text-[var(--ink-2)] border-[#E8DDD4]'}`}>
+                            {DIM_ZH[d] ?? d}
+                            <span className={`ml-1.5 ${isHigh ? 'text-[var(--chestnut)]' : 'text-[#D4C8BE]'}`}>{'★'.repeat(v)}{'☆'.repeat(5 - v)}</span>
                           </span>
                         )
                       })}
@@ -1038,7 +1050,7 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
               {/* Role detail page link */}
               <button
                 onClick={() => { setDetailNode(null); routerNavigate(`/roles/${detailNode.node_id}`) }}
-                className="w-full text-center text-[12px] font-semibold text-white bg-[var(--chestnut)] hover:brightness-110 py-2.5 rounded-xl cursor-pointer transition-all flex items-center justify-center gap-1.5"
+                className="w-full text-center text-[14px] font-semibold text-white bg-[var(--chestnut)] hover:brightness-105 active:scale-[0.98] py-3 rounded-xl cursor-pointer transition-all shadow-md shadow-[var(--chestnut)]/20"
               >
                 查看完整岗位介绍
               </button>

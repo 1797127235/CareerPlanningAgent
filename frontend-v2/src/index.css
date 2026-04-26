@@ -306,6 +306,16 @@ body::before {
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.96) translateY(12px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes reportItemIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 @keyframes locateLabel {
   0%   { opacity: 0; transform: translateX(-50%) translateY(8px); }
   15%  { opacity: 1; transform: translateX(-50%) translateY(0); }

@@ -44,7 +44,7 @@ class Profile(Base):
 
 
 class SjtSession(Base):
-    """Temporary storage for generated SJT questions between generate and submit."""
+    """Persistent storage for SJT questions and progress."""
 
     __tablename__ = "sjt_sessions"
 
@@ -53,8 +53,11 @@ class SjtSession(Base):
         Integer, ForeignKey("profiles.id"), nullable=False, index=True
     )
     questions_json: Mapped[str] = mapped_column(Text, nullable=False)
+    answers_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    current_idx: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="in_progress")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class CareerGoal(Base):

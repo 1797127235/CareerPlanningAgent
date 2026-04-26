@@ -284,13 +284,31 @@ def _auto_locate_on_graph(
                 )
 
         db.commit()
-        # Cache only after successful commit to avoid inconsistency on rollback
-        if profile:
-            _save_rec_cache(profile, p_hash, rec_resp, db)
-            db.commit()
+
+        # Save recommendations cache — re-query profile to get a fresh
+        # session-managed object after commit (avoids DetachedInstanceError)
+        try:
+            from backend.routers.recommendations import _save_rec_cache
+            from backend.services.gap_analyzer import profile_hash as _ph
+
+            fresh_profile = db.query(Profile).filter(Profile.id == profile_id).first()
+            if fresh_profile and enriched:
+                p_hash = _ph(profile_data)
+                skill_count = len([s for s in profile_data.get("skills", []) if s.get("name")])
+                rec_resp = {"recommendations": enriched, "user_skill_count": skill_count}
+                _save_rec_cache(fresh_profile, p_hash, rec_resp, db)
+                logger.info(
+                    "[AUTO-LOCATE-CACHE-SAVED] profile_id=%d count=%d top=%r",
+                    profile_id, len(enriched), enriched[0].get("label", "?"),
+                )
+            else:
+                logger.warning(
+                    "[AUTO-LOCATE-CACHE-SKIP] profile_id=%d fresh=%s enriched=%d",
+                    profile_id, fresh_profile is not None, len(enriched),
+                )
+        except Exception as cache_err:
+            logger.exception("[AUTO-LOCATE-CACHE-FAILED] profile_id=%d: %s", profile_id, cache_err)
+
         return {"node_id": node_id, "label": node_label}
     except Exception as e:
-        import traceback
-
-        print(f"[auto_locate] FAILED for user={user_id}: {e}")
-        traceback.print_exc()
+        logger.exception("[auto_locate] FAILED for user=%d profile_id=%d: %s", user_id, profile_id, e)

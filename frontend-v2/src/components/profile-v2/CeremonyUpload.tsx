@@ -249,7 +249,7 @@ export function CeremonyUpload({
             initial={prefersReduced ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={prefersReduced ? undefined : { opacity: 0 }}
-            className="flex flex-col items-center"
+            className="flex flex-col items-start"
             role="status"
             aria-label={`正在处理简历，当前步骤：${
               uploadStep === 2 ? '解析简历' : uploadStep === 3 ? '合并画像' : '处理中'
@@ -269,7 +269,7 @@ export function CeremonyUpload({
               )}
 
               {/* 水平并排：进度环 + 步骤 */}
-              <div className="relative z-10 flex items-center justify-center gap-8">
+              <div className="relative z-10 flex items-center gap-8">
                 {/* 左侧进度环 */}
                 <div className="shrink-0">
                   <CircularProgress progress={((uploadStep) / 3) * 100} size={68} />
@@ -292,7 +292,7 @@ export function CeremonyUpload({
             </div>
 
             {/* 底部提示 */}
-            <p className="mt-4 text-[13px] text-[var(--ink-3)]">
+            <p className="mt-4 text-[13px] text-[var(--ink-3)] text-left">
               正在将你的经历排版为档案...
             </p>
           </motion.div>

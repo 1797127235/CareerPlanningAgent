@@ -9,6 +9,15 @@ interface InterviewFormProps {
   onClose: () => void
   onSaved?: () => void
   onAddEntry: (data: Partial<GrowthEntry>) => Promise<unknown> | unknown
+  onCreateInterview?: (data: {
+    company: string
+    position?: string
+    round?: string
+    content_summary: string
+    self_rating?: string
+    result?: string
+    reflection?: string
+  }) => Promise<unknown> | unknown
   initialEntry?: GrowthEntry | null
   onUpdate?: (id: number, data: Partial<GrowthEntry>) => Promise<unknown>
 }
@@ -19,6 +28,7 @@ export function InterviewForm({
   onClose,
   onSaved,
   onAddEntry,
+  onCreateInterview,
   initialEntry,
   onUpdate,
 }: InterviewFormProps) {
@@ -71,6 +81,19 @@ export function InterviewForm({
           content: `${structured.company} ${structured.round}`,
           tags: ['面试', structured.company],
           structured_data: structured as any,
+        })
+      } else if (onCreateInterview) {
+        const contentSummary = structured.questions
+          .map((qa) => `Q: ${qa.q}\nA: ${qa.a}`)
+          .join('\n\n')
+        await onCreateInterview({
+          company: structured.company,
+          position: structured.position,
+          round: structured.round,
+          content_summary: contentSummary,
+          self_rating: structured.self_rating,
+          result: structured.result,
+          reflection: structured.reflection,
         })
       } else {
         await onAddEntry({

@@ -6,6 +6,7 @@ import { ChatPanel } from '@/components/ChatPanel'
 import { MessageSquare } from 'lucide-react'
 import HomePage from './pages/HomePage'
 import DemoPage from './pages/DemoPage'
+import ReportListPage from './pages/ReportListPage'
 import ReportPage from './pages/ReportPage'
 import ProfilePage from './pages/ProfilePage'
 import LoginPage from './pages/LoginPage'
@@ -65,7 +66,8 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/__demo" element={<DemoPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/report" element={<ReportPage />} />
+          <Route path="/report" element={<ReportListPage />} />
+          <Route path="/report/:id" element={<ReportPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/profile/match/:roleId" element={<MatchDetailPage />} />
           <Route path="/graph" element={<GraphPage />} />

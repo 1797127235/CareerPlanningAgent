@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from backend.auth import get_current_user
 from backend.db import get_db, SessionLocal
-from backend.models import Profile, User
+from backend.models import Profile, SjtSession, User
 from backend.services.graph.locator import _auto_locate_on_graph
 from backend.routers._profiles_helpers import (
     _get_or_create_profile,
@@ -181,6 +181,12 @@ def update_profile(
         quality_data = ProfileService.compute_quality(merged)
         profile.quality_json = json.dumps(quality_data, ensure_ascii=False, default=str)
 
+        # Profile changed → drop any in-progress SJT session so user re-generates fresh questions
+        db.query(SjtSession).filter(
+            SjtSession.profile_id == profile.id,
+            SjtSession.status == "in_progress",
+        ).delete(synchronize_session=False)
+
         logger.info(
             "[UPDATE-PROFILE] job_target=%r source=%r merge=%s",
             merged.get("job_target", ""),
@@ -230,6 +236,13 @@ def reparse_profile(
 
     profile.profile_json = json.dumps(profile_data, ensure_ascii=False, default=str)
     profile.quality_json = json.dumps(quality_data, ensure_ascii=False, default=str)
+
+    # Profile re-parsed → drop any in-progress SJT session
+    db.query(SjtSession).filter(
+        SjtSession.profile_id == profile.id,
+        SjtSession.status == "in_progress",
+    ).delete(synchronize_session=False)
+
     db.commit()
     db.refresh(profile)
 
@@ -295,6 +308,86 @@ def set_preferences(
     profile.profile_json = json.dumps(profile_data, ensure_ascii=False, default=str)
     db.commit()
     return ok(message="就业意愿已保存")
+
+
+# ── POST /profiles/projects — add a project ────────────────────────────────
+
+class ProjectRequest(BaseModel):
+    name: str = ""
+    description: str = ""
+    tech_stack: list[str] = []
+    model_config = {"extra": "ignore"}
+
+
+@router.post("/projects")
+def add_project(
+    req: ProjectRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Add a project to profile.projects array."""
+    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    if not profile:
+        raise HTTPException(404, "画像不存在")
+
+    profile_data = _load_profile_json(profile)
+    projects = profile_data.get("projects", [])
+    projects.append(req.model_dump(exclude_defaults=True))
+    profile_data["projects"] = projects
+    profile.profile_json = json.dumps(profile_data, ensure_ascii=False, default=str)
+    db.commit()
+    return ok(_profile_to_dict(profile, db, user.id), message="项目已添加")
+
+
+# ── PATCH /profiles/projects/{index} — update a project ────────────────────
+
+@router.patch("/projects/{index}")
+def update_project(
+    index: int,
+    req: ProjectRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Update a project by index in profile.projects array."""
+    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    if not profile:
+        raise HTTPException(404, "画像不存在")
+
+    profile_data = _load_profile_json(profile)
+    projects = profile_data.get("projects", [])
+    if index < 0 or index >= len(projects):
+        raise HTTPException(404, "项目不存在")
+
+    projects[index] = req.model_dump(exclude_defaults=True)
+    profile_data["projects"] = projects
+    profile.profile_json = json.dumps(profile_data, ensure_ascii=False, default=str)
+    db.commit()
+    return ok(_profile_to_dict(profile, db, user.id), message="项目已更新")
+
+
+# ── DELETE /profiles/projects/{index} — delete a project ───────────────────
+
+@router.delete("/projects/{index}")
+def delete_project(
+    index: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a project by index from profile.projects array."""
+    profile = db.query(Profile).filter(Profile.user_id == user.id).first()
+    if not profile:
+        raise HTTPException(404, "画像不存在")
+
+    profile_data = _load_profile_json(profile)
+    projects = profile_data.get("projects", [])
+    if index < 0 or index >= len(projects):
+        raise HTTPException(404, "项目不存在")
+
+    projects.pop(index)
+    profile_data["projects"] = projects
+    profile.profile_json = json.dumps(profile_data, ensure_ascii=False, default=str)
+    db.commit()
+    return ok(_profile_to_dict(profile, db, user.id), message="项目已删除")
 
 
 # ── DELETE /profiles — reset profile data ────────────────────────────────────

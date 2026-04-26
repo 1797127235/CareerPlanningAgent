@@ -222,3 +222,28 @@ export async function generateReportV2(): Promise<ReportDetail & { data: ReportV
   const detail = await generateReport()
   return detail as ReportDetail & { data: ReportV2Data }
 }
+
+/** Export a report as PDF — triggers browser download */
+export async function exportReportPdf(reportId: number): Promise<void> {
+  const token = localStorage.getItem('token')
+  const res = await fetch(`/api/report/${reportId}/export`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error((err as { detail?: string }).detail || `导出失败 (${res.status})`)
+  }
+  const blob = await res.blob()
+  const disposition = res.headers.get('Content-Disposition') || ''
+  const match = disposition.match(/filename\*?=UTF-8''([^;]+)/)
+  const filename = match ? decodeURIComponent(match[1]) : `职业报告_${reportId}.pdf`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}

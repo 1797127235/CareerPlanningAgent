@@ -1,12 +1,12 @@
 import { useState, useMemo, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import Navbar from '@/components/shared/Navbar'
 import { useGrowthEntries } from '@/components/growth-log/useEntries'
 import type { GrowthEntry } from '@/components/growth-log/mockData'
 import { ProjectForm } from '@/components/growth-log/ProjectForm'
 import { InterviewForm } from '@/components/growth-log/InterviewForm'
-import { listProjects } from '@/api/growthLog'
+import { listProjects, createProject, createInterview } from '@/api/growthLog'
 import { listApplications } from '@/api/applications'
 import { rawFetch } from '@/api/client'
 import type { ProjectRecord } from '@/api/growthLog'
@@ -404,7 +404,7 @@ function EmptyState({ onFocus }: { onFocus: () => void }) {
 /* ═══════════════════════════════════════════
    PROJECT KANBAN
    ═══════════════════════════════════════════ */
-function ProjectKanban({ projects, onRefresh, onAddEntry }: { projects: ProjectRecord[]; onRefresh: () => void; onAddEntry: (data: Partial<GrowthEntry>) => Promise<unknown> | unknown }) {
+function ProjectKanban({ projects, onRefresh, onAddEntry, onCreateProject }: { projects: ProjectRecord[]; onRefresh: () => void; onAddEntry: (data: Partial<GrowthEntry>) => Promise<unknown> | unknown; onCreateProject?: (data: { name: string; description?: string; skills_used?: string[]; github_url?: string; status?: string }) => Promise<unknown> | unknown }) {
   const [showAdd, setShowAdd] = useState(false)
   const stages = [
     { key: 'planning', label: '规划中', color: 'bg-[var(--ink-3)]' },
@@ -484,6 +484,7 @@ function ProjectKanban({ projects, onRefresh, onAddEntry }: { projects: ProjectR
               onClose={() => setShowAdd(false)}
               onSaved={() => { onRefresh(); }}
               onAddEntry={onAddEntry}
+              onCreateProject={onCreateProject}
             />
           </div>
         </div>
@@ -495,7 +496,7 @@ function ProjectKanban({ projects, onRefresh, onAddEntry }: { projects: ProjectR
 /* ═══════════════════════════════════════════
    INTERVIEW KANBAN
    ═══════════════════════════════════════════ */
-function InterviewKanban({ interviews, onRefresh, onAddEntry }: { interviews: InterviewRecordData[]; onRefresh: () => void; onAddEntry: (data: Partial<GrowthEntry>) => Promise<unknown> | unknown }) {
+function InterviewKanban({ interviews, onRefresh, onAddEntry, onCreateInterview }: { interviews: InterviewRecordData[]; onRefresh: () => void; onAddEntry: (data: Partial<GrowthEntry>) => Promise<unknown> | unknown; onCreateInterview?: (data: { company: string; position?: string; round?: string; content_summary: string; self_rating?: string; result?: string; reflection?: string }) => Promise<unknown> | unknown }) {
   const [showAdd, setShowAdd] = useState(false)
   const stages = [
     { key: 'applied', label: '已投递', color: 'bg-[var(--ink-3)]' },
@@ -561,6 +562,7 @@ function InterviewKanban({ interviews, onRefresh, onAddEntry }: { interviews: In
               onClose={() => setShowAdd(false)}
               onSaved={() => { onRefresh(); }}
               onAddEntry={onAddEntry}
+              onCreateInterview={onCreateInterview}
             />
           </div>
         </div>
@@ -579,6 +581,17 @@ export default function GrowthLogPage() {
   const [projectView, setProjectView] = useState<'list' | 'kanban'>('kanban')
   const qc = useQueryClient()
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  const createProjectMut = useMutation({
+    mutationFn: createProject,
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['growth-projects'] }),
+  })
+  const createInterviewMut = useMutation({
+    mutationFn: createInterview,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['growth-interviews'] })
+    },
+  })
 
   const { data: projectsData } = useQuery({ queryKey: ['growth-projects'], queryFn: listProjects, staleTime: 120_000 })
   const { data: appsData } = useQuery<JobApplication[]>({ queryKey: ['pursuits-apps'], queryFn: listApplications, staleTime: 120_000 })
@@ -673,9 +686,9 @@ export default function GrowthLogPage() {
 
           {/* Content */}
           {filter === 'interview' && interviewView === 'kanban' ? (
-            <InterviewKanban interviews={interviewsData?.interviews ?? []} onRefresh={() => refetchInterviews()} onAddEntry={addEntry} />
+            <InterviewKanban interviews={interviewsData?.interviews ?? []} onRefresh={() => refetchInterviews()} onAddEntry={addEntry} onCreateInterview={(data) => createInterviewMut.mutateAsync(data)} />
           ) : filter === 'project' && projectView === 'kanban' ? (
-            <ProjectKanban projects={projectsData?.projects ?? []} onRefresh={() => qc.invalidateQueries({ queryKey: ['growth-projects'] })} onAddEntry={addEntry} />
+            <ProjectKanban projects={projectsData?.projects ?? []} onRefresh={() => qc.invalidateQueries({ queryKey: ['growth-projects'] })} onAddEntry={addEntry} onCreateProject={(data) => createProjectMut.mutateAsync(data)} />
           ) : (
             <div>
               {entriesLoading ? (

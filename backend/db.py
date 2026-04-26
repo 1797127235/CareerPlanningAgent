@@ -158,6 +158,22 @@ def init_db() -> None:
             conn.commit()
         except Exception:
             pass  # column already exists
+        # SJT session persistence migration
+        try:
+            conn.execute(text("ALTER TABLE sjt_sessions ADD COLUMN answers_json TEXT NOT NULL DEFAULT '[]'"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE sjt_sessions ADD COLUMN current_idx INTEGER NOT NULL DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE sjt_sessions ADD COLUMN status VARCHAR(16) NOT NULL DEFAULT 'in_progress'"))
+            conn.commit()
+        except Exception:
+            pass
 
 
 def get_db():

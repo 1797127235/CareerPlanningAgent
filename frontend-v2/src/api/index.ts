@@ -15,7 +15,6 @@ export {
   deleteCoachResult,
   postChat,
 } from './coach'
-export { fetchDashboardStats } from './dashboard'
 export {
   fetchGraphMap,
   fetchEscapeRoutes,

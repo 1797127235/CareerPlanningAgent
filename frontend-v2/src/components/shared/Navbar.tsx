@@ -23,6 +23,7 @@ export default function Navbar() {
     { label: '能力画像', route: '/profile' },
     { label: '成长手札', route: '/growth-log' },
     { label: '职位地图', route: '/graph' },
+    { label: '职业报告', route: '/report' },
   ]
 
   return (

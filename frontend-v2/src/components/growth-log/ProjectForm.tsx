@@ -5,6 +5,13 @@ interface ProjectFormProps {
   onClose: () => void
   onSaved?: () => void
   onAddEntry: (data: Partial<GrowthEntry>) => Promise<unknown> | unknown
+  onCreateProject?: (data: {
+    name: string
+    description?: string
+    skills_used?: string[]
+    github_url?: string
+    status?: string
+  }) => Promise<unknown> | unknown
   initialEntry?: GrowthEntry | null
   onUpdate?: (id: number, data: Partial<GrowthEntry>) => Promise<unknown>
 }
@@ -13,6 +20,7 @@ export function ProjectForm({
   onClose,
   onSaved,
   onAddEntry,
+  onCreateProject,
   initialEntry,
   onUpdate,
 }: ProjectFormProps) {
@@ -53,6 +61,14 @@ export function ProjectForm({
           content: structured.name,
           tags: ['项目', ...skillsArr.slice(0, 3)],
           structured_data: structured as any,
+        })
+      } else if (onCreateProject) {
+        await onCreateProject({
+          name: structured.name,
+          description: structured.description,
+          skills_used: skillsArr,
+          github_url: structured.github_url,
+          status: structured.status,
         })
       } else {
         await onAddEntry({

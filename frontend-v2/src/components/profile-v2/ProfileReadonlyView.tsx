@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import {
   PenLine,
+  Plus,
   Sparkles,
   GraduationCap,
   Briefcase,
@@ -21,8 +22,18 @@ import {
   ShieldCheck,
   Zap,
   RefreshCw,
+  Leaf,
+  MessageCircle,
+  BookOpen,
+  Users,
+  MoreHorizontal,
 } from 'lucide-react'
-import type { ProfileData, Skill, Internship } from '@/types/profile'
+import type { ProfileData, Skill, Internship, Education } from '@/types/profile'
+import { EducationEditForm } from './edits/EducationEditForm'
+import { SkillsEditForm } from './edits/SkillsEditForm'
+import { InternshipsEditForm } from './edits/InternshipsEditForm'
+import { ProjectsEditForm } from './edits/ProjectsEditForm'
+import { getSjtProgress } from '@/api/profiles'
 
 /* ── Design Tokens ── */
 const serif = { fontFamily: 'var(--font-serif), Georgia, "Noto Serif SC", serif' }
@@ -110,27 +121,74 @@ interface RecommendationItem {
 
 interface Props {
   data: ProfileData
-  onEdit: () => void
   onReport?: () => void
   onSetGoal?: () => void
   onChangeGoal?: () => void
+  onDelete?: () => Promise<void>
+  onStartAssessment?: () => void
   recommendations?: RecommendationItem[]
+  onSaveEducation?: (data: Education) => Promise<void>
+  onSaveSkills?: (data: Skill[]) => Promise<void>
+  onSaveInternships?: (data: Internship[]) => Promise<void>
+  onSaveProjects?: (data: Array<string | Record<string, unknown>>) => Promise<void>
 }
 
-export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal, onChangeGoal, recommendations = [] }: Props) {
+export default function ProfileReadonlyView({ data, onReport, onSetGoal, onChangeGoal, onDelete, onStartAssessment, recommendations = [], onSaveEducation, onSaveSkills, onSaveInternships, onSaveProjects }: Props) {
   const navigate = useNavigate()
   const profile = data.profile
   const gp = data.graph_position
   const primaryGoal = data.career_goals?.find((g) => g.is_primary)
   const hasGoal = !!primaryGoal && !!primaryGoal.target_node_id
 
+  /* ── Edit modal state ── */
+  const [editEdu, setEditEdu] = useState(false)
+  const [editSkills, setEditSkills] = useState(false)
+  const [editInterns, setEditInterns] = useState(false)
+  const [editProjects, setEditProjects] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleSaveEdu = useCallback(async (edu: Education) => {
+    if (onSaveEducation) await onSaveEducation(edu)
+  }, [onSaveEducation])
+
+  const handleSaveProjects = useCallback(async (projects: Array<string | Record<string, unknown>>) => {
+    if (onSaveProjects) await onSaveProjects(projects)
+  }, [onSaveProjects])
+
+  const handleSaveSkills = useCallback(async (skills: Skill[]) => {
+    if (onSaveSkills) await onSaveSkills(skills)
+  }, [onSaveSkills])
+
+  const handleSaveInterns = useCallback(async (interns: Internship[]) => {
+    if (onSaveInternships) await onSaveInternships(interns)
+  }, [onSaveInternships])
+
+  const handleDelete = useCallback(async () => {
+    if (!onDelete) return
+    setDeleting(true)
+    try {
+      await onDelete()
+      setDeleteConfirm(false)
+    } finally {
+      setDeleting(false)
+    }
+  }, [onDelete])
+
+  /* SJT progress check */
+  const [hasSjtProgress, setHasSjtProgress] = useState(false)
+  useEffect(() => {
+    getSjtProgress().then((p) => setHasSjtProgress(!!p)).catch(() => {})
+  }, [])
+
   /* Derived data */
   const matchRate = useMemo(() => {
+    if (!hasGoal) return null
     if (gp?.gap_skills?.length) {
       return Math.max(30, 100 - gp.gap_skills.length * 9)
     }
-    return 85
-  }, [gp])
+    return 95
+  }, [gp, hasGoal])
 
   const gapCount = gp?.gap_skills?.length ?? 0
   const totalHours = gp?.total_hours ?? 0
@@ -232,7 +290,50 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
       <motion.header custom={0} variants={fadeUp} initial="hidden" animate="visible" className="grid gap-6 md:grid-cols-2 mb-10 items-start">
         {/* Left — Identity + AI Summary */}
         <div>
-          <Kicker text="AI 职业能力画像" />
+          <div className="flex items-start justify-between">
+            <Kicker text="AI 职业能力画像" />
+            {onDelete && (
+              <button
+                onClick={() => setDeleteConfirm(true)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[var(--ink-3)] hover:text-red-500 hover:bg-red-50 border border-[var(--line)] transition-colors cursor-pointer"
+                title="重置画像"
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+              </button>
+            )}
+          </div>
+
+          {/* Delete confirmation — inline */}
+          {deleteConfirm && (
+            <div className="mt-3 rounded-xl border border-[var(--line)] bg-[var(--bg-card)] p-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center" style={{ background: '#FDF0EA', border: '1px solid #EBDDD0' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B85C38" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+                </div>
+                <div>
+                  <p className="text-[14px] font-semibold" style={{ ...sans, color: ink(1) }}>确认重置画像？</p>
+                  <p className="text-[12px] mt-0.5" style={{ ...sans, color: ink(3) }}>将清空全部技能、项目和背景数据</p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                <button
+                  onClick={() => setDeleteConfirm(false)}
+                  className="flex-1 py-2.5 rounded-lg text-[13px] font-medium border border-[var(--line)] transition-colors hover:bg-[var(--bg-paper)] active:scale-[0.98] cursor-pointer"
+                  style={{ ...sans, color: ink(2) }}
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex-1 py-2.5 rounded-lg text-[13px] font-semibold text-white transition-all cursor-pointer disabled:opacity-50 hover:opacity-90 active:scale-[0.98]"
+                  style={{ background: '#B85C38', ...sans }}
+                >
+                  {deleting ? '重置中...' : '确认重置'}
+                </button>
+              </div>
+            </div>
+          )}
           <h1
             style={{
               ...serif,
@@ -278,7 +379,6 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
               <Target className="w-4 h-4" style={{ color: 'var(--chestnut)' }} />
               岗位匹配摘要
             </h3>
-            <Sparkles className="w-4 h-4" style={{ color: ink(3) }} />
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-5">
@@ -290,21 +390,21 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
             </div>
             <div className="rounded-lg p-3" style={{ background: 'var(--bg-paper)' }}>
               <p className="text-[11px] mb-1" style={{ ...sans, color: ink(3) }}>岗位匹配度</p>
-              <p className="text-[18px] font-semibold" style={{ ...serif, color: 'var(--chestnut)' }}>
-                {matchRate}%
+              <p className="text-[18px] font-semibold" style={{ ...serif, color: hasGoal ? 'var(--chestnut)' : ink(3) }}>
+                {matchRate != null ? `${matchRate}%` : '—'}
               </p>
             </div>
             <div className="rounded-lg p-3" style={{ background: 'var(--bg-paper)' }}>
               <p className="text-[11px] mb-1" style={{ ...sans, color: ink(3) }}>待补技能</p>
               <p className="text-[18px] font-semibold" style={{ ...serif, color: ink(1) }}>
-                {gapCount} <span className="text-[13px] font-normal" style={{ color: ink(3) }}>项</span>
+                {hasGoal ? gapCount : '—'} <span className="text-[13px] font-normal" style={{ color: ink(3) }}>项</span>
               </p>
             </div>
             <div className="rounded-lg p-3" style={{ background: 'var(--bg-paper)' }}>
               <p className="text-[11px] mb-1" style={{ ...sans, color: ink(3) }}>预计成长周期</p>
               <p className="text-[18px] font-semibold" style={{ ...serif, color: ink(1) }}>
-                {weeks > 0 ? `${weeks}` : '—'}
-                <span className="text-[13px] font-normal" style={{ color: ink(3) }}> 周 / {totalHours} 小时</span>
+                {hasGoal && weeks > 0 ? `${weeks}` : '—'}
+                <span className="text-[13px] font-normal" style={{ color: ink(3) }}> 周 / {hasGoal ? totalHours : '—'} 小时</span>
               </p>
             </div>
           </div>
@@ -320,14 +420,6 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
                   查看成长路径
                   <ArrowRight className="w-3.5 h-3.5" />
                 </button>
-                <button
-                  onClick={onEdit}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium border transition-colors hover:bg-[var(--bg-card-hover)] active:scale-[0.98]"
-                  style={{ borderColor: 'var(--line)', color: ink(2), ...sans }}
-                >
-                  <PenLine className="w-3.5 h-3.5" />
-                  编辑档案
-                </button>
               </>
             ) : (
               <>
@@ -338,14 +430,6 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
                 >
                   设定目标岗位
                   <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={onEdit}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[13px] font-medium border transition-colors hover:bg-[var(--bg-card-hover)] active:scale-[0.98]"
-                  style={{ borderColor: 'var(--line)', color: ink(2), ...sans }}
-                >
-                  <PenLine className="w-3.5 h-3.5" />
-                  编辑档案
                 </button>
               </>
             )}
@@ -498,14 +582,58 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
             </>
           ) : (
             <Card>
-              <div className="flex flex-col items-center gap-3 py-6">
-                <p className="text-[13px]" style={{ ...sans, color: ink(2) }}>推荐方向还在生成中，你可以先去图谱探索。</p>
+              <div className="flex flex-col items-center gap-4 py-8">
+                {/* Animated compass icon */}
+                <div className="relative w-14 h-14">
+                  <motion.div
+                    className="absolute inset-0 rounded-full border-2 border-dashed"
+                    style={{ borderColor: 'var(--chestnut, #B85C38)', opacity: 0.3 }}
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <motion.div
+                    className="absolute inset-2 rounded-full flex items-center justify-center"
+                    style={{ background: 'linear-gradient(135deg, #FDF5E8, #F5E6D0)' }}
+                    animate={{ scale: [1, 1.05, 1] }}
+                    transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+                  >
+                    <Sparkles className="w-5 h-5" style={{ color: '#B85C38' }} />
+                  </motion.div>
+                </div>
+
+                {/* Progress text */}
+                <div className="text-center">
+                  <p className="text-[14px] font-medium" style={{ ...serif, color: ink(1) }}>
+                    AI 正在分析你的技术方向
+                  </p>
+                  <motion.p
+                    className="text-[12px] mt-1.5"
+                    style={{ ...sans, color: ink(3) }}
+                    animate={{ opacity: [0.5, 1, 0.5] }}
+                    transition={{ duration: 2, repeat: Infinity }}
+                  >
+                    匹配技能图谱 · 计算契合度 · 生成推荐
+                  </motion.p>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-48 h-1 rounded-full overflow-hidden" style={{ background: 'var(--line)' }}>
+                  <motion.div
+                    className="h-full rounded-full"
+                    style={{ background: 'linear-gradient(90deg, #B85C38, #C4853F)' }}
+                    initial={{ width: '0%' }}
+                    animate={{ width: '90%' }}
+                    transition={{ duration: 20, ease: 'easeOut' }}
+                  />
+                </div>
+
+                {/* Skip link */}
                 <button
-                  onClick={() => navigate('/explore')}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12px] font-medium border transition-colors hover:bg-[var(--line)]/10 active:scale-[0.98]"
-                  style={{ borderColor: 'var(--line)', color: ink(1), ...sans }}
+                  onClick={() => navigate('/graph')}
+                  className="text-[12px] transition-colors hover:opacity-70"
+                  style={{ ...sans, color: ink(3) }}
                 >
-                  去图谱探索 <ArrowRight className="w-3.5 h-3.5" />
+                  先去图谱探索 →
                 </button>
               </div>
             </Card>
@@ -517,8 +645,18 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
       <motion.section custom={4} variants={fadeUp} initial="hidden" animate="visible" className="grid gap-6 md:grid-cols-2 mb-8">
         {/* Skills Table */}
         <Card className="p-0 overflow-hidden">
-          <div className="p-5 border-b border-[var(--line)]">
+          <div className="p-5 border-b border-[var(--line)] flex items-center justify-between">
             <h2 className="text-[15px] font-semibold" style={{ ...sans, color: ink(1) }}>技能结构 / 能力差距</h2>
+            {onSaveSkills && (
+              <button
+                onClick={() => setEditSkills(true)}
+                className="flex items-center gap-1.5 text-[12px] font-medium text-[var(--ink-3)] hover:text-[var(--chestnut)] transition-colors cursor-pointer"
+                title="编辑技能"
+              >
+                <PenLine className="w-3 h-3" />
+                编辑
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]" style={sans}>
@@ -545,41 +683,233 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
         </Card>
 
         {/* Soft Skills — Qualitative */}
-        <Card>
-          <h2 className="text-[15px] font-semibold mb-4" style={{ ...sans, color: ink(1) }}>软技能特质</h2>
-          <div className="divide-y divide-[var(--line)]">
-            {(() => {
-              const ss = profile.soft_skills as Record<string, { score?: number; level?: string; advice?: string }> | undefined
-              if (!ss) return null
-              const items = Object.entries(ss)
-                .filter(([k]) => !k.startsWith('_'))
-                .map(([key, val]) => {
-                  const labelMap: Record<string, string> = {
-                    communication: '沟通表达',
-                    learning: '学习能力',
-                    collaboration: '协作意识',
-                    innovation: '创新意识',
-                    resilience: '抗压韧性',
-                  }
-                  return { key, label: labelMap[key] || key, advice: val?.advice || '' }
-                })
-                .filter((i) => i.advice)
-              return items.map((item, idx) => (
-                <div key={item.key} className={idx === 0 ? 'pb-3' : 'py-3'}>
-                  <p className="text-[12px] font-medium mb-1" style={{ ...sans, color: ink(3) }}>{item.label}</p>
-                  <p className="text-[13px] leading-relaxed" style={{ ...serif, color: ink(2), fontStyle: 'italic' }}>
-                    “{item.advice}”
+        <Card className="!p-0 overflow-hidden h-full">
+          {(() => {
+            const ss = profile.soft_skills as Record<string, { score?: number; level?: string; advice?: string }> | undefined
+            const sjtDims = ['communication', 'learning', 'collaboration', 'innovation', 'resilience'] as const
+            const isV2 = ss?._version === 2
+            const hasData = isV2 && sjtDims.some((d) => ss?.[d] != null)
+
+            if (!hasData) {
+              return (
+                <div className="relative overflow-hidden rounded-xl h-full" style={{ background: 'linear-gradient(135deg, #FDF8F3 0%, #F5EDE4 100%)' }}>
+                  {/* Background decorative circles */}
+                  <div className="absolute top-[-40px] right-[-20px] w-[160px] h-[160px] rounded-full opacity-25" style={{ background: 'linear-gradient(135deg, #E8C4A0 0%, #D4A574 100%)' }} />
+                  <div className="absolute bottom-[-30px] left-[35%] w-[100px] h-[100px] rounded-full opacity-15" style={{ background: 'linear-gradient(135deg, #E8C4A0 0%, #D4A574 100%)' }} />
+                  <div className="absolute top-[25%] right-[12%] w-[60px] h-[60px] rounded-full opacity-10" style={{ background: '#E8C4A0' }} />
+
+                  <div className="relative z-10 p-6">
+                    {/* Header */}
+                    <div className="flex items-center gap-2 mb-5">
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'rgba(196, 113, 90, 0.12)' }}>
+                        <Leaf className="w-4 h-4" style={{ color: '#C4715A' }} />
+                      </div>
+                      <span className="text-[14px] font-semibold" style={{ ...sans, color: '#5C4033' }}>软技能特质</span>
+                    </div>
+
+                    <div className="flex items-end justify-between gap-4">
+                      {/* Left content */}
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-[22px] font-bold leading-tight mb-2" style={{ ...serif, color: '#3D2B1F' }}>
+                          了解你的软技能画像
+                        </h3>
+                        {/* Decorative line */}
+                        <div className="flex items-center gap-1.5 mb-4">
+                          <div className="w-6 h-[3px] rounded-full" style={{ background: '#C4715A' }} />
+                          <div className="w-1.5 h-1.5 rounded-full" style={{ background: '#C4715A' }} />
+                        </div>
+
+                        <p className="text-[13px] leading-relaxed mb-4 max-w-[320px]" style={{ ...sans, color: '#8B6F5C' }}>
+                          通过几个职场情境题，快速了解你的沟通、学习、协作等能力倾向。没有标准答案，完成后即可生成专属评估。
+                        </p>
+
+                        {/* Tags */}
+                        <div className="flex items-center gap-2 mb-5 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium border" style={{ background: 'rgba(196, 113, 90, 0.06)', borderColor: 'rgba(196, 113, 90, 0.15)', color: '#9B6B5A' }}>
+                            <MessageCircle className="w-3.5 h-3.5" />
+                            沟通表达
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium border" style={{ background: 'rgba(196, 113, 90, 0.06)', borderColor: 'rgba(196, 113, 90, 0.15)', color: '#9B6B5A' }}>
+                            <BookOpen className="w-3.5 h-3.5" />
+                            学习能力
+                          </span>
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-medium border" style={{ background: 'rgba(196, 113, 90, 0.06)', borderColor: 'rgba(196, 113, 90, 0.15)', color: '#9B6B5A' }}>
+                            <Users className="w-3.5 h-3.5" />
+                            团队协作
+                          </span>
+                          <span className="inline-flex items-center justify-center w-8 h-8 rounded-full border" style={{ background: 'rgba(196, 113, 90, 0.06)', borderColor: 'rgba(196, 113, 90, 0.15)', color: '#9B6B5A' }}>
+                            <MoreHorizontal className="w-3.5 h-3.5" />
+                          </span>
+                        </div>
+
+                        {onStartAssessment && (
+                          <motion.button
+                            onClick={onStartAssessment}
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl text-[14px] font-semibold text-white transition-opacity hover:opacity-90 cursor-pointer"
+                            style={{ background: 'linear-gradient(135deg, #C4715A 0%, #A85D48 100%)', boxShadow: '0 4px 14px rgba(196, 113, 90, 0.35)', ...sans }}
+                          >
+                            {hasSjtProgress ? '继续评估' : '开始评估'}
+                            <ChevronRight className="w-4 h-4" />
+                          </motion.button>
+                        )}
+                      </div>
+
+                      {/* Right decoration */}
+                      <div className="hidden sm:block relative w-[160px] h-[140px] shrink-0">
+                        {/* Plant */}
+                        <svg className="absolute bottom-0 right-6 w-16 h-24" viewBox="0 0 80 110" fill="none">
+                          <path d="M40 110 Q40 70 55 50" stroke="#D4A574" strokeWidth="2" fill="none" />
+                          <ellipse cx="55" cy="45" rx="12" ry="20" fill="#E8B895" transform="rotate(-20 55 45)" />
+                          <ellipse cx="48" cy="55" rx="10" ry="16" fill="#D4A574" transform="rotate(10 48 55)" />
+                          <ellipse cx="60" cy="35" rx="9" ry="14" fill="#F0C4A0" transform="rotate(-30 60 35)" />
+                          <circle cx="58" cy="30" r="3" fill="#E8D5A3" />
+                        </svg>
+                        {/* Geometric shapes */}
+                        <div className="absolute bottom-0 right-0 w-8 h-14 rounded-t-lg" style={{ background: 'linear-gradient(180deg, #E8B895 0%, #D4A574 100%)' }} />
+                        <div className="absolute bottom-0 right-10 w-12 h-8 rounded-t-full" style={{ background: 'linear-gradient(180deg, #F0C4A0 0%, #E8B895 100%)' }} />
+                        <div className="absolute bottom-8 right-1 w-5 h-5 rounded-full" style={{ background: 'linear-gradient(135deg, #E8B895 0%, #D4A574 100%)' }} />
+                        {/* Sparkle */}
+                        <svg className="absolute top-2 right-12 w-4 h-4" viewBox="0 0 16 16" fill="none">
+                          <path d="M8 0 L9 7 L16 8 L9 9 L8 16 L7 9 L0 8 L7 7 Z" fill="#E8D5A3" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+
+            const DIM_LABEL: Record<string, string> = {
+              communication: '沟通表达',
+              learning: '学习能力',
+              collaboration: '协作意识',
+              innovation: '创新意识',
+              resilience: '抗压韧性',
+            }
+            const LEVEL_STYLE: Record<string, { bg: string; text: string; bar: string }> = {
+              '待发展': { bg: '#F8F7F6', text: '#8B7355', bar: '#D4C4B0' },
+              '基础': { bg: '#F5F0EB', text: '#A67C52', bar: '#C4A882' },
+              '良好': { bg: '#FDF5E8', text: '#B85C38', bar: '#D4A574' },
+              '优秀': { bg: '#FDF0EA', text: '#9B4D3A', bar: '#C4715A' },
+              'high': { bg: '#FDF0EA', text: '#9B4D3A', bar: '#C4715A' },
+              'medium': { bg: '#FDF5E8', text: '#B85C38', bar: '#D4A574' },
+              'low': { bg: '#F8F7F6', text: '#8B7355', bar: '#D4C4B0' },
+            }
+
+            // Compute overall score
+            const dimEntries = sjtDims
+              .map((key) => ({ key, dim: ss?.[key] as { score?: number; level?: string; advice?: string } | undefined }))
+              .filter((d) => d.dim != null)
+            const avgScore = dimEntries.length
+              ? Math.round(dimEntries.reduce((sum, d) => sum + (d.dim?.score ?? 0), 0) / dimEntries.length)
+              : 0
+            const overallLevel = avgScore >= 80 ? '优秀' : avgScore >= 60 ? '良好' : avgScore >= 40 ? '基础' : '待发展'
+
+            return (
+              <div className="px-5 py-5 space-y-5">
+                {/* Overall — centered, large level */}
+                <div className="text-center py-3">
+                  <p className="text-[12px] tracking-wide" style={{ ...sans, color: ink(3) }}>
+                    你的软技能综合表现为
+                  </p>
+                  <p
+                    className="font-bold mt-1 leading-tight"
+                    style={{
+                      ...serif,
+                      fontSize: 'clamp(36px, 5vw, 44px)',
+                      color: '#3D2B1F',
+                    }}
+                  >
+                    {overallLevel}
+                  </p>
+                  <p className="text-[11px] mt-2 tabular-nums" style={{ ...sans, color: ink(3) }}>
+                    综合得分 {avgScore} / 100
                   </p>
                 </div>
-              ))
-            })()}
-          </div>
+
+                {/* Dimension list */}
+                <div className="space-y-0">
+                  {dimEntries.map(({ key, dim }) => {
+                    const style = LEVEL_STYLE[dim?.level || ''] || LEVEL_STYLE['待发展']
+                    const score = dim?.score ?? 0
+                    return (
+                      <div
+                        key={key}
+                        className="py-4 border-b border-[var(--line)] last:border-b-0"
+                      >
+                        <div className="flex items-baseline justify-between">
+                          <span
+                            className="text-[14px] font-medium"
+                            style={{ ...sans, color: ink(1) }}
+                          >
+                            {DIM_LABEL[key]}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <span
+                              className="text-[14px] font-semibold tabular-nums"
+                              style={{ color: style.text }}
+                            >
+                              {score}
+                            </span>
+                            <span
+                              className="text-[12px]"
+                              style={{ ...sans, color: ink(3) }}
+                            >
+                              {dim?.level || '待发展'}
+                            </span>
+                          </div>
+                        </div>
+                        {/* Thin progress bar */}
+                        <div className="h-[2px] rounded-full overflow-hidden mt-2 mb-2.5" style={{ background: '#F0EBE5' }}>
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${score}%`, background: style.bar }}
+                          />
+                        </div>
+                        {dim?.advice && (
+                          <p className="text-[12px] leading-relaxed" style={{ ...sans, color: ink(3) }}>
+                            {dim.advice}
+                          </p>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {onStartAssessment && (
+                  <div className="flex justify-center pt-1">
+                    <button
+                      onClick={onStartAssessment}
+                      className="text-[12px] transition-colors cursor-pointer hover:opacity-60"
+                      style={{ color: ink(3), ...sans }}
+                    >
+                      重新评估
+                    </button>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </Card>
       </motion.section>
 
       {/* ── Experience Timeline ── */}
       <motion.section custom={6} variants={fadeUp} initial="hidden" animate="visible" className="mb-8">
-        <h2 className="text-[16px] font-semibold mb-4" style={{ ...sans, color: ink(1) }}>经历与项目</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-[16px] font-semibold" style={{ ...sans, color: ink(1) }}>经历与项目</h2>
+          {onSaveProjects && (
+            <button
+              onClick={() => setEditProjects(true)}
+              className="flex items-center gap-1.5 text-[12px] font-medium text-[var(--ink-3)] hover:text-[var(--chestnut)] transition-colors cursor-pointer"
+              title="添加或编辑项目"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {(profile.projects?.length ?? 0) > 0 ? '编辑' : '添加项目'}
+            </button>
+          )}
+        </div>
         <div className="relative">
           {/* Horizontal connector line */}
           <div className="hidden md:block absolute top-6 left-0 right-0 h-px bg-[var(--line)]" />
@@ -590,11 +920,22 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
               <div className="relative">
                 <div className="hidden md:flex absolute -top-1.5 left-6 w-3 h-3 rounded-full border-2 border-[var(--chestnut)] bg-[var(--bg-paper)] z-10" />
                 <Card className="h-full">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-7 h-7 rounded-full bg-[var(--bg-paper)] border border-[var(--line)] flex items-center justify-center">
-                      <GraduationCap className="w-3.5 h-3.5" style={{ color: ink(3) }} />
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-[var(--bg-paper)] border border-[var(--line)] flex items-center justify-center">
+                        <GraduationCap className="w-3.5 h-3.5" style={{ color: ink(3) }} />
+                      </div>
+                      <span className="text-[11px] font-medium" style={{ ...sans, color: ink(3) }}>教育经历</span>
                     </div>
-                    <span className="text-[11px] font-medium" style={{ ...sans, color: ink(3) }}>教育经历</span>
+                    {onSaveEducation && (
+                      <button
+                        onClick={() => setEditEdu(true)}
+                        className="w-6 h-6 rounded flex items-center justify-center text-[var(--ink-3)] hover:text-[var(--chestnut)] hover:bg-[var(--bg-paper)] transition-colors cursor-pointer"
+                        title="编辑"
+                      >
+                        <PenLine className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                   <p className="text-[14px] font-semibold" style={{ ...sans, color: ink(1) }}>
                     {profile.education.school}
@@ -611,11 +952,22 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
               <div key={`intern-${i}`} className="relative">
                 <div className="hidden md:flex absolute -top-1.5 left-6 w-3 h-3 rounded-full border-2 border-[var(--chestnut)] bg-[var(--bg-paper)] z-10" />
                 <Card className="h-full">
-                  <div className="flex items-center gap-2 mb-2">
-                    <div className="w-7 h-7 rounded-full bg-[var(--bg-paper)] border border-[var(--line)] flex items-center justify-center">
-                      <Briefcase className="w-3.5 h-3.5" style={{ color: ink(3) }} />
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-full bg-[var(--bg-paper)] border border-[var(--line)] flex items-center justify-center">
+                        <Briefcase className="w-3.5 h-3.5" style={{ color: ink(3) }} />
+                      </div>
+                      <span className="text-[11px] font-medium" style={{ ...sans, color: ink(3) }}>实习经历</span>
                     </div>
-                    <span className="text-[11px] font-medium" style={{ ...sans, color: ink(3) }}>实习经历</span>
+                    {i === 0 && onSaveInternships && (
+                      <button
+                        onClick={() => setEditInterns(true)}
+                        className="w-6 h-6 rounded flex items-center justify-center text-[var(--ink-3)] hover:text-[var(--chestnut)] hover:bg-[var(--bg-paper)] transition-colors cursor-pointer"
+                        title="编辑实习经历"
+                      >
+                        <PenLine className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                   <p className="text-[11px] mb-1" style={{ ...sans, color: ink(3) }}>{intern.duration}</p>
                   <p className="text-[14px] font-semibold" style={{ ...sans, color: ink(1) }}>{intern.role}</p>
@@ -648,11 +1000,22 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
                 <div key={`proj-${i}`} className="relative">
                   <div className="hidden md:flex absolute -top-1.5 left-6 w-3 h-3 rounded-full border-2 border-[var(--line)] bg-[var(--bg-paper)] z-10" />
                   <Card className="h-full">
-                    <div className="flex items-center gap-2 mb-2">
-                      <div className="w-7 h-7 rounded-full bg-[var(--bg-paper)] border border-[var(--line)] flex items-center justify-center">
-                        <FolderKanban className="w-3.5 h-3.5" style={{ color: ink(3) }} />
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-[var(--bg-paper)] border border-[var(--line)] flex items-center justify-center">
+                          <FolderKanban className="w-3.5 h-3.5" style={{ color: ink(3) }} />
+                        </div>
+                        <span className="text-[11px] font-medium" style={{ ...sans, color: ink(3) }}>项目 {i + 1}</span>
                       </div>
-                      <span className="text-[11px] font-medium" style={{ ...sans, color: ink(3) }}>项目 {i + 1}</span>
+                      {onSaveProjects && (
+                        <button
+                          onClick={() => setEditProjects(true)}
+                          className="w-6 h-6 rounded flex items-center justify-center text-[var(--ink-3)] hover:text-[var(--chestnut)] hover:bg-[var(--bg-paper)] transition-colors cursor-pointer"
+                          title="编辑项目"
+                        >
+                          <PenLine className="w-3 h-3" />
+                        </button>
+                      )}
                     </div>
                     <p className="text-[14px] font-semibold" style={{ ...sans, color: ink(1) }}>{title}</p>
                     {desc && (
@@ -739,6 +1102,40 @@ export default function ProfileReadonlyView({ data, onEdit, onReport, onSetGoal,
           档案仅用于系统分析，不会分享给任何第三方。
         </p>
       </motion.footer>
+
+      {/* ── Edit Modals ── */}
+      {onSaveEducation && profile.education && (
+        <EducationEditForm
+          open={editEdu}
+          onClose={() => setEditEdu(false)}
+          data={profile.education}
+          onSave={handleSaveEdu}
+        />
+      )}
+      {onSaveSkills && (
+        <SkillsEditForm
+          open={editSkills}
+          onClose={() => setEditSkills(false)}
+          data={profile.skills ?? []}
+          onSave={handleSaveSkills}
+        />
+      )}
+      {onSaveInternships && (
+        <InternshipsEditForm
+          open={editInterns}
+          onClose={() => setEditInterns(false)}
+          data={profile.internships ?? []}
+          onSave={handleSaveInterns}
+        />
+      )}
+      {onSaveProjects && (
+        <ProjectsEditForm
+          open={editProjects}
+          onClose={() => setEditProjects(false)}
+          data={profile.projects ?? []}
+          onSave={handleSaveProjects}
+        />
+      )}
     </div>
   )
 }

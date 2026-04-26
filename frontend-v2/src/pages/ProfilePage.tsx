@@ -1,59 +1,72 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Upload, PenLine, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Upload, PenLine, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useProfileData, type ManualProfilePayload } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { setProfileName, updateProfile } from '@/api/profiles'
 import { fetchRecommendations, type Recommendation as ApiRecommendation } from '@/api/recommendations'
 import { setCareerGoal } from '@/api/graph'
-import { Block, BlockGrid, Tooltip, useToast } from '@/components/ui'
-import { GLOSSARY } from '@/lib/glossary'
+import { useToast } from '@/components/ui'
 import Navbar from '@/components/shared/Navbar'
-import {
-  EducationCard,
-  InternshipCard,
-  ProjectCard,
-  SkillChips,
-  KnowledgeChips,
-  SoftSkillRow,
-  SjtCta,
-  GoalCard,
-  RecommendationCard,
-} from '@/components/profile-v2/cards'
-import {
-  EducationEdit,
-  InternshipEdit,
-  ProjectEdit,
-  SkillEdit,
-} from '@/components/profile-v2/forms'
 import { SjtQuiz } from '@/components/profile-v2/SjtQuiz'
 import { ManualProfileForm } from '@/components/profile-v2/ManualProfileForm'
 import { CeremonyUpload } from '@/components/profile-v2/CeremonyUpload'
 import { mockProfileData } from '@/components/profile-v2/mockData'
 import ProfileReadonlyView from '@/components/profile-v2/ProfileReadonlyView'
 import type { Education, Internship, Skill } from '@/types/profile'
-import type { ProjectItem } from '@/components/profile-v2/cards/ProjectCard'
 
-function useRecommendations(hasProfile: boolean) {
+function useRecommendations(hasProfile: boolean, justUploaded: boolean) {
   const [recs, setRecs] = useState<ApiRecommendation[]>([])
+  const inFlight = useRef(false)
+  const retryCount = useRef(0)
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const clearTimer = useCallback(() => {
+    if (retryTimer.current) {
+      clearTimeout(retryTimer.current)
+      retryTimer.current = null
+    }
+  }, [])
 
+  const doFetch = useCallback(async (isRetry = false) => {
+    if (inFlight.current) return
+    inFlight.current = true
+    if (!isRetry) retryCount.current = 0
+    try {
+      const res = await fetchRecommendations(6)
+      const list = res.recommendations || []
+      setRecs(list)
+      if (list.length === 0 && retryCount.current < 10) {
+        retryCount.current += 1
+        retryTimer.current = setTimeout(() => doFetch(true), 6000)
+      } else {
+        retryCount.current = 0
+      }
+    } catch {
+      // silently retry on next cycle
+    } finally {
+      inFlight.current = false
+    }
+  }, [])
+
+  // Cleanup on unmount
+  useEffect(() => clearTimer, [clearTimer])
+
+  // Fetch when profile exists
   useEffect(() => {
     if (!hasProfile) return
-    let active = true
+    doFetch()
+    return clearTimer
+  }, [hasProfile, doFetch, clearTimer])
 
-    fetchRecommendations(6)
-      .then((res) => {
-        if (active) setRecs(res.recommendations || [])
-      })
-      .catch(() => {
-        if (active) setRecs([])
-      })
-
-    return () => {
-      active = false
+  // Re-fetch when upload completes (background thread may now be done)
+  useEffect(() => {
+    if (justUploaded && hasProfile && recs.length === 0) {
+      retryCount.current = 0
+      clearTimer()
+      doFetch()
     }
-  }, [hasProfile])
+  }, [justUploaded, hasProfile, recs.length, doFetch, clearTimer])
 
   return { recs }
 }
@@ -76,7 +89,7 @@ export default function ProfilePage() {
   const isMock = searchParams.get('mock') === '1'
   const { toast } = useToast()
 
-  const { profile, loading, loadError, loadProfile, savingEdit, handleSaveEdit } = useProfileData(!isMock)
+  const { profile, loading, loadError, loadProfile, savingEdit, handleSaveEdit, handleDelete } = useProfileData(!isMock)
   const { uploadStep, uploadError, justUploaded, selectedFileName, fileInputRef, triggerFileDialog, onFileSelected } = useResumeUpload(loadProfile)
 
   const [ceremonyAnimating, setCeremonyAnimating] = useState(false)
@@ -88,21 +101,15 @@ export default function ProfilePage() {
   const [sjtOpen, setSjtOpen] = useState(false)
   const [showNamePrompt, setShowNamePrompt] = useState(false)
   const [pendingName, setPendingName] = useState('')
-  const [isEditing, setIsEditing] = useState(false)
   const [showChangeGoalConfirm, setShowChangeGoalConfirm] = useState(false)
   const namePromptShown = useRef(false)
-
-  /* Toggle back to readonly after a fresh upload */
-  useEffect(() => {
-    if (justUploaded) setIsEditing(false)
-  }, [justUploaded])
 
   const data = isMock ? mockProfileData : profile
   const hasProfile = isMock
     ? true
     : !!(data?.profile?.skills?.length || data?.profile?.knowledge_areas?.length || data?.profile?.projects?.length || data?.profile?.internships?.length || data?.profile?.education?.school || data?.name)
 
-  const { recs } = useRecommendations(hasProfile && !isMock)
+  const { recs } = useRecommendations(hasProfile && !isMock, justUploaded)
   const recommendations = isMock
     ? [
         { role_id: 'backend-engineer', label: '后端开发工程师', reason: '你的 Python 和数据库经验很适合这个方向' },
@@ -140,20 +147,10 @@ export default function ProfilePage() {
     ? Math.max(1, Math.floor((Date.now() - new Date(data.created_at).getTime()) / (1000 * 60 * 60 * 24)))
     : 1
 
-  // Edit states
-  const [editingEdu, setEditingEdu] = useState(false)
-  const [editingInternships, setEditingInternships] = useState(false)
-  const [editingProjects, setEditingProjects] = useState(false)
-  const [addingSkill, setAddingSkill] = useState(false)
-  const [saving, setSaving] = useState(false)
-
   const profileObj = data?.profile || {}
   const education = profileObj.education as Education | undefined
-  const experienceYears = (profileObj.experience_years as number) || 0
   const internships = (profileObj.internships as Internship[]) || []
-  const projects = (profileObj.projects || []) as Array<string | ProjectItem>
   const skills = (profileObj.skills as Skill[]) || []
-  const areas = (profileObj.knowledge_areas as string[]) || []
   const softSkills = data?.profile?.soft_skills as Record<string, { score?: number; level?: string; advice?: string; evidence?: string }> | undefined
   const hasSjt = softSkills?._version === 2 && sjtDims.some((d) => softSkills[d] != null)
   const goal = data?.career_goals?.find((g) => g.is_primary) || data?.career_goals?.[0]
@@ -161,32 +158,31 @@ export default function ProfilePage() {
   const [showAllRecs, setShowAllRecs] = useState(false)
   const visibleRecs = showAllRecs ? recommendations : recommendations.slice(0, 3)
 
-  const savePatch = async (patch: Record<string, unknown>) => {
-    setSaving(true)
+  const savePatch = useCallback(async (patch: Record<string, unknown>) => {
     try {
       await updateProfile({ profile: { ...profileObj, ...patch }, quality: null })
       await loadProfile()
       toast('已保存')
-    } finally {
-      setSaving(false)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
     }
-  }
+  }, [profileObj, loadProfile, toast])
 
-  const handleAddSkill = async (s: Skill) => {
-    const next = [...skills, s]
-    await savePatch({ skills: next })
-    setAddingSkill(false)
-  }
+  const handleSaveEducation = useCallback(async (edu: Education) => {
+    await savePatch({ education: edu })
+  }, [savePatch])
 
-  const handleDeleteSkill = async (s: Skill) => {
-    const next = skills.filter((x) => x.name !== s.name)
-    await savePatch({ skills: next })
-  }
+  const handleSaveSkills = useCallback(async (newSkills: Skill[]) => {
+    await savePatch({ skills: newSkills })
+  }, [savePatch])
 
-  const handleDeleteArea = async (a: string) => {
-    const next = areas.filter((x) => x !== a)
-    await savePatch({ knowledge_areas: next })
-  }
+  const handleSaveInternships = useCallback(async (newInterns: Internship[]) => {
+    await savePatch({ internships: newInterns })
+  }, [savePatch])
+
+  const handleSaveProjects = useCallback(async (newProjects: Array<string | Record<string, unknown>>) => {
+    await savePatch({ projects: newProjects })
+  }, [savePatch])
 
   if (loading && !isMock) {
     return (
@@ -260,72 +256,25 @@ export default function ProfilePage() {
         {/* Header + Progress */}
         <section className="mb-16">
           {hasProfile ? (
-            <>
-              {!isEditing ? (
-                <ProfileReadonlyView
-                  data={data}
-                  onEdit={() => setIsEditing(true)}
-                  onReport={() => navigate('/report')}
-                  onSetGoal={() => {
-                    document.getElementById('recs-section')?.scrollIntoView({ behavior: 'smooth' })
-                  }}
-                  onChangeGoal={() => setShowChangeGoalConfirm(true)}
-                  recommendations={recommendations.map((r) => ({
-                    role_id: r.role_id,
-                    label: r.label,
-                    reason: r.reason,
-                    zone: r.zone,
-                    replacement_pressure: r.replacement_pressure,
-                  }))}
-                />
-              ) : (
-                <>
-                  <h1 className="text-[var(--text-2xl)] font-semibold text-[var(--ink-1)] tracking-tight">
-                    我们已经认识 {daysSince} 天了
-                  </h1>
-                  <p className="mt-1 text-[var(--text-sm)] text-[var(--ink-3)] font-serif italic">
-                    最近更新于 {data?.updated_at ? data.updated_at.slice(0, 10) : '今天'}
-                  </p>
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    {['名字', '教育', '经历', '技能', '软技能', '目标'].map((label, i) => {
-                      const done = [
-                        !!data?.name,
-                        !!data?.profile?.education?.school,
-                        ((data?.profile?.internships?.length ?? 0) > 0) || ((data?.profile?.projects?.length ?? 0) > 0),
-                        (data?.profile?.skills?.length ?? 0) > 0,
-                        Object.keys((data?.profile?.soft_skills as Record<string, unknown>) ?? {}).filter((k) => k !== '_version').length > 0,
-                        (data?.career_goals?.length ?? 0) > 0,
-                      ][i]
-                      return (
-                        <span
-                          key={label}
-                          className={[
-                            'inline-flex items-center px-2.5 py-1 rounded-[var(--radius-pill)] text-[var(--text-xs)] border',
-                            done ? 'bg-[var(--chestnut)] text-white border-[var(--chestnut)]' : 'bg-transparent text-[var(--ink-3)] border-[var(--line)]',
-                          ].join(' ')}
-                        >
-                          {done ? '✓ ' : ''}{label}
-                        </span>
-                      )
-                    })}
-                  </div>
-                  <div className="mt-4 flex flex-wrap items-center gap-3">
-                    <button
-                      onClick={triggerFileDialog}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] border border-[var(--line)] hover:bg-[var(--line)]/10 transition-[color,background-color] duration-200 active:scale-[0.98]"
-                    >
-                      <Upload className="w-4 h-4" /> 重新上传简历
-                    </button>
-                    <button
-                      onClick={() => setShowManual(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
-                    >
-                      <PenLine className="w-4 h-4" /> 手动补一笔
-                    </button>
-                  </div>
-                </>
-              )}
-            </>
+            <ProfileReadonlyView
+              data={data}
+              onReport={() => navigate('/report')}
+              onSetGoal={() => navigate('/graph')}
+              onChangeGoal={() => setShowChangeGoalConfirm(true)}
+              onDelete={handleDelete}
+              onStartAssessment={() => setSjtOpen(true)}
+              recommendations={recommendations.map((r) => ({
+                role_id: r.role_id,
+                label: r.label,
+                reason: r.reason,
+                zone: r.zone,
+                replacement_pressure: r.replacement_pressure,
+              }))}
+              onSaveEducation={handleSaveEducation}
+              onSaveSkills={handleSaveSkills}
+              onSaveInternships={handleSaveInternships}
+              onSaveProjects={handleSaveProjects}
+            />
           ) : (
             <>
               {/* Empty State — Ceremony Upload */}
@@ -410,293 +359,24 @@ export default function ProfilePage() {
           )}
         </section>
 
-        {hasProfile && isEditing && (
-          <>
-            {sjtOpen ? (
-              <div className="mb-[var(--space-5)]">
+        {/* SJT Quiz Modal */}
+        <AnimatePresence>
+          {sjtOpen && (
+            <motion.div
+              {...MODAL_BACKDROP}
+              className="fixed inset-0 bg-[var(--ink-1)]/20 backdrop-blur-sm z-[999] flex items-center justify-center p-6"
+              onClick={() => setSjtOpen(false)}
+            >
+              <motion.div
+                {...MODAL_CARD}
+                className="bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-[var(--shadow-float)] p-6 max-w-2xl w-full border border-[var(--line)] max-h-[80vh] overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <SjtQuiz onComplete={() => { setSjtOpen(false); loadProfile() }} onCancel={() => setSjtOpen(false)} />
-              </div>
-            ) : (
-              <BlockGrid className="mb-[var(--space-5)]">
-                {/* Education & Experience */}
-                <Block kicker="PROFILE" title="教育背景与经历" span={2}>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-[var(--text-xs)] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-2">教育</p>
-                      {editingEdu ? (
-                        <EducationEdit
-                          education={education}
-                          saving={saving}
-                          onCancel={() => setEditingEdu(false)}
-                          onSave={async (edu) => {
-                            await savePatch({ education: edu })
-                            setEditingEdu(false)
-                          }}
-                        />
-                      ) : (
-                        <>
-                          {education?.school ? (
-                            <p className="text-[var(--text-base)] text-[var(--ink-1)]">
-                              {education.school} · {education.major || '…'} · {education.degree || '…'}
-                              {experienceYears > 0 ? `（${experienceYears} 年经验）` : ''}
-                            </p>
-                          ) : (
-                            <p className="text-[var(--text-sm)] text-[var(--ink-3)] italic">还没有教育背景记录</p>
-                          )}
-                          <EducationCard education={education} onEdit={() => setEditingEdu(true)} />
-                        </>
-                      )}
-                    </div>
-
-                    <div>
-                      <p className="text-[var(--text-xs)] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-2">实习</p>
-                      {editingInternships ? (
-                        <InternshipEdit
-                          internships={internships}
-                          saving={saving}
-                          onCancel={() => setEditingInternships(false)}
-                          onSave={async (items) => {
-                            await savePatch({ internships: items })
-                            setEditingInternships(false)
-                          }}
-                        />
-                      ) : (
-                        <div className="space-y-3">
-                          {internships.length > 0 ? (
-                            internships.map((it, idx) => <InternshipCard key={idx} internship={it} />)
-                          ) : (
-                            <p className="text-[var(--text-sm)] text-[var(--ink-3)] italic">还没有实习记录</p>
-                          )}
-                          <button
-                            onClick={() => setEditingInternships(true)}
-                            className="inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
-                          >
-                            <Plus className="w-4 h-4" /> {internships.length > 0 ? '再加一段实习' : '加一段实习'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <p className="text-[var(--text-xs)] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-2">项目</p>
-                      {editingProjects ? (
-                        <ProjectEdit
-                          projects={projects}
-                          saving={saving}
-                          onCancel={() => setEditingProjects(false)}
-                          onSave={async (items) => {
-                            await savePatch({ projects: items })
-                            setEditingProjects(false)
-                          }}
-                        />
-                      ) : (
-                        <div className="space-y-3">
-                          {projects.length > 0 ? (
-                            projects.map((p, idx) => <ProjectCard key={idx} project={p} onEdit={() => setEditingProjects(true)} />)
-                          ) : (
-                            <p className="text-[var(--text-sm)] text-[var(--ink-3)] italic">还没有项目记录</p>
-                          )}
-                          <button
-                            onClick={() => setEditingProjects(true)}
-                            className="inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
-                          >
-                            <Plus className="w-4 h-4" /> {projects.length > 0 ? '再加一个项目' : '加一个项目'}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </Block>
-
-                {/* Skills */}
-                <Block kicker="SKILLS" title="技能与知识">
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-[var(--text-xs)] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-2">技能清单</p>
-                      <SkillChips skills={skills} onDelete={handleDeleteSkill} />
-                      {addingSkill ? (
-                        <div className="mt-3">
-                          <SkillEdit onAdd={handleAddSkill} onCancel={() => setAddingSkill(false)} saving={saving} />
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => setAddingSkill(true)}
-                          className="mt-3 inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
-                        >
-                          <Plus className="w-4 h-4" /> 加一个技能
-                        </button>
-                      )}
-                    </div>
-                    <div>
-                      <p className="text-[var(--text-xs)] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-2">知识领域</p>
-                      <KnowledgeChips areas={areas} onDelete={handleDeleteArea} />
-                      <button
-                        onClick={() => {
-                          const val = window.prompt('输入要添加的知识领域（多个可用顿号分隔）：')
-                          if (!val) return
-                          const next = [...new Set([...areas, ...val.split(/[,，、\s]+/).map((s) => s.trim()).filter(Boolean)])]
-                          savePatch({ knowledge_areas: next })
-                        }}
-                        className="mt-3 inline-flex items-center gap-1 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200"
-                      >
-                        <Plus className="w-4 h-4" /> 加一个领域
-                      </button>
-                    </div>
-                  </div>
-                </Block>
-
-                {/* Soft Skills */}
-                <Block kicker="TRAITS" title="软技能画像">
-                  {hasSjt ? (
-                    <>
-                      <p className="text-[var(--text-sm)] text-[var(--ink-2)] mb-3">这是系统根据你的自评给出的观察。</p>
-                      <div>
-                        {sjtDims.map((d) => {
-                          const info = softSkills?.[d]
-                          if (!info) return null
-                          return (
-                            <SoftSkillRow
-                              key={d}
-                              dimKey={d}
-                              level={info.level}
-                              advice={info.advice}
-                              evidence={info.evidence}
-                            />
-                          )
-                        })}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-[var(--text-sm)] text-[var(--ink-3)] italic mb-3">还没有软技能评估</p>
-                      <div className="flex items-center gap-2">
-                        <SjtCta onStart={() => setSjtOpen(true)} />
-                        <Tooltip content={GLOSSARY.sjt.desc} storageKey="sjt">
-                          <span className="text-[var(--text-sm)] text-[var(--ink-3)]">情境判断（SJT）</span>
-                        </Tooltip>
-                      </div>
-                    </>
-                  )}
-                </Block>
-
-                {/* Goals & Recommendations */}
-                <Block kicker="DIRECTION" title="目标与推荐" accent>
-                  <div className="space-y-4">
-                    <div>
-                      <p className="text-[var(--text-xs)] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-2">当前目标</p>
-                      {hasGoal ? (
-                        <GoalCard
-                          goal={goal}
-                          onExplore={() => { /* navigate to graph */ }}
-                          onChange={() => { /* navigate or open modal */ }}
-                        />
-                      ) : (
-                        <div className="rounded-[var(--radius-md)] border border-[var(--line)] bg-[var(--bg-card)] p-4">
-                          <p className="text-[var(--text-base)] text-[var(--ink-1)]">还没有明确的目标</p>
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              onClick={() => {
-                                const el = document.getElementById('recs-section')
-                                el?.scrollIntoView({ behavior: 'smooth' })
-                              }}
-                              className="px-3 py-1.5 rounded-full bg-[var(--chestnut)] text-white text-[var(--text-xs)] font-medium hover:opacity-90 transition-opacity duration-200 active:scale-[0.98]"
-                            >
-                              让 AI 帮我推荐
-                            </button>
-                            <button
-                              onClick={() => navigate('/explore')}
-                              className="px-3 py-1.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] text-[var(--text-xs)] font-medium hover:bg-[var(--line)]/10 transition-colors duration-200 active:scale-[0.98]"
-                            >
-                              我去图谱探索
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <p className="text-[var(--text-xs)] font-bold uppercase tracking-[0.15em] text-[var(--ink-3)] mb-2">推荐方向</p>
-                      {recommendations.length > 0 ? (
-                        <>
-                          <div className="space-y-3">
-                            <AnimatePresence initial={false}>
-                              {visibleRecs.map((rec) => (
-                                <motion.div
-                                  key={rec.role_id}
-                                  initial={{ opacity: 0, height: 0 }}
-                                  animate={{ opacity: 1, height: 'auto' }}
-                                  exit={{ opacity: 0, height: 0 }}
-                                  transition={{ duration: 0.2, ease: EASE_OUT }}
-                                >
-                                  <RecommendationCard
-                                    rec={{ role_id: rec.role_id, label: rec.label, reason: rec.reason, zone: rec.zone, replacement_pressure: rec.replacement_pressure }}
-                                    onExplore={() => { /* navigate to role */ }}
-                                  />
-                                </motion.div>
-                              ))}
-                            </AnimatePresence>
-                          </div>
-                          {recommendations.length > 3 && (
-                            <button
-                              onClick={() => setShowAllRecs((v) => !v)}
-                              className="mt-3 text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
-                            >
-                              {showAllRecs ? '收起' : `展开更多（还有 ${recommendations.length - 3} 个）`}
-                            </button>
-                          )}
-                        </>
-                      ) : (
-                        <p className="text-[var(--text-sm)] text-[var(--ink-3)] italic">还没有推荐方向</p>
-                      )}
-                    </div>
-                  </div>
-                </Block>
-              </BlockGrid>
-            )}
-
-            {/* Epilogue */}
-            <div className="pt-[var(--space-5)] border-t border-[var(--line)]">
-              {(() => {
-                const incomplete = 6 - sectionsCompleted
-                const todos = [
-                  !data?.name ? '补一个名字' : null,
-                  sectionsCompleted < 2 ? '补充教育背景' : null,
-                  sectionsCompleted < 3 ? '加一段实习或项目' : null,
-                  sectionsCompleted < 4 ? '加几个技能' : null,
-                  sectionsCompleted < 5 ? '做一次软技能小测' : null,
-                  sectionsCompleted < 6 ? '选一个目标方向' : null,
-                ].filter(Boolean) as string[]
-                return (
-                  <>
-                    {incomplete > 0 && todos.length > 0 && (
-                      <>
-                        <p className="text-[var(--text-base)] font-medium text-[var(--ink-1)] mb-3">
-                          还有几件事可以讲 —— 但不用现在做完。
-                        </p>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {todos.map((t) => (
-                            <span
-                              key={t}
-                              className="px-2.5 py-1 rounded-[var(--radius-pill)] text-[var(--text-xs)] font-medium bg-[var(--bg-card)] text-[var(--ink-2)] border border-[var(--line)]"
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                    <p className="text-[var(--text-xs)] text-[var(--ink-3)] font-mono">
-                      上次更新 {data?.updated_at ? data.updated_at.slice(0, 10) : '—'}
-                    </p>
-                    <p className="mt-2 text-[var(--text-sm)] text-[var(--ink-2)] italic">
-                      这份档案只给你自己和懂你的系统看。
-                    </p>
-                  </>
-                )
-              })()}
-            </div>
-          </>
-        )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Change goal confirmation modal */}

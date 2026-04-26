@@ -1,6 +1,8 @@
 """SJT (soft-skill judgement test) routes for profiles.
 
 POST /sjt/generate — create assessment session
+GET  /sjt/progress — resume in-progress session
+POST /sjt/save     — save partial progress
 POST /sjt/submit   — score answers and write results back
 """
 from __future__ import annotations
@@ -8,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -32,9 +34,19 @@ def generate_sjt(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Generate personalized SJT questions based on the user's profile."""
+    """Generate personalized SJT questions based on the user's profile.
+
+    Deletes any previous in-progress session for this profile so that
+    only one active session exists at a time.
+    """
     profile = _get_or_create_profile(user.id, db)
     profile_data = _load_profile_json(profile)
+
+    # Drop stale in-progress sessions for this profile
+    db.query(SjtSession).filter(
+        SjtSession.profile_id == profile.id,
+        SjtSession.status == "in_progress",
+    ).delete(synchronize_session=False)
 
     try:
         questions = ProfileService.generate_sjt_questions(profile_data)
@@ -47,8 +59,10 @@ def generate_sjt(
         id=session_id,
         profile_id=profile.id,
         questions_json=json.dumps(questions, ensure_ascii=False, default=str),
+        answers_json="[]",
+        current_idx=0,
+        status="in_progress",
         created_at=now,
-        expires_at=now + timedelta(hours=1),
     )
     db.add(session)
     db.commit()
@@ -63,6 +77,75 @@ def generate_sjt(
         for q in questions
     ]
     return ok({"session_id": session_id, "questions": safe_questions})
+
+
+@router.get("/sjt/progress")
+def get_sjt_progress(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the user's in-progress SJT session (questions + saved answers)."""
+    profile = _get_or_create_profile(user.id, db)
+
+    session = (
+        db.query(SjtSession)
+        .filter(
+            SjtSession.profile_id == profile.id,
+            SjtSession.status == "in_progress",
+        )
+        .first()
+    )
+
+    if not session:
+        return ok(None)
+
+    questions = json.loads(session.questions_json)
+    safe_questions = [
+        {
+            "id": q["id"],
+            "dimension": q["dimension"],
+            "scenario": q["scenario"],
+            "options": [{"id": o["id"], "text": o["text"]} for o in q["options"]],
+        }
+        for q in questions
+    ]
+
+    return ok({
+        "session_id": session.id,
+        "questions": safe_questions,
+        "answers": json.loads(session.answers_json) if session.answers_json else [],
+        "current_idx": session.current_idx,
+    })
+
+
+class SjtSaveRequest(BaseModel):
+    session_id: str
+    answers: list[dict]
+    current_idx: int
+
+
+@router.post("/sjt/save")
+def save_sjt_progress(
+    req: SjtSaveRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save partial progress (answers + current question index)."""
+    profile = _get_or_create_profile(user.id, db)
+
+    session = db.query(SjtSession).filter(SjtSession.id == req.session_id).first()
+    if not session:
+        raise HTTPException(410, "评估会话不存在，请重新开始")
+    if session.profile_id != profile.id:
+        raise HTTPException(400, "会话与画像不匹配")
+    if session.status != "in_progress":
+        raise HTTPException(400, "评估已完成")
+
+    session.answers_json = json.dumps(req.answers, ensure_ascii=False, default=str)
+    session.current_idx = req.current_idx
+    db.commit()
+
+    return ok({"saved": True})
 
 
 class SjtSubmitRequest(BaseModel):
@@ -84,15 +167,6 @@ def submit_sjt(
         raise HTTPException(410, "评估会话不存在，请重新开始")
     if session.profile_id != profile.id:
         raise HTTPException(400, "会话与画像不匹配")
-
-    now_utc = datetime.now(timezone.utc)
-    expires = session.expires_at
-    if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if expires < now_utc:
-        db.delete(session)
-        db.commit()
-        raise HTTPException(410, "评估已过期，请重新开始")
 
     questions = json.loads(session.questions_json)
     expected_ids = {q["id"] for q in questions}
@@ -120,7 +194,10 @@ def submit_sjt(
     quality_data = ProfileService.compute_quality(profile_data)
     profile.quality_json = json.dumps(quality_data, ensure_ascii=False, default=str)
 
-    db.delete(session)
+    # Mark session completed instead of deleting it
+    session.status = "completed"
+    session.answers_json = json.dumps(req.answers, ensure_ascii=False, default=str)
+    session.current_idx = len(questions)
     db.commit()
 
     all_scores = [info["score"] for info in dimensions.values()]
