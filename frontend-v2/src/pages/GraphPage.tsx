@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { fetchGraphMap } from '@/api/graph'
 import { fetchProfile } from '@/api/profiles'
 import { Coverflow } from '@/components/explorer/Coverflow'
+import Navbar from '@/components/shared/Navbar'
 import type { GraphNode } from '@/types/graph'
 import type { ProfileData } from '@/types/profile'
 
@@ -91,16 +92,19 @@ export default function GraphPage() {
   }
 
   return (
-    <main className="h-[calc(100vh-64px)] bg-[var(--bg-paper)] text-[var(--ink-1)] overflow-hidden">
-      <Coverflow
-        nodes={nodes}
-        edges={mapQ.data?.edges ?? []}
-        profileId={profileId}
-        fromNodeId={fromNodeId}
-        targetNodeId={targetNodeId}
-        careerGoals={careerGoals}
-        onGoalSet={() => profileQ.refetch()}
-      />
-    </main>
+    <>
+      <Navbar />
+      <main className="mt-[64px] h-[calc(100vh-64px)] bg-[var(--bg-paper)] text-[var(--ink-1)] overflow-hidden">
+        <Coverflow
+          nodes={nodes}
+          edges={mapQ.data?.edges ?? []}
+          profileId={profileId}
+          fromNodeId={fromNodeId}
+          targetNodeId={targetNodeId}
+          careerGoals={careerGoals}
+          onGoalSet={() => profileQ.refetch()}
+        />
+      </main>
+    </>
   )
 }

@@ -21,9 +21,9 @@ export default function Navbar() {
 
   const links = [
     { label: '能力画像', route: '/profile' },
-    { label: '成长路径', route: '/growth-log' },
-    { label: '岗位图谱', route: '/graph' },
-    { label: '方法论', route: '/coach/chat' },
+    { label: '成长手札', route: '/growth-log' },
+    { label: '职位地图', route: '/graph' },
+    { label: '方法卷宗', route: '/coach/chat' },
   ]
 
   return (
@@ -63,7 +63,7 @@ export default function Navbar() {
             onMouseEnter={(e) => { e.currentTarget.style.background = t.buttonHover }}
             onMouseLeave={(e) => { e.currentTarget.style.background = t.button }}
           >
-            开始分析
+            启程分析
           </button>
         </div>
 

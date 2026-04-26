@@ -1,0 +1,628 @@
+import { useState } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { rawFetch } from '@/api/client'
+import { Plus, X, Sparkles, Loader2 } from 'lucide-react'
+
+const ease = [0.22, 1, 0.36, 1] as const
+
+/* ── Q/A helpers (mirrored from PursuitDetailPage) ── */
+interface QAPair { q: string; a: string }
+
+interface AISuggestion {
+  score: number
+  strengths: string[]
+  weaknesses: string[]
+  suggested_answer: string
+}
+
+function parseQA(content: string): QAPair[] {
+  const pairs: QAPair[] = []
+  for (const block of content.split(/\n\n+/)) {
+    const qm = block.match(/Q\d+:\s*([\s\S]+?)(?=\nA\d+:|$)/m)
+    const am = block.match(/A\d+:\s*([\s\S]+?)$/m)
+    if (qm) pairs.push({ q: qm[1].trim(), a: am ? am[1].trim() : '' })
+  }
+  return pairs.length > 0 ? pairs : content.trim() ? [{ q: content.trim(), a: '' }] : []
+}
+
+function serializeQA(pairs: QAPair[]): string {
+  return pairs
+    .filter(p => p.q.trim())
+    .map((p, i) => `Q${i + 1}: ${p.q}\nA${i + 1}: ${p.a.trim() || '(未填写)'}`)
+    .join('\n\n')
+}
+
+interface InterviewRecord {
+  id: number
+  company: string
+  position: string
+  round: string
+  content_summary: string
+  self_rating: string
+  result: string
+  stage: string
+  reflection: string | null
+  ai_analysis: Record<string, unknown> | null
+  interview_at: string | null
+  created_at: string
+}
+
+const STAGES = [
+  { key: 'applied', label: '已投递', color: 'bg-[var(--text-3)]' },
+  { key: 'written_test', label: '笔试', color: 'bg-violet-400' },
+  { key: 'interviewing', label: '面试中', color: 'bg-blue-400' },
+  { key: 'offered', label: '已拿offer', color: 'bg-emerald-400' },
+  { key: 'rejected', label: '未通过', color: 'bg-red-300' },
+]
+
+interface Props {
+  interviews: InterviewRecord[]
+  onRefresh: () => void
+}
+
+export function InterviewKanban({ interviews, onRefresh }: Props) {
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [showAdd, setShowAdd] = useState(false)
+
+  // 只显示真实面试，过滤 AI 模拟
+  const realInterviews = interviews.filter(i => i.company !== 'AI 模拟')
+
+  const grouped = STAGES.map(stage => ({
+    ...stage,
+    items: realInterviews.filter(i => i.stage === stage.key),
+  }))
+
+  const selected = realInterviews.find(i => i.id === selectedId) || null
+
+  return (
+    <div>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-[13px] text-[var(--text-3)]">
+          共 {realInterviews.length} 条面试记录
+        </p>
+        <button
+          onClick={() => setShowAdd(true)}
+          className="btn-cta flex items-center gap-1 px-3 py-1.5 text-[13px] font-medium cursor-pointer"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          新增面试
+        </button>
+      </div>
+
+      {/* Kanban columns */}
+      {realInterviews.length === 0 ? (
+        <div className="py-16 text-center glass-static p-8">
+          <div className="g-inner">
+          <p className="text-[14px] text-[var(--text-2)] mb-3">还没有面试记录</p>
+          <button
+            onClick={() => setShowAdd(true)}
+            className="text-[13px] font-semibold text-[var(--blue)] hover:text-[var(--blue-deep)] cursor-pointer"
+          >
+            记录你的第一场面试
+          </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-5 gap-3">
+          {grouped.map((stage) => (
+            <div key={stage.key}>
+              {/* Column header */}
+              <div className="flex items-center gap-2 mb-3">
+                <div className={`w-2 h-2 rounded-full ${stage.color}`} />
+                <span className="text-[13px] font-semibold text-[var(--text-1)]">
+                  {stage.label}
+                </span>
+                <span className="text-[12px] text-[var(--text-3)] tabular-nums">
+                  {stage.items.length}
+                </span>
+              </div>
+
+              {/* Cards */}
+              <div className="space-y-2 min-h-[100px]">
+                {stage.items.length === 0 ? (
+                  <div className="py-6 border border-dashed border-black/[0.06] rounded-[var(--radius-md)] text-center glass-static">
+                    <span className="text-[12px] text-[var(--text-3)]">暂无</span>
+                  </div>
+                ) : (
+                  stage.items.map((item, i) => (
+                    <motion.button
+                      key={item.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.03, duration: 0.2, ease }}
+                      onClick={() => setSelectedId(item.id)}
+                      className="w-full text-left glass p-3 cursor-pointer"
+                    >
+                      <p className="text-[14px] font-semibold text-[var(--text-1)] truncate">
+                        {item.company}
+                      </p>
+                      <p className="text-[13px] text-[var(--text-2)] truncate mt-0.5">
+                        {item.position}
+                      </p>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[11px] text-[var(--text-3)]">
+                          {item.round}
+                        </span>
+                        <span className="text-[11px] text-[var(--text-3)]">
+                          {item.created_at?.slice(5, 10).replace('-', '/')}
+                        </span>
+                      </div>
+                    </motion.button>
+                  ))
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Detail panel (modal) */}
+      <AnimatePresence>
+        {selected && (
+          <InterviewDetailModal
+            interview={selected}
+            onClose={() => setSelectedId(null)}
+            onRefresh={onRefresh}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Add interview modal */}
+      <AnimatePresence>
+        {showAdd && (
+          <AddInterviewModal
+            onClose={() => setShowAdd(false)}
+            onRefresh={onRefresh}
+          />
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+
+/* ── Detail Modal ── */
+
+function InterviewDetailModal({
+  interview,
+  onClose,
+  onRefresh,
+}: {
+  interview: InterviewRecord
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const qc = useQueryClient()
+  const initialPairs = parseQA(interview.content_summary || '')
+  const [pairs, setPairs] = useState<QAPair[]>(initialPairs.length > 0 ? initialPairs : [{ q: '', a: '' }])
+  const [reflection, setReflection] = useState(interview.reflection || '')
+  const [suggestions, setSuggestions] = useState<Record<number, AISuggestion | null>>({})
+  const [suggestLoading, setSuggestLoading] = useState<Record<number, boolean>>({})
+  const [suggestError, setSuggestError] = useState<Record<number, boolean>>({})
+
+  const fetchSuggestion = async (idx: number) => {
+    const pair = pairs[idx]
+    if (!pair.q.trim()) return
+    setSuggestLoading(prev => ({ ...prev, [idx]: true }))
+    try {
+      const data = await rawFetch(`/growth-log/interviews/${interview.id}/suggest-answer`, {
+        method: 'POST',
+        body: JSON.stringify({ question: pair.q, answer: pair.a }),
+      })
+      setSuggestions(prev => ({ ...prev, [idx]: data as AISuggestion }))
+      setSuggestError(prev => ({ ...prev, [idx]: false }))
+    } catch {
+      setSuggestions(prev => ({ ...prev, [idx]: null }))
+      setSuggestError(prev => ({ ...prev, [idx]: true }))
+    } finally {
+      setSuggestLoading(prev => ({ ...prev, [idx]: false }))
+    }
+  }
+
+  const updateMut = useMutation({
+    mutationFn: (data: Record<string, string>) =>
+      rawFetch(`/growth-log/interviews/${interview.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      onRefresh()
+      qc.invalidateQueries({ queryKey: ['growth-interviews'] })
+    },
+  })
+
+  const deleteMut = useMutation({
+    mutationFn: () =>
+      rawFetch(`/growth-log/interviews/${interview.id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      onClose()
+      onRefresh()
+      qc.invalidateQueries({ queryKey: ['growth-interviews'] })
+    },
+  })
+
+  const addPair = () => setPairs([...pairs, { q: '', a: '' }])
+  const removePair = (idx: number) => setPairs(pairs.filter((_, i) => i !== idx))
+  const updatePair = (idx: number, field: 'q' | 'a', value: string) => {
+    const next = [...pairs]
+    next[idx][field] = value
+    setPairs(next)
+  }
+
+  const saveAll = () => {
+    const updates: Record<string, string> = {}
+    const serialized = serializeQA(pairs)
+    if (serialized !== (interview.content_summary || '')) updates.content_summary = serialized
+    if (reflection !== (interview.reflection || '')) updates.reflection = reflection
+    if (Object.keys(updates).length > 0) updateMut.mutate(updates)
+  }
+
+  const iCls = "w-full px-3.5 py-2.5 text-[12px] rounded-xl outline-none bg-white/60 border border-black/[0.06] focus:border-[var(--blue)]/40 focus:bg-white/80 transition-colors resize-none"
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 8 }}
+        transition={{ duration: 0.2, ease }}
+        onClick={(e) => e.stopPropagation()}
+        className="glass-static w-full max-w-[520px] mx-4 p-6 max-h-[85vh] overflow-y-auto"
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <h3 className="text-[18px] font-bold text-[var(--text-1)]">{interview.company}</h3>
+            <p className="text-[14px] text-[var(--text-2)] mt-0.5">{interview.position} · {interview.round}</p>
+          </div>
+          <button onClick={onClose} className="p-1 text-[var(--text-3)] hover:text-[var(--text-1)] cursor-pointer">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Q/A pairs */}
+        <div className="mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[12px] font-semibold text-[var(--text-3)]">面试内容（问了什么、答了什么）</p>
+            <button
+              onClick={saveAll}
+              disabled={updateMut.isPending}
+              className="text-[11px] font-medium text-[var(--blue)] hover:text-[var(--blue-deep)] cursor-pointer disabled:opacity-40 transition-colors"
+            >
+              {updateMut.isPending ? '保存中...' : '保存'}
+            </button>
+          </div>
+          <div className="space-y-3">
+            {pairs.map((pair, i) => (
+              <div key={i} className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold text-[var(--blue)] w-5 shrink-0">Q{i + 1}</span>
+                  <input
+                    value={pair.q}
+                    onChange={(e) => updatePair(i, 'q', e.target.value)}
+                    placeholder="面试问题"
+                    className={iCls}
+                  />
+                  {pairs.length > 1 && (
+                    <button
+                      onClick={() => removePair(i)}
+                      className="p-1 text-[var(--text-3)] hover:text-red-400 cursor-pointer transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <div className="pl-7">
+                  <textarea
+                    value={pair.a}
+                    onChange={(e) => updatePair(i, 'a', e.target.value)}
+                    placeholder="我的回答（可选）"
+                    rows={2}
+                    className={iCls}
+                  />
+                </div>
+                {/* AI suggestion */}
+                <div className="pl-7">
+                  {suggestions[i] ? (
+                    <div className="mt-1.5 p-3 rounded-xl bg-[var(--blue)]/[0.08] border border-[var(--blue)]/10">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] font-bold text-[var(--blue)]">AI 建议</span>
+                        <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded ${
+                          (suggestions[i]?.score ?? 0) >= 8 ? 'bg-emerald-100 text-emerald-700'
+                          : (suggestions[i]?.score ?? 0) >= 5 ? 'bg-amber-100 text-amber-700'
+                          : 'bg-red-100 text-red-600'
+                        }`}>
+                          {suggestions[i]?.score ?? 0} / 10
+                        </span>
+                      </div>
+                      {suggestions[i]?.strengths && suggestions[i]!.strengths.length > 0 && (
+                        <div className="mb-1.5">
+                          <span className="text-[10px] font-semibold text-emerald-600">亮点</span>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {suggestions[i]!.strengths.map((s, j) => (
+                              <li key={j} className="text-[11px] text-[var(--text-2)] leading-relaxed">• {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {suggestions[i]?.weaknesses && suggestions[i]!.weaknesses.length > 0 && (
+                        <div className="mb-1.5">
+                          <span className="text-[10px] font-semibold text-red-500">不足</span>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {suggestions[i]!.weaknesses.map((s, j) => (
+                              <li key={j} className="text-[11px] text-[var(--text-2)] leading-relaxed">• {s}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {suggestions[i]?.suggested_answer && (
+                        <div>
+                          <span className="text-[10px] font-semibold text-[var(--blue)]">示范回答</span>
+                          <p className="mt-0.5 text-[11px] text-[var(--text-2)] leading-relaxed whitespace-pre-wrap">
+                            {suggestions[i]!.suggested_answer}
+                          </p>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => setSuggestions(prev => { const n = { ...prev }; delete n[i]; return n })}
+                        className="mt-1.5 text-[10px] text-[var(--text-3)] hover:text-[var(--text-1)] cursor-pointer transition-colors"
+                      >
+                        收起
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 mt-1">
+                      <button
+                        onClick={() => fetchSuggestion(i)}
+                        disabled={suggestLoading[i] || !pair.q.trim()}
+                        className="flex items-center gap-1 text-[11px] text-[var(--blue)] hover:text-[var(--blue-deep)] cursor-pointer transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {suggestLoading[i] ? (
+                          <>
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            分析中...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3 h-3" />
+                            AI 建议
+                          </>
+                        )}
+                      </button>
+                      {suggestError[i] && (
+                        <span className="text-[11px] text-red-400">生成失败，请重试</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <button
+            onClick={addPair}
+            className="flex items-center gap-1 text-[11px] text-[var(--blue)] hover:text-[var(--blue-deep)] cursor-pointer mt-2 transition-colors"
+          >
+            <Plus className="w-3 h-3" /> 加一题
+          </button>
+        </div>
+
+        {/* Editable: reflection */}
+        <div className="mb-5">
+          <p className="text-[12px] font-semibold text-[var(--text-3)] mb-1.5">反思与收获</p>
+          <textarea
+            value={reflection}
+            onChange={(e) => setReflection(e.target.value)}
+            onBlur={saveAll}
+            placeholder="这次面试的感受、做得好的和不足的地方..."
+            rows={2}
+            className="w-full px-3 py-2 rounded-lg border border-black/[0.06] text-[13px] text-[var(--text-1)] placeholder:text-[var(--text-3)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/15 focus:border-[var(--blue)]/30 transition-all resize-none leading-relaxed bg-white/60"
+          />
+        </div>
+
+        {/* Stage selector */}
+        <div className="mb-4">
+          <p className="text-[12px] font-semibold text-[var(--text-3)] mb-2">求职阶段</p>
+          <div className="flex flex-wrap gap-2">
+            {STAGES.map((s) => (
+              <button
+                key={s.key}
+                onClick={() => updateMut.mutate({ stage: s.key })}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all duration-200 cursor-pointer ${
+                  interview.stage === s.key
+                    ? 'border-[var(--blue)]/40 bg-[var(--blue)]/[0.08] text-[var(--blue)]'
+                    : 'border-black/[0.06] text-[var(--text-2)] hover:border-[var(--blue)]/30 hover:bg-[var(--blue)]/[0.04]'
+                }`}
+              >
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Self rating */}
+        <div className="mb-5">
+          <p className="text-[12px] font-semibold text-[var(--text-3)] mb-2">自评</p>
+          <div className="flex gap-2">
+            {[
+              { key: 'good', label: '发挥好', color: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
+              { key: 'medium', label: '一般', color: 'border-amber-400 bg-amber-50 text-amber-700' },
+              { key: 'bad', label: '发挥差', color: 'border-red-300 bg-red-50 text-red-600' },
+            ].map((r) => (
+              <button
+                key={r.key}
+                onClick={() => updateMut.mutate({ self_rating: r.key })}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all duration-200 cursor-pointer ${
+                  interview.self_rating === r.key ? r.color : 'border-black/[0.06] text-[var(--text-2)] hover:border-black/[0.10]'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* AI analysis preview (if available) */}
+        {interview.ai_analysis && (interview.ai_analysis as Record<string, unknown>).source === 'mock_interview' && (
+          <div className="mb-5 p-3 rounded-lg bg-[var(--blue)]/[0.06] border border-[var(--blue)]/10">
+            <p className="text-[12px] font-semibold text-[var(--blue)] mb-1">AI 模拟面试评估</p>
+            <p className="text-[13px] text-[var(--text-2)]">
+              得分 {String((interview.ai_analysis as Record<string, unknown>).overall_score ?? '')} · {String((interview.ai_analysis as Record<string, unknown>).summary ?? '')}
+            </p>
+          </div>
+        )}
+
+        {/* Date + delete */}
+        <div className="flex items-center justify-between pt-4 border-t border-black/[0.04]">
+          <span className="text-[12px] text-[var(--text-3)]">
+            {interview.created_at?.slice(0, 10)}
+          </span>
+          <button
+            onClick={() => { if (confirm('确定删除这条面试记录？')) deleteMut.mutate() }}
+            className="text-[12px] text-red-400 hover:text-red-500 transition-colors cursor-pointer"
+          >
+            删除记录
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+
+/* ── Add Interview Modal ── */
+
+function AddInterviewModal({
+  onClose,
+  onRefresh,
+}: {
+  onClose: () => void
+  onRefresh: () => void
+}) {
+  const [company, setCompany] = useState('')
+  const [position, setPosition] = useState('')
+  const [round, setRound] = useState('技术一面')
+  const [stage, setStage] = useState('applied')
+
+  const qc = useQueryClient()
+
+  const createMut = useMutation({
+    mutationFn: (data: Record<string, string>) =>
+      rawFetch('/growth-log/interviews', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      onClose()
+      onRefresh()
+      qc.invalidateQueries({ queryKey: ['growth-interviews'] })
+    },
+  })
+
+  const handleSubmit = () => {
+    if (!company.trim()) return
+    createMut.mutate({
+      company: company.trim(),
+      position: position.trim(),
+      round,
+      stage,
+      content_summary: '',
+      self_rating: 'medium',
+      result: 'pending',
+    })
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 8 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 8 }}
+        transition={{ duration: 0.2, ease }}
+        onClick={(e) => e.stopPropagation()}
+        className="glass-static w-full max-w-[420px] mx-4 p-6"
+      >
+        <div className="g-inner">
+        <h3 className="text-[18px] font-bold text-[var(--text-1)] mb-5">新增面试记录</h3>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-[12px] font-semibold text-[var(--text-2)] mb-1.5">公司名 *</label>
+            <input
+              value={company}
+              onChange={(e) => setCompany(e.target.value)}
+              placeholder="如 字节跳动"
+              className="w-full px-3 py-2 rounded-lg border border-black/[0.06] text-[14px] text-[var(--text-1)] placeholder:text-[var(--text-3)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/15 focus:border-[var(--blue)]/30 transition-all bg-white/60"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-semibold text-[var(--text-2)] mb-1.5">岗位</label>
+            <input
+              value={position}
+              onChange={(e) => setPosition(e.target.value)}
+              placeholder="如 后端工程师"
+              className="w-full px-3 py-2 rounded-lg border border-black/[0.06] text-[14px] text-[var(--text-1)] placeholder:text-[var(--text-3)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/15 focus:border-[var(--blue)]/30 transition-all bg-white/60"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-semibold text-[var(--text-2)] mb-1.5">面试轮次</label>
+            <input
+              value={round}
+              onChange={(e) => setRound(e.target.value)}
+              placeholder="如 技术一面、HR面"
+              className="w-full px-3 py-2 rounded-lg border border-black/[0.06] text-[14px] text-[var(--text-1)] placeholder:text-[var(--text-3)] focus:outline-none focus:ring-2 focus:ring-[var(--blue)]/15 focus:border-[var(--blue)]/30 transition-all bg-white/60"
+            />
+          </div>
+          <div>
+            <label className="block text-[12px] font-semibold text-[var(--text-2)] mb-2">当前阶段</label>
+            <div className="flex flex-wrap gap-2">
+              {STAGES.map((s) => (
+                <button
+                  key={s.key}
+                  onClick={() => setStage(s.key)}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-all duration-200 cursor-pointer ${
+                    stage === s.key
+                      ? 'border-[var(--blue)]/40 bg-[var(--blue)]/[0.08] text-[var(--blue)]'
+                      : 'border-black/[0.06] text-[var(--text-2)] hover:border-[var(--blue)]/30'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 mt-6">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-lg text-[13px] font-medium text-[var(--text-2)] hover:bg-black/[0.04] transition-all cursor-pointer"
+          >
+            取消
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!company.trim() || createMut.isPending}
+            className="px-5 py-2 rounded-lg bg-[var(--blue)] text-white text-[13px] font-bold hover:bg-[var(--blue-deep)] active:scale-[0.98] transition-all disabled:opacity-30 cursor-pointer"
+          >
+            {createMut.isPending ? '保存中...' : '保存'}
+          </button>
+        </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}

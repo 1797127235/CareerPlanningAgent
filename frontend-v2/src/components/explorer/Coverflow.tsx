@@ -500,7 +500,7 @@ export function Coverflow({ nodes, edges: _edges, initialNodeId, profileId, from
   return (
     <div className="h-full flex flex-col overflow-hidden">
       {/* ── Top toolbar: zone filters + search + profile selector ── */}
-      <div className="absolute top-4 left-4 right-4 z-30 flex items-start gap-3">
+      <div className="fixed top-[64px] left-0 right-0 z-30 flex items-start gap-3 px-4 pt-2 pb-2 bg-[var(--bg-paper)]/80 backdrop-blur-sm">
         {/* Left: zone filter pills */}
         <div className="flex items-center gap-1.5 flex-wrap shrink-0 max-w-[40%]">
           {ZONE_FILTERS.map(f => (

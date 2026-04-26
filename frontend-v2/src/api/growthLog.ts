@@ -39,6 +39,35 @@ export interface InterviewRecord {
   created_at: string
 }
 
+/* ── Dashboard ── */
+
+export interface GrowthDashboardData {
+  current_streak: number
+  total_entries: number
+  active_plans: number
+  pipeline_count: number
+  latest_milestone?: string
+  gap_skills?: string[]
+  readiness_curve?: { date: string; score: number }[]
+}
+
+export const getGrowthDashboard = () =>
+  rawFetch<GrowthDashboardData>(`${BASE}/dashboard`)
+
+/* ── Insights ── */
+
+export interface InsightItem {
+  type: 'activity' | 'pipeline' | 'plan' | 'diagnosis' | 'interview'
+  level: 'normal' | 'warning' | 'highlight'
+  icon: string
+  headline: string
+  detail: string
+  link: string
+}
+
+export const getInsights = () =>
+  rawFetch<{ insights: InsightItem[] }>(`${BASE}/insights`)
+
 /* ── Goal Journey ── */
 
 export interface StageEvent {
