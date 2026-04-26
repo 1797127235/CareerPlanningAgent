@@ -12,6 +12,13 @@ import {
 import { mockReportData } from '@/components/report-v2/mockData'
 import { TableOfContents } from '@/components/editorial'
 
+const tocItems = [
+  { id: 'chapter-1', numeral: 'I', label: '你是谁' },
+  { id: 'chapter-2', numeral: 'II', label: '你能去哪' },
+  { id: 'chapter-3', numeral: 'III', label: '差距' },
+  { id: 'chapter-4', numeral: 'IV', label: '下一步' },
+]
+
 export default function ReportPage() {
   const [searchParams] = useSearchParams()
   const isMock = searchParams.get('mock') === '1'
@@ -26,6 +33,7 @@ export default function ReportPage() {
       setLoading(false)
       return
     }
+
     setLoading(true)
     setError(null)
     try {
@@ -85,22 +93,21 @@ export default function ReportPage() {
 
   return (
     <main className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
-      <div className="max-w-[720px] mx-auto px-6 md:px-12 lg:px-20 pb-32">
-        <ReportPrologue targetLabel={data.target.label} />
-        <div id="chapter-1"><ReportChapterI data={data} /></div>
-        <div id="chapter-2"><ReportChapterII data={data} /></div>
-        <div id="chapter-3"><ReportChapterIII data={data} /></div>
-        <div id="chapter-4"><ReportChapterIV data={data} /></div>
-        <ReportEpilogue generatedAt={data.generated_at} />
+      <div className="mx-auto max-w-[1180px] px-6 md:px-10 xl:px-14 pt-6 md:pt-10 pb-24 md:pb-28">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,780px)_180px] xl:grid-cols-[minmax(0,820px)_190px] gap-10 lg:gap-12 xl:gap-16 items-start">
+          <div className="min-w-0">
+            <ReportPrologue targetLabel={data.target.label} />
+            <div id="chapter-1"><ReportChapterI data={data} /></div>
+            <div id="chapter-2"><ReportChapterII data={data} /></div>
+            <div id="chapter-3"><ReportChapterIII data={data} /></div>
+            <div id="chapter-4"><ReportChapterIV data={data} /></div>
+            <ReportEpilogue generatedAt={data.generated_at} />
+          </div>
+          <aside className="hidden lg:block">
+            <TableOfContents placement="inline" className="sticky top-24" items={tocItems} />
+          </aside>
+        </div>
       </div>
-      <TableOfContents
-        items={[
-          { id: 'chapter-1', numeral: 'I', label: '你是谁' },
-          { id: 'chapter-2', numeral: 'II', label: '你能去哪' },
-          { id: 'chapter-3', numeral: 'III', label: '差距' },
-          { id: 'chapter-4', numeral: 'IV', label: '下一步' },
-        ]}
-      />
     </main>
   )
 }
