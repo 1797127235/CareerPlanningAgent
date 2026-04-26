@@ -387,46 +387,20 @@ def _auto_locate_on_graph(
                     )
 
             # ── Programmatic job_target override (triple insurance) ────────────────
-            # Locator re-ranking may have pushed the job_target role down or out.
-            # Force it to rank #1 with affinity >= 88, same as _generate_recommendations.
+            from backend.services._shared.recommendations import (
+                apply_job_target_override,
+            )
+
             job_target = profile_data.get("job_target", "") or ""
+            enriched = apply_job_target_override(
+                enriched,
+                job_target,
+                graph_nodes,
+                min_affinity=88,
+                boost_above_top=False,
+            )
             target_role_id = find_role_id_for_job_target(job_target)
-            if target_role_id and target_role_id in graph_nodes:
-                existing_ids = [r["role_id"] for r in enriched]
-                if target_role_id in existing_ids:
-                    idx = existing_ids.index(target_role_id)
-                    target_rec = enriched.pop(idx)
-                    target_rec["affinity_pct"] = max(
-                        target_rec.get("affinity_pct", 0), 88
-                    )
-                    target_rec["channel"] = "entry"
-                    target_rec["reason"] = (
-                        target_rec.get("reason")
-                        or f"与求职意向「{job_target}」高度吻合"
-                    )
-                    enriched.insert(0, target_rec)
-                else:
-                    node = graph_nodes[target_role_id]
-                    enriched.insert(
-                        0,
-                        {
-                            "role_id": target_role_id,
-                            "label": node.get("label", target_role_id),
-                            "affinity_pct": 88,
-                            "matched_skills": [],
-                            "gap_skills": node.get("must_skills", [])[:4],
-                            "gap_hours": 0,
-                            "zone": node.get("zone", "safe"),
-                            "salary_p50": node.get("salary_p50", 0),
-                            "reason": f"与求职意向「{job_target}」高度吻合",
-                            "channel": "entry",
-                            "career_level": node.get("career_level", 0),
-                            "replacement_pressure": node.get(
-                                "replacement_pressure", 50
-                            ),
-                            "human_ai_leverage": node.get("human_ai_leverage", 50),
-                        },
-                    )
+            if target_role_id:
                 logger.info(
                     "Auto-locate job_target override: moved %s to rank #1 (job_target=%s)",
                     target_role_id,
