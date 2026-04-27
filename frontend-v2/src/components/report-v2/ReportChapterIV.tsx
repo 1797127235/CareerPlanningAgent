@@ -1,11 +1,36 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Chapter, ChapterOpener } from '@/components/editorial'
+import { createEntry } from '@/api/growthEntries'
 import type { ReportV2Data, PlanActionItem } from '@/api/report'
 
 const numerals = ['一', '二', '三']
 
+type SaveState = 'idle' | 'saving' | 'saved' | 'error'
+
 function ActionCard({ idx, item }: { idx: number; item: PlanActionItem }) {
   const navigate = useNavigate()
+  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  const handleSave = async () => {
+    if (saveState === 'saving' || saveState === 'saved') return
+    setSaveState('saving')
+    setErrorMsg('')
+    try {
+      await createEntry({
+        content: item.text,
+        tags: ['行动计划'],
+        category: null,
+        is_plan: true,
+        status: 'pending',
+      })
+      setSaveState('saved')
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : '未知错误')
+      setSaveState('error')
+    }
+  }
 
   return (
     <div className="mt-8 first:mt-4 rounded-[24px] border border-[var(--line)] bg-[var(--bg-card)] px-6 py-5 shadow-[var(--shadow-block)]">
@@ -27,11 +52,37 @@ function ActionCard({ idx, item }: { idx: number; item: PlanActionItem }) {
         优先级：{item.priority === 'high' ? '高' : '中'} · 阶段：{item.phase || 1}
       </p>
       <button
-        onClick={() => navigate('/growth-log', { state: { prefill: item.text } })}
-        className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[var(--line)] text-[var(--ink-1)] hover:bg-[var(--line)]/10 transition-colors text-sm font-medium"
+        onClick={handleSave}
+        disabled={saveState === 'saving' || saveState === 'saved'}
+        className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-full border border-[var(--line)] text-sm font-medium transition-all disabled:opacity-70"
+        style={{
+          background: saveState === 'saved' ? 'var(--chestnut-soft)' : 'transparent',
+          borderColor: saveState === 'saved' ? 'var(--chestnut-soft)' : undefined,
+          color: saveState === 'saved' ? 'var(--chestnut)' : 'var(--ink-1)',
+        }}
+        onMouseEnter={(e) => {
+          if (saveState !== 'saved') e.currentTarget.style.background = 'var(--line)'
+        }}
+        onMouseLeave={(e) => {
+          if (saveState !== 'saved') e.currentTarget.style.background = 'transparent'
+        }}
       >
-        记到成长档案 →
+        {saveState === 'saving' && '保存中...'}
+        {saveState === 'saved' && '已记录 ✓ · 查看 →'}
+        {saveState === 'error' && '保存失败，点击重试'}
+        {saveState === 'idle' && '记到成长档案 →'}
       </button>
+      {saveState === 'saved' && (
+        <button
+          onClick={() => navigate('/growth-log')}
+          className="mt-2 text-[12px] text-[var(--chestnut)] hover:underline"
+        >
+          前往成长档案查看
+        </button>
+      )}
+      {errorMsg && (
+        <p className="mt-2 text-[12px] leading-relaxed text-[var(--chestnut)]">{errorMsg}</p>
+      )}
     </div>
   )
 }

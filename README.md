@@ -38,7 +38,7 @@ DASHSCOPE_API_KEY=sk-your-dashscope-api-key-here
 
 **一键启动（推荐）**
 ```bash
-start.bat   # 按提示选 1 启动前端+后端
+run.bat   # 按提示选 1 启动前端+后端
 ```
 
 **手动启动（两个终端）**：

@@ -29,6 +29,8 @@ def _load_env() -> None:
     except ImportError:
         pass  # python-dotenv is optional
 
+load_env = _load_env  # public alias for backward compat
+
 
 _load_env()
 

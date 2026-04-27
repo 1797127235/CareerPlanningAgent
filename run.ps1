@@ -58,7 +58,7 @@ Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -Windo
 Start-Sleep -Seconds 3
 
 # Start Frontend
-Write-Host "[2/2] Starting Frontend (port 5173)..." -ForegroundColor Yellow
+Write-Host "[2/2] Starting Frontend (port 5174)..." -ForegroundColor Yellow
 $frontendCmd = "Set-Location '$Root\frontend-v2'; npm run dev; Read-Host 'Press Enter to close'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd -WindowStyle Normal
 
@@ -70,7 +70,7 @@ Write-Host "  Services Started!                    " -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Backend API: http://localhost:8000/docs" -ForegroundColor Cyan
-Write-Host "  Frontend:    http://localhost:5173" -ForegroundColor Cyan
+Write-Host "  Frontend:    http://localhost:5174" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Note: Close the two PowerShell windows" -ForegroundColor Yellow
 Write-Host "      (Backend/Frontend) to stop services" -ForegroundColor Yellow

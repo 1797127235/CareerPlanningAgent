@@ -122,6 +122,10 @@ def create_app() -> FastAPI:
     app.include_router(coach_results.router, prefix="/api/coach/results", tags=["教练结果"])
     app.include_router(growth_log.router, prefix="/api/growth-log", tags=["成长档案"])
 
+    @app.get("/api/health")
+    async def health():
+        return {"status": "ok"}
+
     return app
 
 

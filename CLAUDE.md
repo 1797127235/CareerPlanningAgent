@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **一键启动（推荐）**
 ```bash
-start.bat   # 按提示选 1 启动前端+后端
+run.bat   # 按提示选 1 启动前端+后端
 ```
 
 **手动启动**
@@ -15,5 +15,5 @@ start.bat   # 按提示选 1 启动前端+后端
 python -m uvicorn backend.app:app --reload   # http://localhost:8000
 
 # 前端
-cd frontend && npm run dev                    # http://localhost:5173
+cd frontend-v2 && npm run dev                    # http://localhost:5174
 ```
