@@ -26,6 +26,7 @@ class TestToolImports:
         assert isinstance(diagnose_jd, BaseTool)
         assert isinstance(get_jd_history, BaseTool)
 
+    @pytest.mark.skip(reason="practice agent module removed in redesign")
     def test_practice_tools_importable(self):
         from agent.tools.practice_tools import evaluate_answer, list_question_tags, pick_question
 
@@ -126,6 +127,7 @@ class TestAgentCreation:
         agent = create_jd_agent()
         assert agent is not None
 
+    @pytest.mark.skip(reason="practice agent module removed in redesign")
     def test_create_practice_agent(self):
         from agent.agents.practice_agent import create_practice_agent
 

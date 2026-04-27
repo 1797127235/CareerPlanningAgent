@@ -2,7 +2,7 @@ import pytest
 from backend.models import PlanWeekProgress, ActionPlanV2
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
-from backend.models import Base
+from backend.db import Base
 
 @pytest.fixture
 def db():
