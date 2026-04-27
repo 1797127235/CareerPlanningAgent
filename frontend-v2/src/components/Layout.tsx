@@ -6,6 +6,8 @@ const navItems = [
   { label: '档案画像', route: '/profile' },
   { label: '成长档案', route: '/growth-log' },
   { label: '岗位图谱', route: '/graph' },
+  { label: '模拟面试', route: '/interview' },
+  { label: 'JD 诊断', route: '/jd-diagnosis' },
 ] as const
 
 export function Layout() {

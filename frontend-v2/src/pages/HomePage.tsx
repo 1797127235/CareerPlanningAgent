@@ -2,14 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
-  ArrowUpRight,
   Upload,
   PenLine,
-  User,
-  FileText,
-  Calendar,
 } from 'lucide-react'
-import { PaperCard, Kicker, SectionDivider } from '@/components/editorial'
+import { Kicker } from '@/components/editorial'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfileData } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
@@ -70,7 +66,7 @@ function useActivityPulseLocal(enabled: boolean) {
   return pulse
 }
 
-/* ── Hero ── */
+/* ── Hero — 诗书气质 ── */
 function Hero({ hasProfile }: { hasProfile: boolean }) {
   const navigate = useNavigate()
 
@@ -79,30 +75,31 @@ function Hero({ hasProfile }: { hasProfile: boolean }) {
       className="px-6 md:px-12"
       style={{
         background: t.bg,
-        paddingTop: 'clamp(140px, 20vh, 220px)',
-        paddingBottom: 'clamp(80px, 12vh, 120px)',
+        paddingTop: '48px',
+        paddingBottom: '100px',
       }}
     >
       <div className={containerClass}>
-        {/* Kicker with decorative rule */}
+        {/* 眉批小字 */}
         <div className="flex items-center gap-3">
-          <span className="inline-block h-px w-5" style={{ background: t.inkMuted }} />
+          <span className="inline-block h-px w-6" style={{ background: t.inkMuted }} />
           <p
-            className="text-[10px] font-medium uppercase tracking-[0.28em]"
-            style={{ ...sans, color: t.inkMuted }}
+            className="text-[10px] font-normal tracking-[0.3em]"
+            style={{ ...serif, color: t.inkMuted }}
           >
-            AI-Driven Career Planning
+            职途智析
           </p>
         </div>
 
+        {/* 主标题 — 大字、克制行高 */}
         <h1
-          className="mt-10 font-semibold"
+          className="mt-8 font-normal"
           style={{
             ...serif,
             color: t.ink,
             fontSize: 'clamp(44px, 5.8vw, 72px)',
             lineHeight: 1.15,
-            letterSpacing: '0.01em',
+            letterSpacing: '0.02em',
             maxWidth: '800px',
           }}
         >
@@ -111,24 +108,26 @@ function Hero({ hasProfile }: { hasProfile: boolean }) {
           建立在<span style={{ color: t.accent }}>清晰判断</span>之上。
         </h1>
 
+        {/* 副标题 — 简洁、留白 */}
         <p
           className="mt-8 leading-[1.75]"
           style={{
             ...sans,
             color: t.inkSecondary,
-            fontSize: '17px',
-            maxWidth: '540px',
+            fontSize: '16px',
+            maxWidth: '480px',
             letterSpacing: '0.01em',
           }}
         >
-          CareerPlan 通过能力画像、岗位结构与成长路径分析，帮助你理解自己，并做出更可靠的职业决策。
+          CareerPlan 通过能力画像、岗位结构与成长路径分析，帮助你理解自己，做出更可靠的职业决策。
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center gap-5">
+        {/* 行动按钮 */}
+        <div className="mt-10 flex items-center gap-6">
           <button
             onClick={() => navigate(hasProfile ? '/profile' : '/login')}
-            className="rounded-md px-6 py-2.5 text-[14px] font-medium text-white transition-colors duration-200"
-            style={{ background: t.button, ...sans }}
+            className="rounded-sm px-7 py-2.5 text-[14px] font-medium text-white transition-colors duration-200"
+            style={{ background: t.button, ...sans, letterSpacing: '0.04em' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = t.buttonHover }}
             onMouseLeave={(e) => { e.currentTarget.style.background = t.button }}
           >
@@ -139,10 +138,10 @@ function Hero({ hasProfile }: { hasProfile: boolean }) {
               const el = document.getElementById('capabilities')
               if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 80, behavior: 'smooth' })
             }}
-            className="group inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors duration-200"
-            style={{ ...sans, color: t.inkSecondary }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = t.ink }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = t.inkSecondary }}
+            className="group inline-flex items-center gap-2 text-[14px] font-normal transition-colors duration-200"
+            style={{ ...sans, color: t.inkMuted }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = t.inkSecondary }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = t.inkMuted }}
           >
             了解方法
             <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
@@ -163,12 +162,24 @@ const capabilities = [
   },
   {
     num: '02',
+    title: 'JD 诊断',
+    desc: '粘贴真实岗位描述，四维评分诊断匹配度，分析技能缺口与 AI 影响。',
+    route: '/jd-diagnosis',
+  },
+  {
+    num: '03',
+    title: 'AI 模拟面试',
+    desc: '6 大方向 Skill 驱动出题，画像联动，支持自定义题量与题型。',
+    route: '/interview',
+  },
+  {
+    num: '04',
     title: '岗位结构',
     desc: '我们分析岗位之间的关系、迁移空间与行业趋势，让你看清更多可能性。',
     route: '/graph',
   },
   {
-    num: '03',
+    num: '05',
     title: '成长路径',
     desc: '我们把目标拆解为可执行的阶段性能力建设建议，陪伴你持续成长。',
     route: '/growth-log',
@@ -182,46 +193,118 @@ function CapabilitiesSection() {
     <section
       id="capabilities"
       className="px-6 md:px-12"
-      style={{ background: t.bg }}
+      style={{ background: t.bg, paddingTop: '80px', paddingBottom: '80px' }}
     >
       <div className={containerClass}>
-        {capabilities.map((item) => (
-          <button
-            key={item.num}
-            onClick={() => navigate(item.route)}
-            className="group flex w-full items-start gap-5 py-8 text-left md:gap-8 md:py-10"
-            style={{ borderTop: `1px solid ${t.line}` }}
-          >
-            <span
-              className="mt-0.5 text-[24px] font-light transition-colors duration-200 md:text-[28px]"
-              style={{ ...serif, color: t.inkMuted, minWidth: '40px' }}
-            >
-              {item.num}
-            </span>
-            <div className="min-w-0 flex-1">
-              <h3
-                className="text-[17px] font-semibold transition-colors duration-200 group-hover:text-[#B85C38] md:text-[18px]"
-                style={{ ...sans, color: t.ink }}
+        <Kicker>WHAT WE OFFER</Kicker>
+        <h2
+          className="mt-4 font-normal"
+          style={{ ...serif, color: t.ink, fontSize: 'clamp(28px, 3.2vw, 40px)', lineHeight: 1.25, letterSpacing: '0.02em' }}
+        >
+          可以为你做的
+        </h2>
+
+        <div className="mt-12">
+          {/* Row 1: 2 items */}
+          <div className="grid grid-cols-1 md:grid-cols-2" style={{ borderTop: `1px solid ${t.line}` }}>
+            {capabilities.slice(0, 2).map((item, idx) => (
+              <button
+                key={item.num}
+                onClick={() => navigate(item.route)}
+                className="group relative py-10 text-left transition-all duration-300"
+                style={{
+                  borderBottom: `1px solid ${t.line}`,
+                  borderRight: idx === 0 ? `1px solid ${t.line}` : 'none',
+                  paddingLeft: idx === 1 ? 'clamp(24px, 3vw, 48px)' : '0',
+                  paddingRight: idx === 0 ? 'clamp(24px, 3vw, 48px)' : '0',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(184, 92, 56, 0.03)';
+                  const h3 = e.currentTarget.querySelector('h3') as HTMLElement;
+                  if (h3) h3.style.color = t.accent;
+                  const num = e.currentTarget.querySelector('.num-label') as HTMLElement;
+                  if (num) num.style.transform = 'translateX(4px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  const h3 = e.currentTarget.querySelector('h3') as HTMLElement;
+                  if (h3) h3.style.color = t.ink;
+                  const num = e.currentTarget.querySelector('.num-label') as HTMLElement;
+                  if (num) num.style.transform = 'translateX(0)';
+                }}
               >
-                {item.title}
-              </h3>
-              <p
-                className="mt-2 text-[14px] leading-[1.65] md:text-[15px]"
-                style={{ ...sans, color: t.inkSecondary }}
+                <span
+                  className="num-label inline-block text-[12px] font-normal tracking-wide transition-transform duration-300"
+                  style={{ ...serif, color: t.accent }}
+                >
+                  {item.num}
+                </span>
+                <h3
+                  className="mt-2 text-[18px] font-normal tracking-tight transition-colors duration-300 md:text-[20px]"
+                  style={{ ...serif, color: t.ink }}
+                >
+                  {item.title}
+                </h3>
+                <p
+                  className="mt-3 text-[14px] leading-[1.7]"
+                  style={{ ...sans, color: t.inkSecondary }}
+                >
+                  {item.desc}
+                </p>
+              </button>
+            ))}
+          </div>
+
+          {/* Row 2: 3 items */}
+          <div className="grid grid-cols-1 md:grid-cols-3">
+            {capabilities.slice(2).map((item, idx) => (
+              <button
+                key={item.num}
+                onClick={() => navigate(item.route)}
+                className="group relative py-10 text-left transition-all duration-300"
+                style={{
+                  borderBottom: `1px solid ${t.line}`,
+                  borderRight: idx < 2 ? `1px solid ${t.line}` : 'none',
+                  paddingLeft: idx > 0 ? 'clamp(16px, 2vw, 32px)' : '0',
+                  paddingRight: idx < 2 ? 'clamp(16px, 2vw, 32px)' : '0',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(184, 92, 56, 0.03)';
+                  const h3 = e.currentTarget.querySelector('h3') as HTMLElement;
+                  if (h3) h3.style.color = t.accent;
+                  const num = e.currentTarget.querySelector('.num-label') as HTMLElement;
+                  if (num) num.style.transform = 'translateX(4px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent';
+                  const h3 = e.currentTarget.querySelector('h3') as HTMLElement;
+                  if (h3) h3.style.color = t.ink;
+                  const num = e.currentTarget.querySelector('.num-label') as HTMLElement;
+                  if (num) num.style.transform = 'translateX(0)';
+                }}
               >
-                {item.desc}
-              </p>
-            </div>
-            <ArrowUpRight
-              size={18}
-              strokeWidth={1.5}
-              className="mt-1 shrink-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:text-[#B85C38]"
-              style={{ color: t.inkMuted }}
-            />
-          </button>
-        ))}
-        {/* bottom border for last item */}
-        <div style={{ borderTop: `1px solid ${t.line}` }} />
+                <span
+                  className="num-label inline-block text-[12px] font-normal tracking-wide transition-transform duration-300"
+                  style={{ ...serif, color: t.accent }}
+                >
+                  {item.num}
+                </span>
+                <h3
+                  className="mt-2 text-[18px] font-normal tracking-tight transition-colors duration-300 md:text-[20px]"
+                  style={{ ...serif, color: t.ink }}
+                >
+                  {item.title}
+                </h3>
+                <p
+                  className="mt-3 text-[14px] leading-[1.7]"
+                  style={{ ...sans, color: t.inkSecondary }}
+                >
+                  {item.desc}
+                </p>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </section>
   )
@@ -255,207 +338,101 @@ function Dashboard({
   return (
     <section
       className="px-6 md:px-12"
-      style={{ background: t.bg, paddingTop: '80px', paddingBottom: '80px' }}
+      style={{ background: t.bgAlt, paddingTop: '80px', paddingBottom: '80px' }}
     >
       <div className={containerClass}>
         <Kicker>YOUR DASHBOARD</Kicker>
         <h2
-          className="mt-4 font-semibold"
-          style={{ ...serif, color: t.ink, fontSize: 'clamp(28px, 3.2vw, 40px)', lineHeight: 1.25 }}
+          className="mt-4 font-normal"
+          style={{ ...serif, color: t.ink, fontSize: 'clamp(28px, 3.2vw, 40px)', lineHeight: 1.25, letterSpacing: '0.02em' }}
         >
           你的仪表盘
         </h2>
 
-        <div className="mt-10 grid gap-5 md:grid-cols-3">
-          {/* ── 能力画像 ── */}
-          <PaperCard className="flex flex-col">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-full"
-                  style={{ background: 'oklch(0.94 0.03 75)' }}
-                >
-                  <User size={18} strokeWidth={1.5} style={{ color: t.inkSecondary }} />
-                </div>
-                <span className="text-[15px] font-semibold" style={{ ...sans, color: t.ink }}>
-                  能力画像完成度
+        <div className="mt-10" style={{ borderTop: `1px solid ${t.line}` }}>
+          <div className="grid grid-cols-1 md:grid-cols-3">
+            {/* ── 能力画像 ── */}
+            <button
+              onClick={() => navigate('/profile')}
+              className="group py-10 text-left transition-colors duration-200"
+              style={{ borderBottom: `1px solid ${t.line}`, borderRight: `1px solid ${t.line}`, paddingRight: 'clamp(16px, 2vw, 32px)' }}
+              onMouseEnter={(e) => { e.currentTarget.querySelector('h3')!.style.color = t.accent }}
+              onMouseLeave={(e) => { e.currentTarget.querySelector('h3')!.style.color = t.ink }}
+            >
+              <p className="text-[12px] font-normal tracking-wide" style={{ ...serif, color: t.accent }}>
+                01
+              </p>
+              <h3 className="mt-2 text-[18px] font-normal tracking-tight transition-colors duration-200 md:text-[20px]" style={{ ...serif, color: t.ink }}>
+                能力画像
+              </h3>
+              <div className="mt-4">
+                <span className="text-[36px] font-normal leading-none" style={{ ...serif, color: t.ink }}>
+                  {sectionsCompleted}
+                </span>
+                <span className="text-[15px]" style={{ ...serif, color: t.inkMuted }}>
+                  {' '}/ {totalSections}
                 </span>
               </div>
-              <span
-                className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                style={{
-                  background: pct >= 100 ? 'oklch(0.92 0.04 145)' : 'oklch(0.94 0.04 30)',
-                  color: pct >= 100 ? 'oklch(0.45 0.08 145)' : 'var(--chestnut)',
-                }}
-              >
-                {pct >= 100 ? '已完成' : '待完善'}
-              </span>
-            </div>
-
-            <div className="mt-6">
-              <span className="text-[40px] font-semibold leading-none" style={{ ...serif, color: t.ink }}>
-                {sectionsCompleted}
-              </span>
-              <span className="text-[16px]" style={{ ...serif, color: t.inkMuted }}>
-                {' '}
-                / {totalSections}
-              </span>
-            </div>
-
-            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'oklch(0.88 0.012 75)' }}>
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{
-                  width: `${pct}%`,
-                  background: pct >= 100 ? 'oklch(0.55 0.09 145)' : 'var(--chestnut)',
-                }}
-              />
-            </div>
-
-            <p className="mt-3 text-[13px]" style={{ ...sans, color: t.inkMuted }}>
-              上次更新：{formatRelativeTime(profile?.updated_at)}
-            </p>
-
-            <div className="mt-auto pt-6">
-              <button
-                onClick={() => navigate('/profile')}
-                className="group inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors duration-200"
-                style={{ ...sans, color: t.button }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
-              >
-                查看画像
-                <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-              </button>
-            </div>
-          </PaperCard>
-
-          {/* ── 职业分析报告 ── */}
-          <PaperCard className="flex flex-col">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-full"
-                  style={{ background: 'oklch(0.94 0.03 75)' }}
-                >
-                  <FileText size={18} strokeWidth={1.5} style={{ color: t.inkSecondary }} />
-                </div>
-                <span className="text-[15px] font-semibold" style={{ ...sans, color: t.ink }}>
-                  职业分析报告
-                </span>
+              <div className="mt-3 h-px w-full" style={{ background: t.line }}>
+                <div className="h-full transition-all duration-500" style={{ width: `${pct}%`, background: t.accent }} />
               </div>
-              {report && (
-                <span
-                  className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                  style={{ background: 'oklch(0.92 0.04 230)', color: 'oklch(0.50 0.10 230)' }}
-                >
-                  最新
-                </span>
-              )}
-            </div>
+              <p className="mt-3 text-[13px]" style={{ ...sans, color: t.inkMuted }}>
+                {pct >= 100 ? '已完成' : '待完善'} · 上次更新 {formatRelativeTime(profile?.updated_at)}
+              </p>
+            </button>
 
-            <div className="mt-5 flex items-start gap-4">
-              <div className="flex-1">
-                <p className="text-[14px] leading-relaxed" style={{ ...sans, color: t.inkSecondary }}>
-                  {report ? `上次生成于 ${formatRelativeTime(report.created_at)}` : '尚未生成'}
-                </p>
-              </div>
-              {report && (
-                <div
-                  className="relative flex h-[88px] w-[64px] shrink-0 flex-col items-center justify-center rounded-md border"
-                  style={{
-                    background: 'var(--bg-card)',
-                    borderColor: 'var(--line)',
-                    boxShadow: 'var(--shadow-block)',
-                  }}
-                >
-                  <span className="text-[8px] font-medium uppercase tracking-wider" style={{ color: t.inkMuted }}>
-                    CareerPlan
-                  </span>
-                  <span className="mt-1 text-[10px] font-semibold" style={{ color: t.ink }}>
-                    职业分析报告
-                  </span>
-                  <span
-                    className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-md"
-                    style={{ background: 'var(--chestnut)' }}
-                  />
-                </div>
-              )}
-            </div>
+            {/* ── 职业分析报告 ── */}
+            <button
+              onClick={() => navigate('/report')}
+              className="group py-10 text-left transition-colors duration-200"
+              style={{ borderBottom: `1px solid ${t.line}`, borderRight: `1px solid ${t.line}`, paddingLeft: 'clamp(16px, 2vw, 32px)', paddingRight: 'clamp(16px, 2vw, 32px)' }}
+              onMouseEnter={(e) => { e.currentTarget.querySelector('h3')!.style.color = t.accent }}
+              onMouseLeave={(e) => { e.currentTarget.querySelector('h3')!.style.color = t.ink }}
+            >
+              <p className="text-[12px] font-normal tracking-wide" style={{ ...serif, color: t.accent }}>
+                02
+              </p>
+              <h3 className="mt-2 text-[18px] font-normal tracking-tight transition-colors duration-200 md:text-[20px]" style={{ ...serif, color: t.ink }}>
+                职业分析报告
+              </h3>
+              <p className="mt-4 text-[14px] leading-[1.7]" style={{ ...sans, color: t.inkSecondary }}>
+                {report ? `上次生成于 ${formatRelativeTime(report.created_at)}` : '尚未生成'}
+              </p>
+              <p className="mt-3 text-[13px]" style={{ ...sans, color: t.inkMuted }}>
+                {report ? '查看报告 →' : '生成报告 →'}
+              </p>
+            </button>
 
-            <div className="mt-auto pt-6">
-              <button
-                onClick={() => navigate('/report')}
-                className="group inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors duration-200"
-                style={{ ...sans, color: t.button }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
-              >
-                {report ? '查看报告' : '生成报告'}
-                <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-              </button>
-            </div>
-          </PaperCard>
-
-          {/* ── 成长日志 ── */}
-          <PaperCard className="flex flex-col">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-10 w-10 items-center justify-center rounded-full"
-                  style={{ background: 'oklch(0.94 0.03 75)' }}
-                >
-                  <Calendar size={18} strokeWidth={1.5} style={{ color: t.inkSecondary }} />
-                </div>
-                <span className="text-[15px] font-semibold" style={{ ...sans, color: t.ink }}>
-                  成长日志
-                </span>
-              </div>
-              <span
-                className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
-                style={{ background: 'var(--chestnut-soft)', color: 'var(--chestnut)' }}
-              >
-                {pulse && pulse.total_records > 0 ? `${pulse.total_records} 条` : '待记录'}
-              </span>
-            </div>
-
-            <div className="mt-5">
+            {/* ── 成长日志 ── */}
+            <button
+              onClick={() => navigate('/growth-log')}
+              className="group py-10 text-left transition-colors duration-200"
+              style={{ borderBottom: `1px solid ${t.line}`, paddingLeft: 'clamp(16px, 2vw, 32px)' }}
+              onMouseEnter={(e) => { e.currentTarget.querySelector('h3')!.style.color = t.accent }}
+              onMouseLeave={(e) => { e.currentTarget.querySelector('h3')!.style.color = t.ink }}
+            >
+              <p className="text-[12px] font-normal tracking-wide" style={{ ...serif, color: t.accent }}>
+                03
+              </p>
+              <h3 className="mt-2 text-[18px] font-normal tracking-tight transition-colors duration-200 md:text-[20px]" style={{ ...serif, color: t.ink }}>
+                成长日志
+              </h3>
               {pulse && pulse.total_records > 0 ? (
                 <>
-                  <p className="text-[22px] font-semibold" style={{ ...serif, color: t.ink }}>
-                    {pulse.total_records} 条笔记
+                  <p className="mt-4 text-[28px] font-normal leading-none" style={{ ...serif, color: t.ink }}>
+                    {pulse.total_records}
                   </p>
-                  {pulse.current_streak_weeks > 0 && (
-                    <p className="mt-1 text-[13px]" style={{ ...sans, color: t.inkSecondary }}>
-                      连续 {pulse.current_streak_weeks} 周在记录
-                    </p>
-                  )}
+                  <p className="mt-1 text-[13px]" style={{ ...sans, color: t.inkSecondary }}>
+                    {pulse.current_streak_weeks > 0 ? `连续 ${pulse.current_streak_weeks} 周在记录` : '条笔记'}
+                  </p>
                 </>
               ) : (
-                <>
-                  <p className="text-[22px] font-semibold" style={{ ...serif, color: t.ink }}>
-                    暂无记录
-                  </p>
-                  <p className="mt-1 text-[13px] leading-relaxed" style={{ ...sans, color: t.inkMuted }}>
-                    记录你的成长轨迹与关键行动
-                  </p>
-                </>
+                <p className="mt-4 text-[14px] leading-[1.7]" style={{ ...sans, color: t.inkSecondary }}>
+                  暂无记录 · 开始记录你的成长轨迹
+                </p>
               )}
-            </div>
-
-            <div className="mt-auto pt-6">
-              <button
-                onClick={() => navigate('/growth-log')}
-                className="group inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors duration-200"
-                style={{ ...sans, color: t.button }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
-              >
-                {pulse && pulse.total_records > 0 ? '回顾' : '开始记录'}
-                <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-              </button>
-            </div>
-          </PaperCard>
+            </button>
+          </div>
         </div>
       </div>
     </section>

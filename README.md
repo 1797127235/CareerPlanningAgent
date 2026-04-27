@@ -47,13 +47,13 @@ start.bat   # 按提示选 1 启动前端+后端
 # 终端 1：后端（端口 8000）
 python -m uvicorn backend.app:app --reload
 
-# 终端 2：前端（端口 5173）
-cd frontend
+# 终端 2：前端（端口 5174）
+cd frontend-v2
 npm install
 npm run dev
 ```
 
-浏览器打开 [http://localhost:5173](http://localhost:5173) 开始使用。
+浏览器打开 [http://localhost:5174](http://localhost:5174) 开始使用。
 
 ---
 
@@ -64,14 +64,14 @@ npm run dev
 - **SQLAlchemy** + **SQLite** · ORM + 轻量数据库
 - **LangGraph** · 多 Agent 编排框架
 - **阿里云百炼**（qwen 系列）· 大模型推理
-- **text-embedding-v3** · 语义向量计算
+- **text-embedding-v4** · 语义向量计算
 - **Qdrant** · 向量数据库（可选，默认嵌入式）
 
 ### 前端
 - **React 19** + **TypeScript** · UI 框架
-- **Vite** · 构建工具
+- **Vite 8** + **Rolldown** · 构建工具
 - **TanStack Query** · 服务端状态管理
-- **Tailwind CSS 4** · 样式系统（glassmorphism 设计）
+- **Tailwind CSS 4** · 样式系统
 - **Framer Motion** · 动效
 - **Recharts** + **@xyflow/react** · 图表 + 图谱可视化
 - **Lucide Icons** · SVG 图标库
@@ -80,8 +80,8 @@ npm run dev
 - **Supervisor Pattern** · 中央调度器（`agent/supervisor.py`）根据意图路由到专门 Agent
 - **6 个专家 Agent**：`navigator`（图谱探索）/ `growth`（成长追踪）/ `profile`（画像诊断）/ `coach`（教练对话）/ `jd`（JD 诊断）/ `search`（网络搜索）
 - **Tool 层**：每个 Agent 绑定领域工具集；`coach_agent` 额外装载 pull-based context tools（`get_user_profile` / `get_career_goal` / `get_market_signal` / `get_memory_recall`）按需查询用户状态，避免 SystemMessage 全量 push
-- **Skill 系统（coach 专用）** · 基于 Anthropic Skill 规范（`agent/skills/coach-*/SKILL.md`），采用 **Progressive Disclosure 模式**：catalog（13 skill 的 name + description）注入 SystemMessage（~830 tokens），LLM 判断场景后调 `load_skill(name)` tool 按需加载完整规则 —— 相比全量 push 节省 ≥ 60% token，扩到 20 skill 也只吃 ~800 tokens base cost
-- **13 个 coach skill** 覆盖大学生职业规划对话场景：`greeting` / `confirmation` / `concern-direct` / `emotional-support` / `comparison-detox` / `direction-scaffold` / `progress-report` / `interview-prep` / `resume-review` / `market-signal` / `request-deliver` / `project-planning` / `decision-socratic`
+- **Skill 系统（coach 专用）** · 基于 Anthropic Skill 规范（`agent/skills/coach-*/SKILL.md`），采用 **Progressive Disclosure 模式**：catalog（15 skill 的 name + description）注入 SystemMessage（~830 tokens），LLM 判断场景后调 `load_skill(name)` tool 按需加载完整规则 —— 相比全量 push 节省 ≥ 60% token，扩到 20 skill 也只吃 ~800 tokens base cost
+- **15 个 coach skill** 覆盖大学生职业规划对话场景：`greeting` / `confirmation` / `concern-direct` / `emotional-support` / `comparison-detox` / `direction-scaffold` / `exploring-guide` / `profile-builder` / `progress-report` / `interview-prep` / `resume-review` / `market-signal` / `request-deliver` / `project-planning` / `decision-socratic`
 
 ---
 
@@ -128,12 +128,13 @@ CareerPlanningAgent/
 │   ├── _shared/
 │   │   └── references/         #       方向共享参考知识库（知识点清单）
 │   └── ...                     #   · 逐步扩充
-├── frontend/                   # React 前端
+├── frontend-v2/                # React 前端（Vite 8）
 │   └── src/
-│       ├── pages/              # 路由级页面
-│       ├── components/         # 可复用组件
-│       ├── api/                # HTTP 客户端
-│       └── hooks/              # React hooks
+│       ├── pages/              # 17 个路由级页面
+│       ├── components/         # 可复用组件（coach-v2 / editorial / growth-log / ui 等）
+│       ├── api/                # HTTP 客户端（14 个模块）
+│       ├── hooks/              # React hooks（12 个）
+│       └── lib/                # 工具函数
 ├── data/
 │   ├── graph.json              # 岗位图谱 curated 数据（45 节点）
 │   ├── market_signals.json     # 市场信号数据
