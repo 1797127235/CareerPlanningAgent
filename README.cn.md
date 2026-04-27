@@ -4,6 +4,8 @@
 
 > CareerOS 是一个开源 AI Agent 平台。它把简历、项目、JD、面试反馈和成长记录转化为基于证据的职业规划——不是又一个通用 AI 聊天助手。
 
+[English](README.md) · [中文](README.cn.md)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-brown.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-brown.svg)](https://www.python.org)
 [![React 19](https://img.shields.io/badge/react-19-blue.svg)](https://react.dev)

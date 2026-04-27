@@ -4,6 +4,8 @@
 
 > CareerOS is an open-source AI agent platform that turns resumes, projects, job descriptions, interview feedback, and growth logs into an evidence-based career plan — not just another chatbot.
 
+[English](README.md) · [中文](README.cn.md)
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-brown.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-brown.svg)](https://www.python.org)
 [![React 19](https://img.shields.io/badge/react-19-blue.svg)](https://react.dev)
