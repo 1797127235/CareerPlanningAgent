@@ -12,7 +12,7 @@ import {
   ReportChapterIV,
   ReportEpilogue,
 } from '@/components/report-v2'
-import { TableOfContents } from '@/components/editorial'
+import { TableOfContents, ReadingProgressBar } from '@/components/editorial'
 import Navbar from '@/components/shared/Navbar'
 
 const tocItems = [
@@ -127,6 +127,7 @@ export default function ReportPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-paper)] text-[var(--ink-1)]">
+      <ReadingProgressBar />
       <Navbar />
       <main className="pt-[80px] pb-24 md:pb-28">
         <div className="mx-auto max-w-[1180px] px-6 md:px-10 xl:px-14">

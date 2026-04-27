@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 interface TOCItem {
   id: string
@@ -35,6 +35,15 @@ export function TableOfContents({
     return () => obs.disconnect()
   }, [items])
 
+  const handleClick = useCallback((e: React.MouseEvent, id: string) => {
+    e.preventDefault()
+    const el = document.getElementById(id)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.history.pushState(null, '', `#${id}`)
+    }
+  }, [])
+
   return (
     <nav
       className={[
@@ -51,7 +60,8 @@ export function TableOfContents({
           <li key={item.id}>
             <a
               href={`#${item.id}`}
-              className={`block ${placement === 'fixed' ? 'text-[15px]' : 'text-[14px]'} leading-[1.5] transition-colors ${
+              onClick={(e) => handleClick(e, item.id)}
+              className={`block ${placement === 'fixed' ? 'text-[15px]' : 'text-[14px]'} leading-[1.5] transition-colors cursor-pointer ${
                 active === item.id ? 'text-[var(--ink-1)] font-medium' : 'text-[var(--ink-3)] hover:text-[var(--ink-2)]'
               }`}
             >
