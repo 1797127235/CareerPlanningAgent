@@ -37,7 +37,7 @@ export default function Navbar() {
           className="text-[17px] font-semibold tracking-tight transition-opacity duration-200 hover:opacity-60"
           style={{ ...serif, color: t.ink }}
         >
-          CareerPlan
+          CareerOS
         </button>
 
         <div className="hidden items-center gap-8 md:flex">
