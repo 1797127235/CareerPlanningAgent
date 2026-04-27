@@ -39,5 +39,5 @@ RESUMESDK_BASE_URL: str = os.getenv(
 
 # ── CORS ─────────────────────────────────────────────────────────────────
 CORS_ORIGINS: list[str] = os.getenv(
-    "CORS_ORIGINS", "http://localhost:5173,http://localhost:3000"
+    "CORS_ORIGINS", "http://localhost:5174,http://localhost:3000"
 ).split(",")

@@ -72,5 +72,5 @@ async def render_report_pdf(
         TimeoutError: 渲染超时（默认 30s）
         RuntimeError: 渲染异常
     """
-    base = frontend_base or os.getenv("FRONTEND_URL", "http://localhost:5173")
+    base = frontend_base or os.getenv("FRONTEND_URL", "http://localhost:5174")
     return await run_in_threadpool(_render_sync, report_id, token, user_json, base)

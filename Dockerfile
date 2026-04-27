@@ -1,4 +1,4 @@
-# ── Career Planning Agent - Backend ──────────────────────────
+# ── CareerOS - Backend ──────────────────────────
 FROM python:3.11-slim
 
 # Install system deps (some Python packages need compilation)

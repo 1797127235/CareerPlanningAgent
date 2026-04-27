@@ -67,7 +67,7 @@ def create_app() -> FastAPI:
         _slowapi_available = False
 
     app = FastAPI(
-        title="职途智析 API",
+        title="CareerOS API",
         version="2.0",
         lifespan=lifespan,
         redirect_slashes=False,

@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-# Career Planning Agent - Quick Launcher
+# CareerOS - Quick Launcher
 # Double-click to start both backend and frontend
 
 $ErrorActionPreference = "Stop"
