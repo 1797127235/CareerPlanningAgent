@@ -5,7 +5,11 @@ import {
   ArrowUpRight,
   Upload,
   PenLine,
+  User,
+  FileText,
+  Calendar,
 } from 'lucide-react'
+import { PaperCard, Kicker, SectionDivider } from '@/components/editorial'
 import { useAuth } from '@/hooks/useAuth'
 import { useProfileData } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
@@ -235,6 +239,7 @@ function Dashboard({
   const report = useReportMeta(hasProfile)
   const pulse = useActivityPulseLocal(hasProfile)
 
+  const totalSections = 6
   const sectionsCompleted = [
     !!profile?.name,
     !!profile?.profile?.education?.school,
@@ -243,6 +248,7 @@ function Dashboard({
     Object.keys((profile?.profile?.soft_skills as Record<string, unknown>) ?? {}).filter((k) => k !== '_version').length > 0,
     (profile?.career_goals?.length ?? 0) > 0,
   ].filter(Boolean).length
+  const pct = Math.round((sectionsCompleted / totalSections) * 100)
 
   if (!hasProfile) return null
 
@@ -252,71 +258,204 @@ function Dashboard({
       style={{ background: t.bg, paddingTop: '80px', paddingBottom: '80px' }}
     >
       <div className={containerClass}>
-        <p
-          className="text-[11px] font-medium uppercase tracking-[0.22em]"
-          style={{ ...sans, color: t.inkMuted }}
+        <Kicker>YOUR DASHBOARD</Kicker>
+        <h2
+          className="mt-4 font-semibold"
+          style={{ ...serif, color: t.ink, fontSize: 'clamp(28px, 3.2vw, 40px)', lineHeight: 1.25 }}
         >
-          Your Dashboard
-        </p>
+          你的仪表盘
+        </h2>
 
-        <div className="mt-8 grid gap-10 md:grid-cols-3">
-          <div>
-            <h3 className="text-[16px] font-semibold" style={{ ...sans, color: t.ink }}>
-              {profile?.name || '档案画像'}
-            </h3>
-            <p className="mt-2 text-[14px] leading-relaxed" style={{ ...sans, color: t.inkSecondary }}>
-              完成度 {sectionsCompleted}/6 · 上次更新 {formatRelativeTime(profile?.updated_at)}
-            </p>
-            <button
-              onClick={() => navigate('/profile')}
-              className="group mt-4 inline-flex items-center gap-1 text-[14px] font-medium transition-colors duration-200"
-              style={{ ...sans, color: t.button }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
-            >
-              查看
-              <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-            </button>
-          </div>
+        <div className="mt-10 grid gap-5 md:grid-cols-3">
+          {/* ── 能力画像 ── */}
+          <PaperCard className="flex flex-col">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full"
+                  style={{ background: 'oklch(0.94 0.03 75)' }}
+                >
+                  <User size={18} strokeWidth={1.5} style={{ color: t.inkSecondary }} />
+                </div>
+                <span className="text-[15px] font-semibold" style={{ ...sans, color: t.ink }}>
+                  能力画像完成度
+                </span>
+              </div>
+              <span
+                className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                style={{
+                  background: pct >= 100 ? 'oklch(0.92 0.04 145)' : 'oklch(0.94 0.04 30)',
+                  color: pct >= 100 ? 'oklch(0.45 0.08 145)' : 'var(--chestnut)',
+                }}
+              >
+                {pct >= 100 ? '已完成' : '待完善'}
+              </span>
+            </div>
 
-          <div>
-            <h3 className="text-[16px] font-semibold" style={{ ...sans, color: t.ink }}>
-              职业分析报告
-            </h3>
-            <p className="mt-2 text-[14px] leading-relaxed" style={{ ...sans, color: t.inkSecondary }}>
-              {report ? `上次生成于 ${formatRelativeTime(report.created_at)}` : '尚未生成'}
-            </p>
-            <button
-              onClick={() => navigate('/report')}
-              className="group mt-4 inline-flex items-center gap-1 text-[14px] font-medium transition-colors duration-200"
-              style={{ ...sans, color: t.button }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
-            >
-              {report ? '查看' : '生成'}
-              <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-            </button>
-          </div>
+            <div className="mt-6">
+              <span className="text-[40px] font-semibold leading-none" style={{ ...serif, color: t.ink }}>
+                {sectionsCompleted}
+              </span>
+              <span className="text-[16px]" style={{ ...serif, color: t.inkMuted }}>
+                {' '}
+                / {totalSections}
+              </span>
+            </div>
 
-          <div>
-            <h3 className="text-[16px] font-semibold" style={{ ...sans, color: t.ink }}>
-              成长日志
-            </h3>
-            <p className="mt-2 text-[14px] leading-relaxed" style={{ ...sans, color: t.inkSecondary }}>
-              {pulse ? `${pulse.total_records} 条笔记` : '暂无记录'}
-              {pulse && pulse.current_streak_weeks > 0 && ` · 连续 ${pulse.current_streak_weeks} 周`}
+            <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full" style={{ background: 'oklch(0.88 0.012 75)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${pct}%`,
+                  background: pct >= 100 ? 'oklch(0.55 0.09 145)' : 'var(--chestnut)',
+                }}
+              />
+            </div>
+
+            <p className="mt-3 text-[13px]" style={{ ...sans, color: t.inkMuted }}>
+              上次更新：{formatRelativeTime(profile?.updated_at)}
             </p>
-            <button
-              onClick={() => navigate('/growth-log')}
-              className="group mt-4 inline-flex items-center gap-1 text-[14px] font-medium transition-colors duration-200"
-              style={{ ...sans, color: t.button }}
-              onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
-              onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
-            >
-              {pulse && pulse.total_records > 0 ? '回顾' : '记录'}
-              <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-            </button>
-          </div>
+
+            <div className="mt-auto pt-6">
+              <button
+                onClick={() => navigate('/profile')}
+                className="group inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors duration-200"
+                style={{ ...sans, color: t.button }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
+              >
+                查看画像
+                <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
+              </button>
+            </div>
+          </PaperCard>
+
+          {/* ── 职业分析报告 ── */}
+          <PaperCard className="flex flex-col">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full"
+                  style={{ background: 'oklch(0.94 0.03 75)' }}
+                >
+                  <FileText size={18} strokeWidth={1.5} style={{ color: t.inkSecondary }} />
+                </div>
+                <span className="text-[15px] font-semibold" style={{ ...sans, color: t.ink }}>
+                  职业分析报告
+                </span>
+              </div>
+              {report && (
+                <span
+                  className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                  style={{ background: 'oklch(0.92 0.04 230)', color: 'oklch(0.50 0.10 230)' }}
+                >
+                  最新
+                </span>
+              )}
+            </div>
+
+            <div className="mt-5 flex items-start gap-4">
+              <div className="flex-1">
+                <p className="text-[14px] leading-relaxed" style={{ ...sans, color: t.inkSecondary }}>
+                  {report ? `上次生成于 ${formatRelativeTime(report.created_at)}` : '尚未生成'}
+                </p>
+              </div>
+              {report && (
+                <div
+                  className="relative flex h-[88px] w-[64px] shrink-0 flex-col items-center justify-center rounded-md border"
+                  style={{
+                    background: 'var(--bg-card)',
+                    borderColor: 'var(--line)',
+                    boxShadow: 'var(--shadow-block)',
+                  }}
+                >
+                  <span className="text-[8px] font-medium uppercase tracking-wider" style={{ color: t.inkMuted }}>
+                    CareerPlan
+                  </span>
+                  <span className="mt-1 text-[10px] font-semibold" style={{ color: t.ink }}>
+                    职业分析报告
+                  </span>
+                  <span
+                    className="absolute bottom-0 left-0 right-0 h-[3px] rounded-b-md"
+                    style={{ background: 'var(--chestnut)' }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="mt-auto pt-6">
+              <button
+                onClick={() => navigate('/report')}
+                className="group inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors duration-200"
+                style={{ ...sans, color: t.button }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
+              >
+                {report ? '查看报告' : '生成报告'}
+                <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
+              </button>
+            </div>
+          </PaperCard>
+
+          {/* ── 成长日志 ── */}
+          <PaperCard className="flex flex-col">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className="flex h-10 w-10 items-center justify-center rounded-full"
+                  style={{ background: 'oklch(0.94 0.03 75)' }}
+                >
+                  <Calendar size={18} strokeWidth={1.5} style={{ color: t.inkSecondary }} />
+                </div>
+                <span className="text-[15px] font-semibold" style={{ ...sans, color: t.ink }}>
+                  成长日志
+                </span>
+              </div>
+              <span
+                className="rounded-full px-2.5 py-0.5 text-[11px] font-medium"
+                style={{ background: 'var(--chestnut-soft)', color: 'var(--chestnut)' }}
+              >
+                {pulse && pulse.total_records > 0 ? `${pulse.total_records} 条` : '待记录'}
+              </span>
+            </div>
+
+            <div className="mt-5">
+              {pulse && pulse.total_records > 0 ? (
+                <>
+                  <p className="text-[22px] font-semibold" style={{ ...serif, color: t.ink }}>
+                    {pulse.total_records} 条笔记
+                  </p>
+                  {pulse.current_streak_weeks > 0 && (
+                    <p className="mt-1 text-[13px]" style={{ ...sans, color: t.inkSecondary }}>
+                      连续 {pulse.current_streak_weeks} 周在记录
+                    </p>
+                  )}
+                </>
+              ) : (
+                <>
+                  <p className="text-[22px] font-semibold" style={{ ...serif, color: t.ink }}>
+                    暂无记录
+                  </p>
+                  <p className="mt-1 text-[13px] leading-relaxed" style={{ ...sans, color: t.inkMuted }}>
+                    记录你的成长轨迹与关键行动
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="mt-auto pt-6">
+              <button
+                onClick={() => navigate('/growth-log')}
+                className="group inline-flex items-center gap-1.5 text-[14px] font-medium transition-colors duration-200"
+                style={{ ...sans, color: t.button }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = t.buttonHover }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = t.button }}
+              >
+                {pulse && pulse.total_records > 0 ? '回顾' : '开始记录'}
+                <ArrowRight size={14} strokeWidth={1.5} className="transition-transform duration-200 group-hover:translate-x-0.5" />
+              </button>
+            </div>
+          </PaperCard>
         </div>
       </div>
     </section>
