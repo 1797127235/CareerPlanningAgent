@@ -137,7 +137,11 @@ function skillName(item: string | { skill: string }): string {
 function Card({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div
-      className={`bg-white/50 backdrop-blur-sm rounded-2xl border border-white/40 p-6 ${className}`}
+      className={`rounded-2xl border p-6 ${className}`}
+      style={{
+        background: 'rgba(245, 240, 232, 0.6)',
+        borderColor: 'rgba(237, 232, 223, 0.8)',
+      }}
     >
       {children}
     </div>
@@ -439,7 +443,7 @@ function JDInputForm() {
                     className="w-full px-4 py-3 rounded-xl text-[14px] placeholder:text-[#9A9590] focus:outline-none resize-none leading-relaxed transition-all"
                     style={{
                       border: `1px solid ${t.line}`,
-                      background: 'rgba(255,255,255,0.35)',
+                      background: 'rgba(249, 244, 238, 0.5)',
                       color: t.ink,
                     }}
                     onFocus={(e) => {
