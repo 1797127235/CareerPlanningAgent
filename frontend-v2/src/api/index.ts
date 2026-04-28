@@ -91,7 +91,6 @@ export type { JDDiagnosisDetail } from './jd'
 export {
   fetchProfile,
   updateProfile,
-  parseResume,
   setProfileName,
   refineProject,
   resetProfile,
