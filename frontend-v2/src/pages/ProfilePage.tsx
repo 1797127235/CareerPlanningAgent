@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, PenLine, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useProfileData, type ManualProfilePayload } from '@/hooks/useProfileData'
+import { useProfileDataV2 } from '@/hooks/useProfileDataV2'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { setProfileName, updateProfile } from '@/api/profiles'
 import { saveProfile } from '@/api/profiles-v2'
@@ -91,7 +92,8 @@ export default function ProfilePage() {
   const isMock = searchParams.get('mock') === '1'
   const { toast } = useToast()
 
-  const { profile, loading, loadError, loadProfile, savingEdit, handleSaveEdit, handleDelete } = useProfileData(!isMock)
+  const { profile, loading, error: loadError, loadProfile } = useProfileDataV2(!isMock)
+  const { savingEdit, handleSaveEdit, handleDelete } = useProfileData(!isMock)
   const { uploadStep, uploadError, justUploaded, selectedFileName, fileInputRef, triggerFileDialog, onFileSelected, previewData, clearPreviewData } = useResumeUpload()
 
   const [ceremonyAnimating, setCeremonyAnimating] = useState(false)
