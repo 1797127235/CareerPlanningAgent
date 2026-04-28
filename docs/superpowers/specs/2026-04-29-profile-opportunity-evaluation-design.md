@@ -63,13 +63,33 @@ CareerOS 当前的核心业务流强依赖静态岗位图谱（`data/graph.json`
 
 **工作量提醒**: 这不是简单的 API 调用替换，而是数据模型的全面适配。
 
+**V1 Profile 端点兼容策略**:
+Stage 1 只迁移"读取画像"到 v2，以下 v1 端点暂留 v1，后续按需迁移：
+
+| V1 端点 | 功能 | Stage 1 策略 |
+|---------|------|-------------|
+| `GET /api/profiles` | 读取画像 | ❌ 停用，改走 v2 |
+| `PUT /api/profiles` | 更新画像 | 暂留 v1（编辑走 v1） |
+| `DELETE /api/profiles` | 重置画像 | 暂留 v1 |
+| `POST /api/profiles/reparse` | 重新解析 | 暂留 v1 |
+| `PATCH /api/profiles/name` | 修改名称 | 暂留 v1 |
+| `POST /api/profiles/projects` | 添加项目 | 暂留 v1 |
+| `PATCH /api/profiles/projects/{idx}` | 更新项目 | 暂留 v1 |
+| `DELETE /api/profiles/projects/{idx}` | 删除项目 | 暂留 v1 |
+| `POST /api/profiles/sjt/*` | SJT 测评 | 暂留 v1（独立功能，不阻塞主线） |
+
+> 原则：Stage 1 只保证"上传简历→解析→预览→保存→读取展示"这个链路完全走 v2。编辑画像、SJT 等次要功能继续走 v1，后续阶段再评估是否迁移。
+
 ### Stage 2: Opportunity 最小模块
 **分支**: `feat/opportunity-v2`
 
 **目标**: 建立第二个输入源——用户粘贴 JD 生成 Opportunity。
 
+**模型位置**: `backend2/models/opportunity.py`（保持 v2 独立，不混在 backend/models/ 里）。需在 `backend2/db/session.py` 的 `init_db()` 中 import 新模型。
+
 **数据模型**:
 ```python
+# backend2/models/opportunity.py
 class Opportunity(Base):
     __tablename__ = "opportunities"
     
@@ -81,6 +101,22 @@ class Opportunity(Base):
     source_url: Mapped[str | None] = mapped_column(String(512))
     parsed_requirements_json: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+```
+
+**解析结果 Schema** (`parsed_requirements_json` 的结构约束):
+```python
+class SkillRequirement(BaseModel):
+    name: str
+    level: str | None = None  # "required" | "preferred" | "nice_to_have"
+
+class ParsedRequirements(BaseModel):
+    title: str | None = None
+    company: str | None = None
+    skills_required: list[SkillRequirement]
+    experience_years: int | None = None
+    education: str | None = None
+    responsibilities: list[str]
+    nice_to_have: list[str]
 ```
 
 **API**:
@@ -125,6 +161,31 @@ class Evaluation(Base):
 - 复用现有 JD 诊断的 prompt 思路
 - 但输出强制结构化（Pydantic schema），不再自由文本
 
+**评估结果 Schema** (`result_json` 的结构约束):
+```python
+class MatchedSkill(BaseModel):
+    name: str
+    user_level: str  # 用户简历中的技能水平
+    required_level: str  # JD 要求的水平
+
+class GapSkill(BaseModel):
+    name: str
+    estimated_hours: int
+    priority: str  # "high" | "medium" | "low"
+
+class ActionSuggestion(BaseModel):
+    title: str
+    description: str
+    estimated_hours: int | None = None
+
+class EvaluationResult(BaseModel):
+    match_score: float  # 0-100
+    matched_skills: list[MatchedSkill]
+    gap_skills: list[GapSkill]
+    resume_tips: list[str]
+    action_suggestions: list[ActionSuggestion]
+```
+
 **关键约束**: 保存时必须存完整快照。以后 profile 或 JD 变了，历史 evaluation 不会漂。
 
 ### Stage 4: 报告基于 Evaluation 生成
@@ -140,13 +201,21 @@ class Evaluation(Base):
 - 保留旧报告页面但降级：没有 Evaluation 时引导用户先粘贴 JD
 - 不再强依赖 `CareerGoal.from_node_id`
 
+**⚠️ 风险提示**: `backend/services/report/pipeline.py` 有 1011 行且深度依赖 `growth_snapshot`、`project_record` 等非图谱数据。Stage 4 是五阶段中风险最高的阶段，实施前需先调研报告 pipeline 对非图谱数据的依赖关系，避免"摆脱了图谱却掉进 growth 数据的重构陷阱"。建议先做一次报告生成链路的无损拆解调研。
+
 ### Stage 5: 图谱降级
 **分支**: `chore/demote-graph-core`
 
 **目标**: 图谱从主流程阻塞项降级为参考数据。
 
 **动作**:
-- 前端主导航去掉"岗位图谱"入口（或收进二级菜单）
+- 前端主导航调整（具体菜单项）：
+  - **首页**: 保留
+  - **画像**: 保留（已是主入口）
+  - **岗位机会**（新增）: 替代原"岗位图谱"的主入口地位
+  - **岗位图谱**（降级）: 从主导航移除，收进"更多"或"探索"二级菜单
+  - **成长档案**: 保留
+  - **报告**: 入口改为基于 Evaluation
 - `/graph`、`setCareerGoal`、`RoleDetailPage` 保留但明确为"参考探索"
 - `GraphService` 继续运行，定位改为：
   1. 推荐参考方向
