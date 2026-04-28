@@ -2,6 +2,11 @@ import { useState, useCallback, useEffect } from 'react'
 import { fetchProfile, updateProfile, resetProfile, reparseProfile } from '@/api/profiles'
 import type { ProfileData, ManualProfilePayload } from '@/types/profile'
 
+/**
+ * @deprecated Use `useProfileDataV2` instead. This hook calls v1 API.
+ * Kept temporarily for editing/SJT functions that still route to v1.
+ * Will be removed when all profile operations are migrated to v2.
+ */
 export function useProfileData(enabled = true) {
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [loading, setLoading] = useState(enabled)
