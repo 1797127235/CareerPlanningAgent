@@ -4,7 +4,7 @@
 
 **Goal:** 在 backend2 中实现纯净的 JD 诊断能力，不依赖岗位图谱，基于 v2 ProfileData 给出结构化诊断结果。
 
-**Architecture:** 分层架构 — parser（LLM 提取 JD 结构）→ evaluator（Profile vs JD 匹配计算）→ repository（DB 读写）→ service（编排）→ router（HTTP 边界）。每层只依赖下一层，evaluator 是纯函数，无副作用。
+**Architecture:** 分层架构 — parser（LLM 提取 JD 结构）→ evaluator（Profile vs JD 匹配计算）→ repository（DB 读写）→ service（编排）→ router（HTTP 边界）。每层只依赖下一层。evaluator 无 DB/无 graph/无状态副作用，但允许调用 LLM（非纯函数）。
 
 **Tech Stack:** FastAPI, SQLAlchemy, Pydantic v2, OpenAI 兼容 LLM 客户端（backend2/llm/client.py）
 
@@ -12,7 +12,7 @@
 ```
 backend2/services/jd/
   parser.py      ← 只调用 llm/client.py，返回 JDExtract
-  evaluator.py   ← 只接收 ProfileData + JDExtract，纯计算，无 DB/外部调用
+  evaluator.py   ← 只接收 ProfileData + JDExtract，无 DB/无 graph/无状态副作用，允许调用 LLM
   repository.py  ← 只操作 JDDiagnosisV2 ORM
   service.py     ← 编排 parser + evaluator + repository + get_my_profile
   prompts.py     ← 纯字符串模板，无业务逻辑
@@ -60,10 +60,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import ForeignKey, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from backend2.db.session import Base
+from backend.db import Base
 
 
 def _utcnow() -> datetime:
@@ -409,13 +409,22 @@ def parse_jd(jd_text: str) -> JDExtract:
         return JDExtract()
 
     messages = build_jd_parser_messages(jd_text)
-    raw = llm_chat(messages, temperature=0.3, timeout=60)
+    try:
+        raw = llm_chat(messages, temperature=0.3, timeout=60)
+    except Exception:
+        logger.exception("JD parser LLM 调用失败")
+        return JDExtract()
 
     if not raw:
         logger.warning("JD parser LLM 返回空")
         return JDExtract()
 
-    data = parse_json_response(raw)
+    try:
+        data = parse_json_response(raw)
+    except Exception:
+        logger.exception("JD parser JSON 解析失败")
+        return JDExtract()
+
     if not data:
         logger.warning("JD parser 无法从 LLM 响应解析 JSON")
         return JDExtract()
@@ -449,17 +458,18 @@ git commit -m "feat(backend2): add JD parser layer"
 **Files:**
 - Create: `backend2/services/jd/evaluator.py`
 
-**约束**：纯计算函数，只接收 `ProfileData` + `JDExtract`，不能访问 graph / history / report / coach / application 数据，不产生任何副作用。
+**约束**：只接收 `ProfileData` + `JDExtract`，不读数据库、不访问 graph / history / report / coach / application 数据、不修改任何状态。允许调用 LLM。
 
 - [ ] **Step 1: 新建 evaluator.py**
 
 ```python
 """backend2/services/jd/evaluator.py — Profile vs JD 匹配评估。
 
-纯计算函数，无副作用：
+约束：
 - 不读数据库
-- 不调外部 API
+- 不访问 graph / history / report / coach / application
 - 不修改任何状态
+- 允许调用 LLM（无状态副作用）
 - 只接收 ProfileData + JDExtract，返回 JDDiagnosisResult
 """
 from __future__ import annotations
@@ -990,23 +1000,46 @@ Expected: 返回完整 `JDDiagnosisResponse`
 ```bash
 python -c "
 import ast, sys
-files = [
+
+FILES = [
     'backend2/services/jd/parser.py',
     'backend2/services/jd/evaluator.py',
     'backend2/services/jd/service.py',
     'backend2/services/jd/repository.py',
     'backend2/routers/jd.py',
 ]
-for f in files:
+
+# 精确禁止的旧模块路径和类名
+BANNED = {
+    'backend.services.graph',
+    'backend.routers.graph',
+    'backend.services.jd_service',
+    'backend.models.JDDiagnosis',  # 旧表，不是 JDDiagnosisV2
+    'CareerGoal',
+    'Report',
+    'CoachResult',
+    'Coach',
+}
+
+for f in FILES:
     with open(f) as fh:
         tree = ast.parse(fh.read())
     for node in ast.walk(tree):
-        if isinstance(node, ast.Import) or isinstance(node, ast.ImportFrom):
-            src = ast.unparse(node)
-            if 'graph' in src.lower() or 'JDDiagnosis' in src:
-                print(f'BAD in {f}: {src}')
-                sys.exit(1)
-print('OK: no graph imports in jd modules')
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                full = alias.name
+                if any(b in full for b in BANNED):
+                    print(f'BAD import in {f}: {full}')
+                    sys.exit(1)
+        elif isinstance(node, ast.ImportFrom):
+            mod = node.module or ''
+            for alias in node.names:
+                full = f'{mod}.{alias.name}' if mod else alias.name
+                if any(b in full for b in BANNED):
+                    print(f'BAD import in {f}: {full}')
+                    sys.exit(1)
+
+print('OK: no banned imports in jd modules')
 "
 ```
 
