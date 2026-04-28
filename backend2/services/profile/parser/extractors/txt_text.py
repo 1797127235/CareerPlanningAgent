@@ -19,5 +19,6 @@ class TxtTextExtractor(TextExtractor):
         return ResumeDocument(
             filename=filename,
             raw_text=raw_text,
-            extractor=self.name,
+            text_format="plain",
+            extraction_method=self.name,
         )

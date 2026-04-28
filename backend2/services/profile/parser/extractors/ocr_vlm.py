@@ -40,8 +40,9 @@ class OcrVlmExtractor(TextExtractor):
         return ResumeDocument(
             filename=filename,
             raw_text=raw_text,
-            extractor=self.name,
-            is_scanned=True,
+            text_format="plain",
+            extraction_method=self.name,
+            ocr_used=True,
             warnings=["文档为扫描件，OCR 识别可能存在误差"],
         )
 

@@ -132,6 +132,43 @@ def init_db() -> None:
             conn.commit()
         except Exception:
             pass  # column already exists
+        # Save-profile pipeline: profile_parses table + active_parse_id / is_edited
+        try:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS profile_parses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    profile_id INTEGER NOT NULL REFERENCES profiles(id),
+                    file_hash VARCHAR(64) NOT NULL DEFAULT '',
+                    raw_profile_json TEXT NOT NULL DEFAULT '{}',
+                    confirmed_profile_json TEXT NOT NULL DEFAULT '{}',
+                    document_json TEXT NOT NULL DEFAULT '{}',
+                    meta_json TEXT NOT NULL DEFAULT '{}',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_profile_parses_profile_id ON profile_parses(profile_id)"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN active_parse_id INTEGER REFERENCES profile_parses(id)"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_profiles_active_parse_id ON profiles(active_parse_id)"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN is_edited BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
         # 成长档案: 项目-缺口技能关联
         try:
             conn.execute(text("ALTER TABLE project_records ADD COLUMN gap_skill_links TEXT NOT NULL DEFAULT '[]'"))

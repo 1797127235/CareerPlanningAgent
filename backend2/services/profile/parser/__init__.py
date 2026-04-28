@@ -1,25 +1,22 @@
 """Resume parsing pipeline — unified entry point for backend2.
 
 Usage:
-    from backend2.services.profile.parser import ResumeParserPipeline
-    pipeline = ResumeParserPipeline()
-    result = pipeline.parse(file_bytes, filename)
+    from backend2.services.profile.parser import ParserPipeline
+    pipeline = ParserPipeline()
+    result = pipeline.parse(resume_file)
 """
 from __future__ import annotations
 
-from backend2.services.profile.parser.base import ParseStrategy, TextExtractor
+from backend2.services.profile.parser.base import TextExtractor
 from backend2.services.profile.parser.pipeline import (
     ExtractorRegistry,
-    ParseResult,
-    ResumeParserPipeline,
-    default_pipeline,
+    ParserPipeline,
+    default_registry,
 )
 
 __all__ = [
     "ExtractorRegistry",
-    "ParseResult",
-    "ParseStrategy",
-    "ResumeParserPipeline",
+    "ParserPipeline",
     "TextExtractor",
-    "default_pipeline",
+    "default_registry",
 ]

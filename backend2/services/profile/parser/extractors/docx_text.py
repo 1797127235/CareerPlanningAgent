@@ -33,7 +33,8 @@ class DocxTextExtractor(TextExtractor):
             return ResumeDocument(
                 filename=filename,
                 raw_text=raw_text,
-                extractor=self.name,
+                text_format="plain",
+                extraction_method=self.name,
             )
         except ImportError:
             logger.warning("python-docx 未安装，跳过 .docx 提取")

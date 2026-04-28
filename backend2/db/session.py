@@ -39,7 +39,7 @@ SessionLocal = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
 def init_db() -> None:
     """Create all tables if they don't exist (idempotent)."""
     from backend.models import (  # noqa: F401 - shared ORM models
-        User, Report, Profile, CareerGoal,
+        User, Report, Profile, ProfileParse, CareerGoal,
         JobNode, JobEdge, JobScore,
         GrowthSnapshot, SkillUpdate, ActionProgress,
         ActionPlanV2, PlanWeekProgress,
@@ -52,6 +52,23 @@ def init_db() -> None:
         SjtSession,
     )
     Base.metadata.create_all(bind=engine)
+    # Migrate: add columns for save-profile pipeline
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN active_parse_id INTEGER REFERENCES profile_parses(id)"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("CREATE INDEX IF NOT EXISTS ix_profiles_active_parse_id ON profiles(active_parse_id)"))
+            conn.commit()
+        except Exception:
+            pass
+        try:
+            conn.execute(text("ALTER TABLE profiles ADD COLUMN is_edited BOOLEAN NOT NULL DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
 
 
 def get_db():

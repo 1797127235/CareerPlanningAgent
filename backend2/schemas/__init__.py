@@ -2,21 +2,25 @@
 from __future__ import annotations
 
 from backend2.schemas.profile import (
-    CareerSignals,
     Education,
     Internship,
-    ParseCandidate,
+    ParseMeta,
+    ParseResumePreviewResponse,
     ProfileData,
+    Project,
     ResumeDocument,
+    ResumeFile,
     Skill,
 )
 
 __all__ = [
-    "CareerSignals",
     "Education",
     "Internship",
-    "ParseCandidate",
+    "ParseMeta",
+    "ParseResumePreviewResponse",
     "ProfileData",
+    "Project",
     "ResumeDocument",
+    "ResumeFile",
     "Skill",
 ]

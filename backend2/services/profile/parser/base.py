@@ -1,12 +1,13 @@
-"""解析器插件协议 — TextExtractor 和 ParseStrategy 抽象基类。
+"""解析器插件协议 — TextExtractor 抽象基类。
 
-定义了管线如何发现和调用提取器、策略，而不依赖它们的具体实现。
+ParseStrategy 已被移除：新架构中 LLM 是唯一语义解析器，
+不再维护多个平级解析策略。
 """
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from backend2.schemas.profile import ParseCandidate, ResumeDocument
+from backend2.schemas.profile import ResumeDocument
 
 
 class TextExtractor(ABC):
@@ -28,25 +29,5 @@ class TextExtractor(ABC):
 
         只在文件格式根本不可处理时返回 None（如加密 PDF）。
         即使文本为空，也应返回有效的 ResumeDocument。
-        """
-        ...
-
-
-class ParseStrategy(ABC):
-    """将 ResumeDocument 转为 ParseCandidate（结构化画像）。
-
-    策略是无状态的，实例化代价低。
-    策略内部可以使用 LLM、第三方 API 或规则逻辑。
-    不允许修改传入的 ResumeDocument。
-    """
-
-    name: str = ""
-
-    @abstractmethod
-    def parse(self, document: ResumeDocument) -> ParseCandidate | None:
-        """解析文档并返回候选画像。
-
-        当策略无法产出结果时返回 None（如 LLM 超时、格式错误）。
-        管线会尝试下一个策略。
         """
         ...

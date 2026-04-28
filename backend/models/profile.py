@@ -35,12 +35,48 @@ class Profile(Base):
     coach_memo: Mapped[str] = mapped_column(
         Text, nullable=False, default=""
     )  # Natural-language coach memo about user, updated across sessions
+    active_parse_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("profile_parses.id"), nullable=True, index=True
+    )
+    is_edited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, onupdate=_utcnow
     )
 
     owner: Mapped["User"] = relationship("User", back_populates="profiles")
+    parses: Mapped[list["ProfileParse"]] = relationship(
+        "ProfileParse", back_populates="profile", cascade="all, delete-orphan"
+    )
+
+
+class ProfileParse(Base):
+    """每次解析的快照，用于审计、版本对比和重新解析。"""
+
+    __tablename__ = "profile_parses"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    profile_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("profiles.id"), nullable=False, index=True
+    )
+    file_hash: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=""
+    )  # SHA-256 of the uploaded file
+    raw_profile_json: Mapped[str] = mapped_column(
+        Text, nullable=False, default="{}"
+    )  # LLM parser 原始输出（未用户编辑）
+    confirmed_profile_json: Mapped[str] = mapped_column(
+        Text, nullable=False, default="{}"
+    )  # 用户确认/编辑后的最终画像
+    document_json: Mapped[str] = mapped_column(
+        Text, nullable=False, default="{}"
+    )  # ResumeDocument 快照
+    meta_json: Mapped[str] = mapped_column(
+        Text, nullable=False, default="{}"
+    )  # ParseMeta 快照
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+
+    profile: Mapped["Profile"] = relationship("Profile", back_populates="parses")
 
 
 class SjtSession(Base):

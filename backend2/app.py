@@ -63,8 +63,9 @@ def create_app() -> FastAPI:
         )
 
     # Routers
-    from backend2.routers import health
+    from backend2.routers import health, profiles
     app.include_router(health.router, prefix="/api/v2", tags=["health"])
+    app.include_router(profiles.router, prefix="/api/v2", tags=["profiles"])
 
     return app
 

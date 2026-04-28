@@ -1,0 +1,131 @@
+"""ProfileService — 简历解析与画像保存业务入口。"""
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+
+from fastapi import UploadFile
+from sqlalchemy.orm import Session
+
+from backend.models.profile import Profile, ProfileParse
+from backend2.schemas.profile import (
+    ParseResumePreviewResponse,
+    ResumeFile,
+    SaveProfileRequest,
+    SaveProfileResponse,
+)
+from backend2.services.profile.parser.evidence import resumesdk
+from backend2.services.profile.parser.pipeline import ParserPipeline
+
+logger = logging.getLogger(__name__)
+
+# 单例管线，可复用
+_pipeline = ParserPipeline(evidence_collector=resumesdk.collect)
+
+
+async def parse_resume_preview(file: UploadFile) -> ParseResumePreviewResponse:
+    """解析上传的简历文件，返回预览响应。"""
+    content = await file.read()
+    resume_file = ResumeFile(
+        filename=file.filename or "unknown",
+        content_type=file.content_type,
+        file_bytes=content,
+        file_hash=hashlib.sha256(content).hexdigest(),
+    )
+    logger.info("解析简历: %s (%d bytes)", resume_file.filename, len(content))
+    return _pipeline.parse(resume_file)
+
+
+def save_profile(
+    db: Session,
+    user_id: int,
+    request: SaveProfileRequest,
+) -> SaveProfileResponse:
+    """保存用户确认后的画像。
+
+    事务流程：
+    1. 插入或更新 profiles（按 user_id）
+    2. 插入一条 profile_parses 快照（区分 raw / confirmed）
+    3. 回填 profiles.active_parse_id
+    4. 自动计算 is_edited（raw != confirmed）
+    """
+    raw_profile = request.raw_profile
+    confirmed_profile = request.confirmed_profile
+    document = request.document
+    parse_meta = request.parse_meta
+
+    # 序列化各层 JSON
+    raw_json = raw_profile.model_dump(mode="json")
+    confirmed_json = confirmed_profile.model_dump(mode="json")
+    document_json = document.model_dump(mode="json")
+    meta_json = parse_meta.model_dump(mode="json")
+
+    # 自动判断用户是否做过编辑
+    is_edited = raw_json != confirmed_json
+
+    # 用 confirmed_profile 重新计算 quality（覆盖 meta 里的 score）
+    from backend2.services.profile.parser.quality import score_profile
+
+    quality_meta = score_profile(confirmed_profile)
+    meta_json["quality_score"] = quality_meta.quality_score
+    meta_json["quality_checks"] = quality_meta.quality_checks
+
+    # 事务开始
+    try:
+        # 1. 插入或更新 profiles
+        profile = db.query(Profile).filter(
+            Profile.user_id == user_id
+        ).first()
+
+        if profile is None:
+            profile = Profile(
+                user_id=user_id,
+                name=confirmed_profile.name or "",
+                profile_json=json.dumps(confirmed_json, ensure_ascii=False),
+                quality_json=json.dumps(meta_json, ensure_ascii=False),
+                source="resume",
+            )
+            db.add(profile)
+            db.flush()  # 拿到 profile.id
+        else:
+            profile.name = confirmed_profile.name or profile.name
+            profile.profile_json = json.dumps(confirmed_json, ensure_ascii=False)
+            profile.quality_json = json.dumps(meta_json, ensure_ascii=False)
+            profile.source = "resume"
+            db.flush()
+
+        # 2. 插入 profile_parses（保留原始解析快照）
+        parse_snapshot = ProfileParse(
+            profile_id=profile.id,
+            file_hash=document.file_hash or "",
+            raw_profile_json=json.dumps(raw_json, ensure_ascii=False),
+            confirmed_profile_json=json.dumps(confirmed_json, ensure_ascii=False),
+            document_json=json.dumps(document_json, ensure_ascii=False),
+            meta_json=json.dumps(meta_json, ensure_ascii=False),
+        )
+        db.add(parse_snapshot)
+        db.flush()
+
+        # 3. 回填 active_parse_id + is_edited
+        profile.active_parse_id = parse_snapshot.id
+        profile.is_edited = is_edited
+
+        db.commit()
+        db.refresh(profile)
+        db.refresh(parse_snapshot)
+
+        logger.info(
+            "画像保存成功: user_id=%d, profile_id=%d, parse_id=%d, edited=%s",
+            user_id, profile.id, parse_snapshot.id, is_edited,
+        )
+
+        return SaveProfileResponse(
+            profile_id=profile.id,
+            parse_id=parse_snapshot.id,
+        )
+
+    except Exception:
+        db.rollback()
+        logger.exception("画像保存失败: user_id=%d", user_id)
+        raise

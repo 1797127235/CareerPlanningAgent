@@ -45,6 +45,6 @@ class PdfTextExtractor(TextExtractor):
         return ResumeDocument(
             filename=filename,
             raw_text=raw_text,
-            extractor=self.name,
-            is_scanned=False,
+            text_format="plain",
+            extraction_method=self.name,
         )

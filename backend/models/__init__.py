@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from backend.models.user import User, UserNotification
-from backend.models.profile import Profile, CareerGoal, SjtSession
+from backend.models.profile import Profile, ProfileParse, CareerGoal, SjtSession
 from backend.models.report import Report
 from backend.models.graph import JobNode, JobNodeIntro, JobEdge, JobScore
 from backend.models.jd import JDDiagnosis, JobApplication, InterviewDebrief
@@ -24,6 +24,7 @@ __all__ = [
     "User",
     "UserNotification",
     "Profile",
+    "ProfileParse",
     "CareerGoal",
     "SjtSession",
     "Report",
