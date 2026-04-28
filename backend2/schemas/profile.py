@@ -73,8 +73,9 @@ class ResumeDocument(BaseModel):
     extractor: str = ""  # 生成此文档的提取器名称，如 "pdfplumber"
     is_scanned: bool = False
     warnings: list[str] = Field(default_factory=list)
-    # 保留原始文件字节，以便需要原始文件的策略（如 ResumeSDK）可直接使用
-    file_bytes: bytes | None = None
+    # 保留原始文件字节，以便需要原始文件的策略（如 ResumeSDK）可直接使用。
+    # 用 exclude=True 避免进入 JSON 序列化。
+    file_bytes: bytes | None = Field(default=None, exclude=True)
 
 
 class ProfileData(BaseModel):

@@ -221,7 +221,7 @@ class OcrVlmExtractor(TextExtractor):
             "求职意向", "期望职位", "意向岗位",
         ]
         for header in headers:
-            pattern = re.compile(r"(?<!\n)(?<!\w)(" + re.escape(header) + r")(?\w)(?!\n)")
+            pattern = re.compile(r"(?<!\n)(?<!\w)(" + re.escape(header) + r")(?!\w)(?!\n)")
             text = pattern.sub(r"\n\1\n", text)
 
         # 清理多余空行和模糊标记

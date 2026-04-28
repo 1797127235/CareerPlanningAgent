@@ -49,6 +49,11 @@ class ResumeSDKStrategy(ParseStrategy):
         if not profile:
             return None
 
+        from backend2.services.profile.parser.pipeline import is_insufficient_profile
+        if is_insufficient_profile(profile):
+            logger.warning("ResumeSDK 策略产出空画像，丢弃")
+            return None
+
         return ParseCandidate(
             source="resumesdk_llm_adapter",
             profile=profile,

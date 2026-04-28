@@ -23,7 +23,7 @@ CORS_ORIGINS: list[str] = os.getenv(
 ).split(",")
 
 # ── ResumeSDK ────────────────────────────────────────────────────────────
-RESUMESDK_ENABLED: bool = os.getenv("RESUMESDK_ENABLED", "true").lower() in ("true", "1", "yes")
+RESUMESDK_ENABLED: bool = os.getenv("RESUMESDK_ENABLED", "false").lower() in ("true", "1", "yes")
 RESUMESDK_APPCODE: str = os.getenv("RESUMESDK_APPCODE", "")
 RESUMESDK_UID: str = os.getenv("RESUMESDK_UID", "")
 RESUMESDK_PWD: str = os.getenv("RESUMESDK_PWD", "")

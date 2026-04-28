@@ -198,3 +198,19 @@ def _normalize_profile(profile: ProfileData, document: ResumeDocument) -> Profil
     if profile.knowledge_areas is None:
         profile.knowledge_areas = []
     return profile
+
+
+def is_insufficient_profile(profile: ProfileData) -> bool:
+    """Return True if the profile lacks all critical semantic fields.
+
+    A profile with no name, no skills, no projects, no internships,
+    no education, and no domain is considered empty / insufficient.
+    """
+    return (
+        not profile.name.strip()
+        and len(profile.skills) == 0
+        and len(profile.projects) == 0
+        and len(profile.internships) == 0
+        and not profile.education.school
+        and not profile.primary_domain
+    )

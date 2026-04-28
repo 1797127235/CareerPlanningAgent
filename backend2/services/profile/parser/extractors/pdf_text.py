@@ -11,11 +11,12 @@ from backend2.schemas.profile import ResumeDocument
 from backend2.services.profile.parser.base import TextExtractor
 
 logger = logging.getLogger(__name__)
-_MAX_TEXT_LEN = 30000  # 硬性截断上限，防止 token 爆炸
-
-
 class PdfTextExtractor(TextExtractor):
-    """从文字型 PDF 提取文本。扫描件 PDF 返回 None。"""
+    """从文字型 PDF 提取文本。扫描件 PDF 返回 None。
+
+    注意：不在 extractor 层截断 raw_text。截断应在 strategy 内部生成 prompt 时进行，
+    以便保留完整原文用于重新解析。
+    """
 
     name = "pdfplumber"
 
@@ -40,10 +41,6 @@ class PdfTextExtractor(TextExtractor):
         if not raw_text.strip():
             logger.info("PDF 无可提取文字，疑似扫描件 — 自动降级到 OCR")
             return None  # 交给 OcrVlmExtractor
-
-        if len(raw_text) > _MAX_TEXT_LEN:
-            logger.warning("PDF 文本过长，截断: %d → %d 字符", len(raw_text), _MAX_TEXT_LEN)
-            raw_text = raw_text[:_MAX_TEXT_LEN]
 
         return ResumeDocument(
             filename=filename,
