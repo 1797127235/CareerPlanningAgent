@@ -19,10 +19,15 @@ from backend2.core.security import get_current_user
 from backend2.db.session import get_db
 from backend2.schemas.profile import (
     ParseResumePreviewResponse,
+    ProfileData,
     SaveProfileRequest,
     SaveProfileResponse,
 )
-from backend2.services.profile.service import parse_resume_preview, save_profile
+from backend2.services.profile.service import (
+    get_my_profile as _get_my_profile,
+    parse_resume_preview,
+    save_profile,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +71,11 @@ async def parse_preview(file: UploadFile = File(...)) -> ParseResumePreviewRespo
             len(result.profile.skills),
         )
         return result
-    except Exception as e:
+    except HTTPException:
+        raise
+    except Exception:
         logger.exception("解析简历失败: %s", filename)
-        raise HTTPException(status_code=500, detail=f"解析失败: {e}")
+        raise HTTPException(status_code=500, detail="解析失败，请稍后重试")
 
 
 @router.post("", response_model=SaveProfileResponse)
@@ -94,3 +101,18 @@ def create_profile(
     except Exception:
         logger.exception("保存画像失败: user_id=%d", current_user.id)
         raise HTTPException(status_code=500, detail="保存失败，请稍后重试")
+
+
+@router.get("/me", response_model=ProfileData)
+def get_my_profile(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProfileData:
+    """获取当前用户最新确认后的画像（v2 格式）。"""
+    try:
+        return _get_my_profile(db=db, user_id=current_user.id)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("读取画像失败: user_id=%d", current_user.id)
+        raise HTTPException(status_code=500, detail="读取画像失败")

@@ -11,6 +11,18 @@ export default defineConfig({
   server: {
     port: 5174,
     proxy: {
+      '/api/v2': {
+        target: 'http://localhost:8001',
+        changeOrigin: true,
+        configure: (proxy, _options) => {
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            if (req.headers.accept?.includes('text/event-stream')) {
+              proxyRes.headers['cache-control'] = 'no-cache, no-transform'
+              proxyRes.headers['x-accel-buffering'] = 'no'
+            }
+          })
+        },
+      },
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,

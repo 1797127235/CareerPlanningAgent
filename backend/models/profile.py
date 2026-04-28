@@ -46,7 +46,10 @@ class Profile(Base):
 
     owner: Mapped["User"] = relationship("User", back_populates="profiles")
     parses: Mapped[list["ProfileParse"]] = relationship(
-        "ProfileParse", back_populates="profile", cascade="all, delete-orphan"
+        "ProfileParse",
+        back_populates="profile",
+        cascade="all, delete-orphan",
+        foreign_keys="ProfileParse.profile_id",
     )
 
 
@@ -76,7 +79,11 @@ class ProfileParse(Base):
     )  # ParseMeta 快照
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
 
-    profile: Mapped["Profile"] = relationship("Profile", back_populates="parses")
+    profile: Mapped["Profile"] = relationship(
+        "Profile",
+        back_populates="parses",
+        foreign_keys=[profile_id],
+    )
 
 
 class SjtSession(Base):

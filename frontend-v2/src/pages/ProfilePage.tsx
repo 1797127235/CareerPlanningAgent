@@ -5,6 +5,8 @@ import { Upload, PenLine, AlertTriangle, RefreshCw } from 'lucide-react'
 import { useProfileData, type ManualProfilePayload } from '@/hooks/useProfileData'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
 import { setProfileName, updateProfile } from '@/api/profiles'
+import { saveProfile } from '@/api/profiles-v2'
+import type { V2ParsePreviewResponse, V2ProfileData } from '@/api/profiles-v2'
 import { fetchRecommendations, type Recommendation as ApiRecommendation } from '@/api/recommendations'
 import { setCareerGoal } from '@/api/graph'
 import { useToast } from '@/components/ui'
@@ -90,7 +92,7 @@ export default function ProfilePage() {
   const { toast } = useToast()
 
   const { profile, loading, loadError, loadProfile, savingEdit, handleSaveEdit, handleDelete } = useProfileData(!isMock)
-  const { uploadStep, uploadError, justUploaded, selectedFileName, fileInputRef, triggerFileDialog, onFileSelected } = useResumeUpload(loadProfile)
+  const { uploadStep, uploadError, justUploaded, selectedFileName, fileInputRef, triggerFileDialog, onFileSelected, previewData, clearPreviewData } = useResumeUpload()
 
   const [ceremonyAnimating, setCeremonyAnimating] = useState(false)
   useEffect(() => {
@@ -102,7 +104,128 @@ export default function ProfilePage() {
   const [showNamePrompt, setShowNamePrompt] = useState(false)
   const [pendingName, setPendingName] = useState('')
   const [showChangeGoalConfirm, setShowChangeGoalConfirm] = useState(false)
+  const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [savingPreview, setSavingPreview] = useState(false)
+  const [previewFormData, setPreviewFormData] = useState<ManualProfilePayload | null>(null)
+  const [pendingPreviewForEdit, setPendingPreviewForEdit] = useState<V2ParsePreviewResponse | null>(null)
   const namePromptShown = useRef(false)
+
+  // 当 parse-preview 返回数据时自动打开预览模态框
+  useEffect(() => {
+    if (previewData) setShowPreviewModal(true)
+  }, [previewData])
+
+  const handleSavePreviewDirect = useCallback(async () => {
+    if (!previewData) return
+    setSavingPreview(true)
+    try {
+      await saveProfile({
+        raw_profile: previewData.profile,
+        confirmed_profile: previewData.profile,
+        document: previewData.document,
+        parse_meta: previewData.meta,
+      })
+      clearPreviewData()
+      setShowPreviewModal(false)
+      await loadProfile()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
+    } finally {
+      setSavingPreview(false)
+    }
+  }, [previewData, clearPreviewData, loadProfile, toast])
+
+  const v2ToManualPayload = useCallback((v2: V2ProfileData): ManualProfilePayload => {
+    const edu = v2.education[0] || { degree: '', major: '', school: '' }
+    return {
+      name: v2.name,
+      education: {
+        degree: edu.degree || '',
+        major: edu.major || '',
+        school: edu.school || '',
+      },
+      experience_years: 0,
+      job_target: v2.job_target_text,
+      skills: v2.skills.map((s) => ({
+        name: s.name,
+        level: (s.level as Skill['level']) || 'familiar',
+      })),
+      knowledge_areas: [],
+      projects: v2.projects.map((p) => ({
+        name: p.name,
+        description: p.description,
+        tech_stack: p.tech_stack,
+      })),
+      internships: v2.internships.map((i) => ({
+        company: i.company,
+        role: i.role,
+        duration: i.duration,
+        tech_stack: i.tech_stack,
+        highlights: i.highlights,
+      })),
+      certificates: v2.certificates,
+      awards: v2.awards,
+    }
+  }, [])
+
+  const normalizeV2SkillLevel = useCallback((level: Skill['level']): V2ProfileData['skills'][number]['level'] => {
+    if (level === 'advanced' || level === 'expert') return 'advanced'
+    if (level === 'intermediate' || level === 'proficient') return 'intermediate'
+    if (level === 'beginner') return 'beginner'
+    return 'familiar'
+  }, [])
+
+  const manualPayloadToV2Profile = useCallback((payload: ManualProfilePayload, base: V2ProfileData): V2ProfileData => {
+    const baseEducation = base.education[0] || { degree: '', major: '', school: '', duration: '', graduation_year: null }
+
+    return {
+      ...base,
+      name: payload.name,
+      job_target_text: payload.job_target,
+      education: payload.education.school || payload.education.major || payload.education.degree
+        ? [{
+            ...baseEducation,
+            degree: payload.education.degree,
+            major: payload.education.major,
+            school: payload.education.school,
+          }]
+        : [],
+      skills: payload.skills
+        .filter((s) => s.name.trim())
+        .map((s) => ({ name: s.name.trim(), level: normalizeV2SkillLevel(s.level) })),
+      projects: payload.projects.map((project, index) => {
+        const baseProject = base.projects[index] || { name: '', description: '', tech_stack: [], duration: '', highlights: '' }
+        if (typeof project === 'string') {
+          return { ...baseProject, description: project.trim() }
+        }
+        return {
+          ...baseProject,
+          name: typeof project.name === 'string' ? project.name : baseProject.name,
+          description: typeof project.description === 'string' ? project.description : baseProject.description,
+          tech_stack: Array.isArray(project.tech_stack) ? project.tech_stack.map(String) : baseProject.tech_stack,
+          highlights: typeof project.highlights === 'string' ? project.highlights : baseProject.highlights,
+        }
+      }).filter((p) => p.name || p.description || p.tech_stack.length || p.highlights),
+      internships: payload.internships.map((i) => ({
+        company: i.company,
+        role: i.role,
+        duration: i.duration || '',
+        tech_stack: i.tech_stack || [],
+        highlights: i.highlights || '',
+      })),
+      certificates: payload.certificates,
+      awards: payload.awards,
+    }
+  }, [normalizeV2SkillLevel])
+
+  const handleEditThenSave = useCallback(() => {
+    if (!previewData) return
+    setPendingPreviewForEdit(previewData)
+    setPreviewFormData(v2ToManualPayload(previewData.profile))
+    clearPreviewData()
+    setShowPreviewModal(false)
+    setShowManual(true)
+  }, [previewData, clearPreviewData, v2ToManualPayload])
 
   const data = isMock ? mockProfileData : profile
   const hasProfile = isMock
@@ -216,30 +339,54 @@ export default function ProfilePage() {
         <div className="max-w-[860px] mx-auto px-[var(--space-6)] md:px-[var(--space-7)] pt-[80px] pb-[var(--space-6)]">
           <ManualProfileForm
             onSave={async (payload: ManualProfilePayload) => {
-              await handleSaveEdit(payload)
+              if (pendingPreviewForEdit) {
+                setSavingPreview(true)
+                try {
+                  const confirmedProfile = manualPayloadToV2Profile(payload, pendingPreviewForEdit.profile)
+                  await saveProfile({
+                    raw_profile: pendingPreviewForEdit.profile,
+                    confirmed_profile: confirmedProfile,
+                    document: pendingPreviewForEdit.document,
+                    parse_meta: pendingPreviewForEdit.meta,
+                  })
+                  await loadProfile()
+                } finally {
+                  setSavingPreview(false)
+                }
+              } else {
+                await handleSaveEdit(payload)
+              }
+              setPendingPreviewForEdit(null)
+              setPreviewFormData(null)
               setShowManual(false)
             }}
-            onCancel={() => setShowManual(false)}
-            saving={savingEdit}
+            onCancel={() => {
+              setPendingPreviewForEdit(null)
+              setPreviewFormData(null)
+              setShowManual(false)
+            }}
+            saving={savingEdit || savingPreview}
             initialData={
-              data
-                ? {
-                    name: data.name || '',
-                    education: {
-                      degree: (data.profile?.education as { degree?: string })?.degree || '',
-                      major: (data.profile?.education as { major?: string })?.major || '',
-                      school: (data.profile?.education as { school?: string })?.school || '',
-                    },
-                    experience_years: (data.profile?.experience_years as number) || 0,
-                    job_target: (data.profile?.job_target as string) || '',
-                    skills: (data.profile?.skills as ManualProfilePayload['skills']) || [],
-                    knowledge_areas: (data.profile?.knowledge_areas as string[]) || [],
-                    projects: (data.profile?.projects as ManualProfilePayload['projects']) || [],
-                    internships: (data.profile?.internships as ManualProfilePayload['internships']) || [],
-                    certificates: (data.profile?.certificates as string[]) || [],
-                    awards: (data.profile?.awards as string[]) || [],
-                  }
-                : undefined
+              previewFormData
+                ? previewFormData
+                : data
+                  ? {
+                      name: data.name || '',
+                      education: {
+                        degree: (data.profile?.education as { degree?: string })?.degree || '',
+                        major: (data.profile?.education as { major?: string })?.major || '',
+                        school: (data.profile?.education as { school?: string })?.school || '',
+                      },
+                      experience_years: (data.profile?.experience_years as number) || 0,
+                      job_target: (data.profile?.job_target as string) || '',
+                      skills: (data.profile?.skills as ManualProfilePayload['skills']) || [],
+                      knowledge_areas: (data.profile?.knowledge_areas as string[]) || [],
+                      projects: (data.profile?.projects as ManualProfilePayload['projects']) || [],
+                      internships: (data.profile?.internships as ManualProfilePayload['internships']) || [],
+                      certificates: (data.profile?.certificates as string[]) || [],
+                      awards: (data.profile?.awards as string[]) || [],
+                    }
+                  : undefined
             }
           />
         </div>
@@ -430,6 +577,146 @@ export default function ProfilePage() {
                   className="flex-1 py-2.5 rounded-full text-[var(--text-sm)] font-medium text-[var(--ink-2)] hover:text-[var(--ink-1)] transition-colors duration-200 active:scale-[0.98]"
                 >
                   确认更换
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Preview modal — parse-preview 结果确认 */}
+      <AnimatePresence>
+        {showPreviewModal && previewData && (
+          <motion.div
+            {...MODAL_BACKDROP}
+            className="fixed inset-0 bg-[var(--ink-1)]/20 backdrop-blur-sm z-[999] flex items-center justify-center p-6"
+            onClick={() => {
+              setShowPreviewModal(false)
+              clearPreviewData()
+            }}
+          >
+            <motion.div
+              {...MODAL_CARD}
+              className="bg-[var(--bg-card)] rounded-[var(--radius-lg)] shadow-[var(--shadow-float)] p-6 max-w-2xl w-full border border-[var(--line)] max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-5">
+                <div>
+                  <h3 className="text-[var(--text-xl)] font-semibold text-[var(--ink-1)]">简历解析完成</h3>
+                  <p className="text-[var(--text-sm)] text-[var(--ink-3)] mt-0.5">
+                    质量评分 <span className="font-medium text-[var(--ink-1)]">{previewData.meta.quality_score}</span> / 100
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPreviewModal(false)
+                    clearPreviewData()
+                  }}
+                  className="text-[var(--ink-3)] hover:text-[var(--ink-1)] transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Parsed content */}
+              <div className="space-y-4 text-[var(--text-sm)]">
+                {/* Name & Target */}
+                {(previewData.profile.name || previewData.profile.job_target_text) && (
+                  <div className="pb-3 border-b border-[var(--line)]">
+                    {previewData.profile.name && (
+                      <p className="text-[var(--ink-1)] font-medium">{previewData.profile.name}</p>
+                    )}
+                    {previewData.profile.job_target_text && (
+                      <p className="text-[var(--ink-3)] mt-0.5">求职意向：{previewData.profile.job_target_text}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Education */}
+                {previewData.profile.education.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium tracking-wider text-[var(--ink-3)] uppercase mb-1.5">教育经历</p>
+                    {previewData.profile.education.map((edu, i) => (
+                      <div key={i} className="text-[var(--ink-1)]">
+                        {edu.school} {edu.degree && `· ${edu.degree}`} {edu.major && `· ${edu.major}`}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Skills */}
+                {previewData.profile.skills.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium tracking-wider text-[var(--ink-3)] uppercase mb-1.5">技能</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {previewData.profile.skills.map((s, i) => (
+                        <span key={i} className="px-2 py-0.5 rounded-full bg-[var(--line)]/40 text-[var(--ink-2)] text-[12px]">
+                          {s.name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Projects */}
+                {previewData.profile.projects.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium tracking-wider text-[var(--ink-3)] uppercase mb-1.5">项目经历</p>
+                    <div className="space-y-1">
+                      {previewData.profile.projects.map((p, i) => (
+                        <div key={i} className="text-[var(--ink-1)]">
+                          {p.name} {p.tech_stack.length > 0 && (
+                            <span className="text-[var(--ink-3)]">· {p.tech_stack.join(', ')}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Internships */}
+                {previewData.profile.internships.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-medium tracking-wider text-[var(--ink-3)] uppercase mb-1.5">实习 / 工作经历</p>
+                    <div className="space-y-1">
+                      {previewData.profile.internships.map((intern, i) => (
+                        <div key={i} className="text-[var(--ink-1)]">
+                          {intern.company} {intern.role && `· ${intern.role}`}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Awards & Certificates */}
+                {(previewData.profile.awards.length > 0 || previewData.profile.certificates.length > 0) && (
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[var(--ink-2)]">
+                    {previewData.profile.awards.length > 0 && (
+                      <span>获奖：{previewData.profile.awards.length} 项</span>
+                    )}
+                    {previewData.profile.certificates.length > 0 && (
+                      <span>证书：{previewData.profile.certificates.length} 项</span>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="mt-6 pt-4 border-t border-[var(--line)] flex gap-3">
+                <button
+                  onClick={handleEditThenSave}
+                  disabled={savingPreview}
+                  className="flex-[2] py-2.5 rounded-full text-[var(--text-sm)] font-medium border border-[var(--line)] text-[var(--ink-1)] hover:bg-[var(--line)]/10 transition-colors duration-200 active:scale-[0.98] disabled:opacity-50"
+                >
+                  先编辑再保存
+                </button>
+                <button
+                  onClick={handleSavePreviewDirect}
+                  disabled={savingPreview}
+                  className="flex-1 py-2.5 rounded-full text-[var(--text-sm)] font-medium bg-[var(--chestnut)] text-white hover:opacity-90 transition-opacity duration-200 active:scale-[0.98] disabled:opacity-50"
+                >
+                  {savingPreview ? '保存中…' : '确认并保存'}
                 </button>
               </div>
             </motion.div>

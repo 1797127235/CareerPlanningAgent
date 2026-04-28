@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from backend.models.profile import Profile, ProfileParse
 from backend2.schemas.profile import (
     ParseResumePreviewResponse,
+    ProfileData,
     ResumeFile,
     SaveProfileRequest,
     SaveProfileResponse,
@@ -19,6 +20,38 @@ from backend2.services.profile.parser.evidence import resumesdk
 from backend2.services.profile.parser.pipeline import ParserPipeline
 
 logger = logging.getLogger(__name__)
+
+
+def _to_v1_profile_json(v2: dict) -> dict:
+    """把 v2 ProfileData 转换为 v1 兼容格式，供前端 readonly view 使用。
+
+    v2 和 v1 的核心差异：
+    - education: v2 是数组，v1 是单个对象
+    - projects: v2 是对象数组（含 name/description/tech_stack），v1 前端已兼容此格式
+    - job_target_text -> job_target
+    """
+    education_list = v2.get("education", [])
+    education = education_list[0] if isinstance(education_list, list) and education_list else {}
+    v1_edu = {
+        "degree": education.get("degree", "") if isinstance(education, dict) else "",
+        "major": education.get("major", "") if isinstance(education, dict) else "",
+        "school": education.get("school", "") if isinstance(education, dict) else "",
+    }
+
+    return {
+        "name": v2.get("name", ""),
+        "skills": v2.get("skills", []),
+        "education": v1_edu,
+        "projects": v2.get("projects", []),
+        "internships": v2.get("internships", []),
+        "certificates": v2.get("certificates", []),
+        "awards": v2.get("awards", []),
+        "job_target": v2.get("job_target_text", ""),
+        "knowledge_areas": [],
+        "experience_years": 0,
+        "soft_skills": {},
+    }
+
 
 # 单例管线，可复用
 _pipeline = ParserPipeline(evidence_collector=resumesdk.collect)
@@ -71,6 +104,9 @@ def save_profile(
     meta_json["quality_score"] = quality_meta.quality_score
     meta_json["quality_checks"] = quality_meta.quality_checks
 
+    # 生成 v1 兼容格式，供前端 readonly view 使用
+    v1_compatible = _to_v1_profile_json(confirmed_json)
+
     # 事务开始
     try:
         # 1. 插入或更新 profiles
@@ -82,7 +118,7 @@ def save_profile(
             profile = Profile(
                 user_id=user_id,
                 name=confirmed_profile.name or "",
-                profile_json=json.dumps(confirmed_json, ensure_ascii=False),
+                profile_json=json.dumps(v1_compatible, ensure_ascii=False),
                 quality_json=json.dumps(meta_json, ensure_ascii=False),
                 source="resume",
             )
@@ -90,7 +126,7 @@ def save_profile(
             db.flush()  # 拿到 profile.id
         else:
             profile.name = confirmed_profile.name or profile.name
-            profile.profile_json = json.dumps(confirmed_json, ensure_ascii=False)
+            profile.profile_json = json.dumps(v1_compatible, ensure_ascii=False)
             profile.quality_json = json.dumps(meta_json, ensure_ascii=False)
             profile.source = "resume"
             db.flush()
@@ -129,3 +165,39 @@ def save_profile(
         db.rollback()
         logger.exception("画像保存失败: user_id=%d", user_id)
         raise
+
+
+def get_my_profile(db: Session, user_id: int) -> ProfileData:
+    """读取用户最新确认后的画像。
+
+    优先从 active_parse 取 confirmed_profile_json（v2 原始格式），
+    无快照时从 profiles.profile_json 降级返回。
+    """
+    from fastapi import HTTPException
+
+    profile = db.query(Profile).filter(Profile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(status_code=404, detail="未找到画像")
+
+    # 优先取 active_parse 的 confirmed_profile_json
+    if profile.active_parse_id:
+        parse_snapshot = db.query(ProfileParse).filter(
+            ProfileParse.id == profile.active_parse_id
+        ).first()
+        if parse_snapshot and parse_snapshot.confirmed_profile_json:
+            try:
+                confirmed = json.loads(parse_snapshot.confirmed_profile_json)
+                return ProfileData.model_validate(confirmed)
+            except Exception:
+                logger.warning(
+                    "confirmed_profile_json 解析失败，降级到 profile_json: parse_id=%d",
+                    parse_snapshot.id,
+                )
+
+    # 降级：从 profiles.profile_json 读取（v1 兼容格式）
+    try:
+        data = json.loads(profile.profile_json or "{}")
+        return ProfileData.model_validate(data)
+    except Exception as e:
+        logger.exception("画像数据解析失败: profile_id=%d", profile.id)
+        raise HTTPException(status_code=500, detail=f"画像数据损坏: {e}")

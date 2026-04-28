@@ -443,8 +443,12 @@ function Dashboard({
 function CTASection({ isAuthenticated }: { isAuthenticated: boolean }) {
   const navigate = useNavigate()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { uploading, uploadStep, uploadError, triggerFileDialog, onFileSelected } =
-    useResumeUpload(async () => { navigate('/profile') })
+  const { uploading, uploadStep, uploadError, triggerFileDialog, onFileSelected, previewData } =
+    useResumeUpload()
+
+  useEffect(() => {
+    if (previewData) navigate('/profile')
+  }, [previewData, navigate])
 
   const handleUploadClick = () => {
     if (isAuthenticated) {

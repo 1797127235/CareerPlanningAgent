@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { parseResume, updateProfile } from '@/api/profiles'
+import { parsePreview } from '@/api/profiles-v2'
+import type { V2ParsePreviewResponse } from '@/api/profiles-v2'
 
 interface UseResumeUploadReturn {
   uploading: boolean
@@ -11,6 +12,8 @@ interface UseResumeUploadReturn {
   fileInputRef: React.RefObject<HTMLInputElement | null>
   triggerFileDialog: () => void
   onFileSelected: (e: React.ChangeEvent<HTMLInputElement>) => void
+  previewData: V2ParsePreviewResponse | null
+  clearPreviewData: () => void
 }
 
 let _uploading = false
@@ -18,6 +21,7 @@ let _step = 0
 let _error: string | null = null
 let _justUploaded = false
 let _fileName = ''
+let _previewData: V2ParsePreviewResponse | null = null
 const _listeners = new Set<() => void>()
 
 function _set(uploading: boolean, step: number, error: string | null, justUploaded?: boolean) {
@@ -28,12 +32,13 @@ function _set(uploading: boolean, step: number, error: string | null, justUpload
   _listeners.forEach((fn) => fn())
 }
 
-export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUploadReturn {
+export function useResumeUpload(): UseResumeUploadReturn {
   const [uploading, setUploading] = useState(_uploading)
   const [uploadStep, setUploadStep] = useState(_step)
   const [uploadError, setUploadError] = useState(_error)
   const [justUploaded, setJustUploaded] = useState(_justUploaded)
   const [selectedFileName, setSelectedFileName] = useState(_fileName)
+  const [previewData, setPreviewData] = useState<V2ParsePreviewResponse | null>(_previewData)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -43,6 +48,7 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
       setUploadError(_error)
       setJustUploaded(_justUploaded)
       setSelectedFileName(_fileName)
+      setPreviewData(_previewData)
     }
     sync()
     _listeners.add(sync)
@@ -54,6 +60,11 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
     _fileName = ''
     setJustUploaded(false)
     setSelectedFileName('')
+  }, [])
+
+  const clearPreviewData = useCallback(() => {
+    _previewData = null
+    setPreviewData(null)
   }, [])
 
   const triggerFileDialog = useCallback(() => {
@@ -70,22 +81,16 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
       _set(true, 1, null)
       try {
         _set(true, 2, null)
-        const parsed = await parseResume(file)
-        _set(true, 3, null)
-        await updateProfile({
-          profile: { ...parsed.profile, source: 'resume' },
-          quality: parsed.quality,
-          merge: true,
-        })
+        const parsed = await parsePreview(file)
+        _previewData = parsed
         _set(false, 0, null)
-        await onSuccess()
         _justUploaded = true
         _listeners.forEach((fn) => fn())
       } catch (err) {
         _set(false, 0, err instanceof Error ? err.message : '上传失败')
       }
     },
-    [onSuccess],
+    [],
   )
 
   return {
@@ -98,5 +103,7 @@ export function useResumeUpload(onSuccess: () => Promise<void>): UseResumeUpload
     fileInputRef,
     triggerFileDialog,
     onFileSelected,
+    previewData,
+    clearPreviewData,
   }
 }
