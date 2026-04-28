@@ -79,3 +79,10 @@ knowledge-base-submission/04-ETL中间产物/*.parquet
 
 # Claude Code local skills (not project code)
 .claude/
+
+# OpenCode local skills
+.opencode/
+# Local research / temp files
+.firecrawl/
+*.zip
+doc_output.txt
