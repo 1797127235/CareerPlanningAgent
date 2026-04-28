@@ -76,3 +76,6 @@ frontend-v2/artifacts/
 
 # 大文件：ETL 中间产物（Parquet 超出 GitHub 100MB 限制）
 knowledge-base-submission/04-ETL中间产物/*.parquet
+
+# Claude Code local skills (not project code)
+.claude/
