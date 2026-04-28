@@ -22,13 +22,6 @@ export async function updateProfile(payload: UpdateProfilePayload): Promise<void
   })
 }
 
-/** Parse resume file (returns preview, does NOT save) */
-export async function parseResume(file: File): Promise<{ profile: Record<string, unknown>; quality: Record<string, unknown> }> {
-  const res = await apiUpload<{ profile: Record<string, unknown>; quality: Record<string, unknown> }>('/profiles/parse-resume', file)
-  if (!res.success || !res.data) throw new Error(res.message || '简历解析失败')
-  return res.data
-}
-
 /** Set profile display name */
 export async function setProfileName(name: string): Promise<void> {
   await apiFetch('/profiles/name', {
