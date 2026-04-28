@@ -99,6 +99,20 @@ export {
   refineProfileProject,
 } from './profile'
 export type { UpdateProfilePayload, SjtQuestion, SjtAnswer, SjtGenerateResult, SjtDimensionResult, SjtSubmitResult } from './profile'
+export {
+  parsePreview,
+  saveProfile,
+  fetchMyProfileV2,
+} from './profiles-v2'
+export type {
+  V2ProfileData,
+  V2Education,
+  V2Skill,
+  V2Internship,
+  V2Project,
+  V2ParsePreviewResponse,
+  V2SaveProfileResponse,
+} from '@/types/profile-v2'
 export { fetchRecommendations, fetchMatchDetail } from './recommendations'
 export type { Recommendation, RecommendationsResponse, MatchDetail } from './recommendations'
 export {
