@@ -27,6 +27,24 @@ export interface V2Project {
   highlights: string
 }
 
+export interface V2DimensionScore {
+  name: string
+  score: number
+  source: 'resume' | 'user_input' | 'manual'
+}
+
+export interface V2Constraint {
+  type: string
+  value: string
+  label: string
+}
+
+export interface V2Preference {
+  type: string
+  value: string
+  label: string
+}
+
 export interface V2ProfileData {
   name: string
   job_target_text: string
@@ -38,6 +56,12 @@ export interface V2ProfileData {
   awards: string[]
   certificates: string[]
   raw_text: string
+  dimension_scores?: V2DimensionScore[]
+  tags?: string[]
+  strengths?: string[]
+  weaknesses?: string[]
+  constraints?: V2Constraint[]
+  preferences?: V2Preference[]
 }
 
 export interface V2ResumeDocument {

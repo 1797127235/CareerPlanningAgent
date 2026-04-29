@@ -84,3 +84,20 @@ export async function saveProfile(request: {
 export async function fetchMyProfileV2(): Promise<V2ProfileData> {
   return v2RawFetch<V2ProfileData>('/profiles/me')
 }
+
+export interface V2ProfileDataPatch {
+  dimension_scores?: Array<{ name: string; score: number; source: string }>
+  tags?: string[]
+  strengths?: string[]
+  weaknesses?: string[]
+  constraints?: Array<{ type: string; value: string; label: string }>
+  preferences?: Array<{ type: string; value: string; label: string }>
+}
+
+/** 局部更新用户画像（补充信息） */
+export async function patchProfileData(patch: V2ProfileDataPatch): Promise<V2ProfileData> {
+  return v2RawFetch<V2ProfileData>('/profiles/me/profile-data', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  })
+}
