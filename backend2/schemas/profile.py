@@ -229,3 +229,13 @@ class SaveProfileResponse(BaseModel):
     profile_id: int
     parse_id: int
     message: str = "保存成功"
+
+
+class ProfileDataPatch(BaseModel):
+    """允许局部更新的字段子集。"""
+    dimension_scores: list[DimensionScore] | None = None
+    tags: list[str] | None = None
+    strengths: list[str] | None = None
+    weaknesses: list[str] | None = None
+    constraints: list[Constraint] | None = None
+    preferences: list[Preference] | None = None

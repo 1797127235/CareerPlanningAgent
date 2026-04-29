@@ -5,12 +5,13 @@ import hashlib
 import json
 import logging
 
-from fastapi import UploadFile
+from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from backend.models.profile import Profile, ProfileParse
 from backend2.schemas.profile import (
     ParseResumePreviewResponse,
     ProfileData,
+    ProfileDataPatch,
     ResumeFile,
     SaveProfileRequest,
     SaveProfileResponse,
@@ -114,6 +115,30 @@ def save_profile(
         db.refresh(profile)
         db.refresh(parse_snapshot)
 
+        # Demo: trigger v1 recommendation generation in background
+        # so profile page can show directions immediately after upload.
+        try:
+            import threading
+            from backend.db import SessionLocal
+            from backend.services.graph.locator import _auto_locate_on_graph
+
+            profile_data_for_v1 = json.loads(profile.profile_json or "{}")
+            if "job_target_text" in profile_data_for_v1 and "job_target" not in profile_data_for_v1:
+                profile_data_for_v1["job_target"] = profile_data_for_v1.pop("job_target_text")
+
+            def _bg_locate():
+                db_bg = SessionLocal()
+                try:
+                    _auto_locate_on_graph(profile.id, user_id, profile_data_for_v1, db_bg)
+                except Exception:
+                    logger.exception("后台推荐生成失败")
+                finally:
+                    db_bg.close()
+
+            threading.Thread(target=_bg_locate, daemon=True).start()
+        except Exception:
+            logger.exception("启动后台推荐生成失败")
+
         logger.info(
             "画像保存成功: user_id=%d, profile_id=%d, parse_id=%d, edited=%s",
             user_id, profile.id, parse_snapshot.id, is_edited,
@@ -130,28 +155,57 @@ def save_profile(
         raise
 
 def get_my_profile(db: Session, user_id: int) -> ProfileData:
-    """
-    读取用户最新确认后的画像。
+    """读取用户最新确认后的画像。
+
     优先从 active_parse 取 confirmed_profile_json（v2 原始格式），
     无快照时从 profiles.profile_json 降级返回。
     """
-    from fastapi import HTTPException
+    from backend2.services.profile.resolver import resolve_profile_context
 
+    profile_data, _profile_id, _parse_id = resolve_profile_context(db, user_id)
+    return profile_data
+
+
+def patch_profile_data(
+    db: Session,
+    user_id: int,
+    patch: ProfileDataPatch,
+) -> ProfileData:
+    """局部更新用户画像，不生成新的 parse 快照。
+
+    同时更新 profiles.profile_json 和当前 active_parse 的 confirmed_profile_json，
+    因为 get_my_profile() 优先从 active_parse 读取。
+    """
+    from backend2.services.profile.resolver import resolve_profile_context
+    from backend.models.profile import Profile, ProfileParse
+
+    profile_data, profile_id, _parse_id = resolve_profile_context(db, user_id)
+    if profile_id is None:
+        raise HTTPException(status_code=404, detail="画像不存在")
+
+    # 读取当前 JSON
     profile = db.query(Profile).filter(Profile.user_id == user_id).first()
-    if not profile:
-        raise HTTPException(status_code=404, detail="未找到画像")
+    current_json = json.loads(profile.profile_json or "{}")
 
-    # 优先取 active_parse 的 confirmed_profile_json
+    # 只覆盖请求中提供的字段
+    patch_dict = patch.model_dump(exclude_unset=True, mode="json")
+    current_json.update(patch_dict)
+
+    updated_json = json.dumps(current_json, ensure_ascii=False)
+
+    # 写回 profiles 主表
+    profile.profile_json = updated_json
+
+    # 同步更新当前 active_parse 的 confirmed_profile_json
     if profile.active_parse_id:
         parse_snapshot = db.query(ProfileParse).filter(
             ProfileParse.id == profile.active_parse_id
         ).first()
-        if parse_snapshot and parse_snapshot.confirmed_profile_json:
-            try:
-                confirmed = json.loads(parse_snapshot.confirmed_profile_json)
-                return ProfileData.model_validate(confirmed)
-            except Exception:
-                logger.warning(
-                    "confirmed_profile_json 解析失败，降级到 profile_json: parse_id=%d",
-                    parse_snapshot.id,
-                )
+        if parse_snapshot:
+            parse_snapshot.confirmed_profile_json = updated_json
+
+    db.commit()
+    db.refresh(profile)
+
+    logger.info("画像局部更新: user_id=%d, fields=%s", user_id, list(patch_dict.keys()))
+    return ProfileData.model_validate(current_json)

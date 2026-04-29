@@ -20,12 +20,14 @@ from backend2.db.session import get_db
 from backend2.schemas.profile import (
     ParseResumePreviewResponse,
     ProfileData,
+    ProfileDataPatch,
     SaveProfileRequest,
     SaveProfileResponse,
 )
 from backend2.services.profile.service import (
     get_my_profile as _get_my_profile,
     parse_resume_preview,
+    patch_profile_data,
     save_profile,
 )
 
@@ -116,3 +118,19 @@ def get_my_profile(
     except Exception:
         logger.exception("读取画像失败: user_id=%d", current_user.id)
         raise HTTPException(status_code=500, detail="读取画像失败")
+
+
+@router.patch("/me/profile-data", response_model=ProfileData)
+def patch_my_profile(
+    patch: ProfileDataPatch,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> ProfileData:
+    """局部更新当前用户画像（补充信息）。"""
+    try:
+        return patch_profile_data(db=db, user_id=current_user.id, patch=patch)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("局部更新画像失败: user_id=%d", current_user.id)
+        raise HTTPException(status_code=500, detail="更新失败")
