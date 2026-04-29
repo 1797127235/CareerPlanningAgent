@@ -115,30 +115,6 @@ def save_profile(
         db.refresh(profile)
         db.refresh(parse_snapshot)
 
-        # Demo: trigger v1 recommendation generation in background
-        # so profile page can show directions immediately after upload.
-        try:
-            import threading
-            from backend.db import SessionLocal
-            from backend.services.graph.locator import _auto_locate_on_graph
-
-            profile_data_for_v1 = json.loads(profile.profile_json or "{}")
-            if "job_target_text" in profile_data_for_v1 and "job_target" not in profile_data_for_v1:
-                profile_data_for_v1["job_target"] = profile_data_for_v1.pop("job_target_text")
-
-            def _bg_locate():
-                db_bg = SessionLocal()
-                try:
-                    _auto_locate_on_graph(profile.id, user_id, profile_data_for_v1, db_bg)
-                except Exception:
-                    logger.exception("后台推荐生成失败")
-                finally:
-                    db_bg.close()
-
-            threading.Thread(target=_bg_locate, daemon=True).start()
-        except Exception:
-            logger.exception("启动后台推荐生成失败")
-
         logger.info(
             "画像保存成功: user_id=%d, profile_id=%d, parse_id=%d, edited=%s",
             user_id, profile.id, parse_snapshot.id, is_edited,

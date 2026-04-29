@@ -103,6 +103,7 @@ export {
   parsePreview,
   saveProfile,
   fetchMyProfileV2,
+  patchProfileData,
 } from './profiles-v2'
 export type {
   V2ProfileData,
