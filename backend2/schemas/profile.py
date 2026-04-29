@@ -19,6 +19,27 @@ class Skill(BaseModel):
     level: Literal["beginner", "familiar", "intermediate", "advanced"] = "familiar"
 
 
+class DimensionScore(BaseModel):
+    """单一维度得分。"""
+    name: str = ""
+    score: int = Field(default=0, ge=0, le=100)
+    source: Literal["resume", "user_input", "manual"] = "manual"
+
+
+class Constraint(BaseModel):
+    """用户硬约束。"""
+    type: str = ""
+    value: str = ""
+    label: str = ""
+
+
+class Preference(BaseModel):
+    """用户偏好。"""
+    type: str = ""
+    value: str = ""
+    label: str = ""
+
+
 class Education(BaseModel):
     """教育经历。"""
 
@@ -96,6 +117,12 @@ class ProfileData(BaseModel):
     awards: list[str] = Field(default_factory=list)
     certificates: list[str] = Field(default_factory=list)
     raw_text: str = ""            # 为兼容和追溯保留
+    dimension_scores: list[DimensionScore] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    strengths: list[str] = Field(default_factory=list)
+    weaknesses: list[str] = Field(default_factory=list)
+    constraints: list[Constraint] = Field(default_factory=list)
+    preferences: list[Preference] = Field(default_factory=list)
 
     # ── 校验器 ──────────────────────────────────────────────────────────
 
