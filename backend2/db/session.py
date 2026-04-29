@@ -38,6 +38,7 @@ SessionLocal = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
 
 def init_db() -> None:
     """Create all tables if they don't exist (idempotent)."""
+    from backend.db import Base as SharedBase
     from backend.models import (  # noqa: F401 - shared ORM models
         User, Report, Profile, ProfileParse, CareerGoal,
         JobNode, JobEdge, JobScore,
@@ -51,7 +52,10 @@ def init_db() -> None:
         ProjectRecord, ProjectLog, InterviewRecord,
         SjtSession,
     )
-    Base.metadata.create_all(bind=engine)
+    from backend2.models.opportunity import JDDiagnosisV2  # noqa: F401
+
+    # 所有模型注册在 backend.db.Base 上，用 SharedBase 建表
+    SharedBase.metadata.create_all(bind=engine)
     # Migrate: add columns for save-profile pipeline
     with engine.connect() as conn:
         try:
