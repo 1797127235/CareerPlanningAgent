@@ -86,3 +86,4 @@ knowledge-base-submission/04-ETL中间产物/*.parquet
 .firecrawl/
 *.zip
 doc_output.txt
+.worktrees/
