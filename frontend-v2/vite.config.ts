@@ -12,7 +12,7 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/api/v2': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8002',
         changeOrigin: true,
         configure: (proxy, _options) => {
           proxy.on('proxyRes', (proxyRes, req, _res) => {

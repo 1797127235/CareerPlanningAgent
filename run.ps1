@@ -50,15 +50,22 @@ Write-Host "  Starting services...                  " -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Start Backend
-Write-Host "[1/2] Starting Backend (port 8000)..." -ForegroundColor Yellow
+# Start Backend v1
+Write-Host "[1/3] Starting Backend v1 (port 8000)..." -ForegroundColor Yellow
 $backendCmd = "Set-Location '$Root'; python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload; Read-Host 'Press Enter to close'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Normal
 
 Start-Sleep -Seconds 3
 
+# Start Backend v2
+Write-Host "[2/3] Starting Backend v2 (port 8002)..." -ForegroundColor Yellow
+$backend2Cmd = "Set-Location '$Root'; python -m uvicorn backend2.app:app --host 0.0.0.0 --port 8002 --reload; Read-Host 'Press Enter to close'"
+Start-Process powershell -ArgumentList "-NoExit", "-Command", $backend2Cmd -WindowStyle Normal
+
+Start-Sleep -Seconds 3
+
 # Start Frontend
-Write-Host "[2/2] Starting Frontend (port 5174)..." -ForegroundColor Yellow
+Write-Host "[3/3] Starting Frontend (port 5174)..." -ForegroundColor Yellow
 $frontendCmd = "Set-Location '$Root\frontend-v2'; npm run dev; Read-Host 'Press Enter to close'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd -WindowStyle Normal
 
