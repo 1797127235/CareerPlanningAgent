@@ -1,9 +1,7 @@
 """backend2/services/opportunity/prompts.py — LLM prompt 模板。"""
 from __future__ import annotations
 
-
 # ── Parser Prompt ────────────────────────────────────────────────────────
-
 JD_PARSER_SYSTEM = """你是一名专业的招聘 JD 解析助手。
 请从用户提供的职位描述（JD）文本中，提取以下结构化信息并以 JSON 格式输出。
 只提取文本中明确出现的信息，不要猜测或编造。

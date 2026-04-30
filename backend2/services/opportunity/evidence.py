@@ -20,17 +20,17 @@ def _collect_user_skills(profile: ProfileData) -> set[str]:
     skills: set[str] = set()
 
     for item in profile.skills or []:
-        name = getattr(item, "name", str(item))
+        name = item.name.strip()
         if name:
-            skills.add(name.strip().lower())
+            skills.add(name.lower())
 
     for project in profile.projects or []:
-        for tech in getattr(project, "tech_stack", []) or []:
+        for tech in project.tech_stack:
             if tech:
                 skills.add(tech.strip().lower())
 
     for internship in profile.internships or []:
-        for tech in getattr(internship, "tech_stack", []) or []:
+        for tech in internship.tech_stack:
             if tech:
                 skills.add(tech.strip().lower())
 

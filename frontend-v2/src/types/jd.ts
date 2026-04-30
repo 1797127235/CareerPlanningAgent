@@ -1,6 +1,6 @@
 export interface DiagnoseRequest {
   jd_text: string
-  profile_id: number
+  profile_id?: number
   jd_title?: string
 }
 

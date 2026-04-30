@@ -64,6 +64,7 @@ class JDDiagnosisResponse(BaseModel):
     match_score: int = Field(0, ge=0, le=100)
     jd_title: str
     company: str
+    jd_text: str = ""                 # 原始 JD 文本（前端面试入口需要）
     jd_extract: JDExtract
     result: JDDiagnosisResult
     created_at: str

@@ -6,7 +6,6 @@ import re
 
 logger = logging.getLogger(__name__)
 
-# 常见 prompt injection 模式（大小写不敏感）
 _INJECTION_PATTERNS = [
     re.compile(r"```\s*(?:system|instructions?|ignore|override).*?```", re.IGNORECASE | re.DOTALL),
     re.compile(r"ignore\s+(?:all\s+)?(?:previous|above)\s+instructions?", re.IGNORECASE),
