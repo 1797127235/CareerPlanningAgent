@@ -233,9 +233,25 @@ class SaveProfileResponse(BaseModel):
 
 class ProfileDataPatch(BaseModel):
     """允许局部更新的字段子集。"""
+    name: str | None = None
+    job_target_text: str | None = None
+    education: list[Education] | None = None
+    skills: list[Skill] | None = None
+    projects: list[Project] | None = None
+    internships: list[Internship] | None = None
+    awards: list[str] | None = None
+    certificates: list[str] | None = None
     dimension_scores: list[DimensionScore] | None = None
     tags: list[str] | None = None
     strengths: list[str] | None = None
     weaknesses: list[str] | None = None
     constraints: list[Constraint] | None = None
     preferences: list[Preference] | None = None
+
+
+class MyProfileResponse(BaseModel):
+    """GET /profiles/me 的完整响应，包含画像与 ORM 元信息。"""
+
+    profile: ProfileData
+    source: str = ""
+    updated_at: str | None = None

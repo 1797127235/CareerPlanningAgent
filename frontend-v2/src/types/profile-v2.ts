@@ -96,3 +96,9 @@ export interface V2SaveProfileResponse {
   parse_id: number
   message: string
 }
+
+export interface V2MyProfileResponse {
+  profile: V2ProfileData
+  source: string
+  updated_at: string | null
+}

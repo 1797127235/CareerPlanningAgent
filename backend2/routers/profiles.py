@@ -18,6 +18,7 @@ from backend.models import User
 from backend2.core.security import get_current_user
 from backend2.db.session import get_db
 from backend2.schemas.profile import (
+    MyProfileResponse,
     ParseResumePreviewResponse,
     ProfileData,
     ProfileDataPatch,
@@ -25,11 +26,13 @@ from backend2.schemas.profile import (
     SaveProfileResponse,
 )
 from backend2.services.profile.service import (
+    delete_my_profile,
     get_my_profile as _get_my_profile,
     parse_resume_preview,
     patch_profile_data,
     save_profile,
 )
+from backend2.services.opportunity.repository import nullify_profile_refs
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +48,10 @@ _ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt", ".md"}
 
 
 @router.post("/parse-preview", response_model=ParseResumePreviewResponse)
-async def parse_preview(file: UploadFile = File(...)) -> ParseResumePreviewResponse:
+async def parse_preview(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+) -> ParseResumePreviewResponse:
     """上传简历文件，返回解析预览。"""
     # 文件大小校验
     content = await file.read()
@@ -105,12 +111,12 @@ def create_profile(
         raise HTTPException(status_code=500, detail="保存失败，请稍后重试")
 
 
-@router.get("/me", response_model=ProfileData)
+@router.get("/me", response_model=MyProfileResponse)
 def get_my_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-) -> ProfileData:
-    """获取当前用户最新确认后的画像（v2 格式）。"""
+) -> MyProfileResponse:
+    """获取当前用户最新确认后的画像（v2 格式）及元信息。"""
     try:
         return _get_my_profile(db=db, user_id=current_user.id)
     except HTTPException:
@@ -134,3 +140,22 @@ def patch_my_profile(
     except Exception:
         logger.exception("局部更新画像失败: user_id=%d", current_user.id)
         raise HTTPException(status_code=500, detail="更新失败")
+
+
+@router.delete("/me", status_code=204)
+def delete_my_profile_endpoint(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> None:
+    """重置当前用户画像及解析快照。"""
+    try:
+        delete_my_profile(
+            db=db,
+            user_id=current_user.id,
+            before_delete_parses=lambda profile_id: nullify_profile_refs(db, profile_id),
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("重置画像失败: user_id=%d", current_user.id)
+        raise HTTPException(status_code=500, detail="重置失败")

@@ -1,10 +1,9 @@
 """backend2/services/opportunity/repository.py — jd_diagnoses_v2 表 CRUD。"""
 from __future__ import annotations
-
 import json
 import logging
-
 from sqlalchemy.orm import Session
+
 
 from backend2.models.opportunity import JDDiagnosisV2
 from backend2.schemas.opportunity import JDExtract, JDDiagnosisResult
@@ -66,3 +65,17 @@ def get_by_id(db: Session, diagnosis_id: int, user_id: int) -> JDDiagnosisV2 | N
         .filter(JDDiagnosisV2.id == diagnosis_id, JDDiagnosisV2.user_id == user_id)
         .first()
     )
+
+
+def nullify_profile_refs(db: Session, profile_id: int) -> None:
+    """将指定 profile 相关的诊断记录 profile_parse_id 置空。
+
+    当用户画像被重置时调用，保留诊断记录但解除与已删除快照的关联。
+    """
+    db.query(JDDiagnosisV2).filter(
+        JDDiagnosisV2.profile_id == profile_id
+    ).update(
+        {JDDiagnosisV2.profile_parse_id: None},
+        synchronize_session=False,
+    )
+    logger.info("诊断记录解耦: profile_id=%d", profile_id)

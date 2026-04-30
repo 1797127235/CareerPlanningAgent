@@ -1,41 +1,34 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { EditModal, FormField, FormInput, FormRow } from '../EditModal'
 import { Plus, Trash2, X } from 'lucide-react'
-
-interface Project {
-  name: string
-  description: string
-  tech_stack: string[]
-}
+import type { V2Project } from '@/types/profile-v2'
 
 interface ProjectsEditFormProps {
   open: boolean
   onClose: () => void
-  data: Array<string | Record<string, unknown>>
-  onSave: (data: Project[]) => Promise<void>
+  data: V2Project[]
+  onSave: (data: V2Project[]) => Promise<void>
 }
 
-function normalizeProject(raw: string | Record<string, unknown>): Project {
-  if (typeof raw === 'string') {
-    return { name: raw, description: '', tech_stack: [] }
-  }
-  return {
-    name: (raw.name as string) || '',
-    description: (raw.description as string) || '',
-    tech_stack: Array.isArray(raw.tech_stack) ? raw.tech_stack.map(String) : [],
-  }
-}
-
-const EMPTY_PROJECT: Project = { name: '', description: '', tech_stack: [] }
+const EMPTY_PROJECT: V2Project = { name: '', description: '', tech_stack: [], duration: '', highlights: '' }
 
 export function ProjectsEditForm({ open, onClose, data, onSave }: ProjectsEditFormProps) {
-  const [items, setItems] = useState<Project[]>(
-    data.length > 0 ? data.map(normalizeProject) : [{ ...EMPTY_PROJECT }]
+  const [items, setItems] = useState<V2Project[]>(
+    data.length > 0 ? data : [{ ...EMPTY_PROJECT }]
   )
   const [saving, setSaving] = useState(false)
   const [techInput, setTechInput] = useState<Record<number, string>>({})
 
-  const update = (index: number, field: keyof Project, value: string | string[]) => {
+  const prevOpenRef = useRef(false)
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setItems(data.length > 0 ? data : [{ ...EMPTY_PROJECT }])
+      setTechInput({})
+    }
+    prevOpenRef.current = open
+  }, [open, data])
+
+  const update = (index: number, field: keyof V2Project, value: string | string[]) => {
     setItems(items.map((item, i) => i === index ? { ...item, [field]: value } : item))
   }
 
@@ -106,6 +99,15 @@ export function ProjectsEditForm({ open, onClose, data, onSave }: ProjectsEditFo
                 placeholder="如：高并发内存池"
               />
             </FormField>
+            <FormRow>
+              <FormField label="项目时长" hint="如：2024.01 - 2024.06">
+                <FormInput
+                  value={item.duration}
+                  onChange={(v) => update(idx, 'duration', v)}
+                  placeholder="如：2024.01 - 2024.06"
+                />
+              </FormField>
+            </FormRow>
             <FormField label="项目描述">
               <textarea
                 value={item.description}
@@ -146,6 +148,15 @@ export function ProjectsEditForm({ open, onClose, data, onSave }: ProjectsEditFo
                   添加
                 </button>
               </div>
+            </FormField>
+            <FormField label="项目亮点">
+              <textarea
+                value={item.highlights}
+                onChange={(e) => update(idx, 'highlights', e.target.value)}
+                placeholder="简要描述项目中的关键贡献和亮点"
+                rows={2}
+                className="w-full px-3 py-2 rounded-[var(--radius-sm)] border border-[var(--line)] bg-[var(--bg-card)] text-[14px] text-[var(--ink-1)] placeholder:text-[var(--ink-3)] transition-colors hover:border-[var(--chestnut-light)] focus:outline-none focus:border-[var(--chestnut)] resize-none"
+              />
             </FormField>
             {idx < items.length - 1 && (
               <div className="mt-4 border-b border-[var(--line)]" />

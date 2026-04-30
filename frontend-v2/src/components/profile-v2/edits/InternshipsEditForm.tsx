@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { EditModal, FormField, FormInput, FormRow } from '../EditModal'
 import { Plus, Trash2 } from 'lucide-react'
 import type { Internship } from '@/types/profile'
@@ -23,6 +23,14 @@ export function InternshipsEditForm({ open, onClose, data, onSave }: Internships
     data.length > 0 ? data : [{ ...EMPTY_INTERNSHIP }]
   )
   const [saving, setSaving] = useState(false)
+
+  const prevOpenRef = useRef(false)
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setItems(data.length > 0 ? data : [{ ...EMPTY_INTERNSHIP }])
+    }
+    prevOpenRef.current = open
+  }, [open, data])
 
   const update = (index: number, field: keyof Internship, value: string) => {
     setItems(items.map((item, i) => i === index ? { ...item, [field]: value } : item))

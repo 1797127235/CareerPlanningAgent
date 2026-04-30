@@ -1,12 +1,9 @@
 """backend2/services/opportunity/service.py — JD 诊断业务编排。"""
 from __future__ import annotations
-
 import json
 import logging
-
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-
 from backend2.schemas.opportunity import (
     JDExtract,
     JDDiagnoseRequest,
@@ -18,16 +15,14 @@ from backend2.schemas.profile import ProfileData
 from backend2.services.opportunity.evaluator import evaluate
 from backend2.services.opportunity.parser import parse_jd
 from backend2.services.opportunity.repository import create_diagnosis, get_by_id, get_history
-
+from backend2.services.profile.resolver import resolve_profile_context
 logger = logging.getLogger(__name__)
-
 
 def _format_dt(dt) -> str:
     """将 datetime 格式化为 ISO 字符串。"""
     if dt is None:
         return ""
     return dt.isoformat()
-
 
 def _to_response(record, warnings: list[str] | None = None) -> JDDiagnosisResponse:
     """将 ORM 记录转换为 API 响应。"""
@@ -39,12 +34,12 @@ def _to_response(record, warnings: list[str] | None = None) -> JDDiagnosisRespon
         match_score=record.match_score,
         jd_title=record.jd_title,
         company=record.company,
+        jd_text=record.jd_text or "",
         jd_extract=jd_extract,
         result=result,
         created_at=_format_dt(record.created_at),
         warnings=warnings or [],
     )
-
 
 def diagnose(
     db: Session,
@@ -52,7 +47,6 @@ def diagnose(
     request: JDDiagnoseRequest,
 ) -> JDDiagnosisResponse:
     """执行 JD 诊断完整流程。
-
     1. 读取用户最新画像
     2. 解析 JD 文本
     3. 评估匹配度
@@ -63,7 +57,7 @@ def diagnose(
         warnings: list[str] = []
 
         # 1. 读取画像（单次查询拿到 ProfileData + IDs）
-        profile, profile_id, parse_id = _resolve_profile_context(db, user_id)
+        profile, profile_id, parse_id = resolve_profile_context(db, user_id)
 
         # 2. 解析 JD
         jd_extract = parse_jd(request.jd_text)
@@ -101,7 +95,6 @@ def diagnose(
         logger.exception("JD 诊断流程失败: user_id=%d", user_id)
         raise HTTPException(status_code=500, detail="诊断失败，请稍后重试")
 
-
 def get_diagnosis_history(
     db: Session,
     user_id: int,
@@ -131,34 +124,3 @@ def get_diagnosis_detail(
         raise HTTPException(status_code=404, detail="诊断记录不存在")
     return _to_response(record)
 
-
-# ── 内部辅助 ────────────────────────────────────────────────────────────
-
-
-def _resolve_profile_context(db: Session, user_id: int) -> tuple[ProfileData, int, int | None]:
-    """Return ProfileData, profile_id, and parse_id in one query session."""
-    from backend.models import Profile, ProfileParse
-
-    profile_row = db.query(Profile).filter(Profile.user_id == user_id).first()
-    if not profile_row:
-        raise HTTPException(status_code=404, detail="用户未创建画像")
-
-    profile_id = profile_row.id
-    parse_id = profile_row.active_parse_id
-
-    # Try active_parse confirmed_profile_json first (v2)
-    if parse_id:
-        parse_record = db.query(ProfileParse).filter(ProfileParse.id == parse_id).first()
-        if parse_record and parse_record.confirmed_profile_json:
-            try:
-                data = json.loads(parse_record.confirmed_profile_json)
-                return ProfileData.model_validate(data), profile_id, parse_id
-            except Exception:
-                logger.warning("confirmed_profile_json 解析失败，降级到 profile_json")
-
-    # Fallback to profile_json
-    try:
-        data = json.loads(profile_row.profile_json or "{}")
-        return ProfileData.model_validate(data), profile_id, parse_id
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"画像数据损坏: {e}")

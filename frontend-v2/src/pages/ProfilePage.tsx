@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, PenLine, AlertTriangle, RefreshCw } from 'lucide-react'
-import { useProfileData, type ManualProfilePayload } from '@/hooks/useProfileData'
+import { PenLine } from 'lucide-react'
 import { useProfileDataV2 } from '@/hooks/useProfileDataV2'
 import { useResumeUpload } from '@/hooks/useResumeUpload'
-import { setProfileName, updateProfile } from '@/api/profiles'
 import { saveProfile, patchProfileData } from '@/api/profiles-v2'
 import type { V2ParsePreviewResponse, V2ProfileData } from '@/api/profiles-v2'
-import { v2ToV1Profile } from '@/utils/profileAdapter'
+import type { ManualProfilePayload } from '@/types/profile'
 import { useToast } from '@/components/ui'
 import Navbar from '@/components/shared/Navbar'
 import { SjtQuiz } from '@/components/profile-v2/SjtQuiz'
@@ -17,7 +15,8 @@ import { CeremonyUpload } from '@/components/profile-v2/CeremonyUpload'
 import { mockProfileData } from '@/components/profile-v2/mockData'
 import ProfileReadonlyView from '@/components/profile-v2/ProfileReadonlyView'
 import ProfileEditForm from '@/components/profile-v2/ProfileEditForm'
-import type { Education, Internship, Skill } from '@/types/profile'
+import type { Internship, Skill } from '@/types/profile'
+import type { V2Education, V2Project } from '@/types/profile-v2'
 
 const EASE_OUT = [0.22, 1, 0.36, 1] as const
 const PAGE_FADE = { initial: { opacity: 0 }, animate: { opacity: 1 }, transition: { duration: 0.15, ease: EASE_OUT } }
@@ -35,9 +34,9 @@ export default function ProfilePage() {
   const isMock = searchParams.get('mock') === '1'
   const { toast } = useToast()
 
-  const { profile: v1Profile, v2Profile, loading, error: loadError, loadProfile } = useProfileDataV2(!isMock)
-  const { savingEdit, handleSaveEdit, handleDelete } = useProfileData(!isMock)
+  const { v2Profile, source, updatedAt, loading, error: loadError, loadProfile, deleteProfile } = useProfileDataV2(!isMock)
   const { uploadStep, uploadError, justUploaded, selectedFileName, fileInputRef, triggerFileDialog, onFileSelected, previewData, clearPreviewData } = useResumeUpload()
+  const [savingEdit, setSavingEdit] = useState(false)
 
   const [ceremonyAnimating, setCeremonyAnimating] = useState(false)
   useEffect(() => {
@@ -173,7 +172,6 @@ export default function ProfilePage() {
   }, [previewData, clearPreviewData, v2ToManualPayload])
 
   const v2Data = isMock ? mockProfileData : v2Profile
-  const v1Data = isMock ? v2ToV1Profile(mockProfileData) : v1Profile
 
   const hasProfile = isMock
     ? true
@@ -187,41 +185,131 @@ export default function ProfilePage() {
     }
   }, [justUploaded, loading, hasProfile, v2Data?.name, isMock])
 
-  const handleNameConfirm = () => {
+  const handleNameConfirm = useCallback(async () => {
     if (!pendingName.trim()) return
     setShowNamePrompt(false)
-    setProfileName(pendingName.trim())
-      .then(() => loadProfile())
-      .catch(console.error)
-  }
-
-  const profileObj = v1Data?.profile || {}
-
-  const savePatch = useCallback(async (patch: Record<string, unknown>) => {
     try {
-      await updateProfile({ profile: { ...profileObj, ...patch }, quality: null })
+      await patchProfileData({ name: pendingName.trim() })
+      await loadProfile()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
+    }
+  }, [pendingName, loadProfile, toast])
+
+  const handleSaveEdit = useCallback(async (payload: ManualProfilePayload) => {
+    setSavingEdit(true)
+    try {
+      if (hasProfile && v2Data) {
+        const patch = manualPayloadToV2Profile(payload, v2Data)
+        await patchProfileData({
+          name: patch.name,
+          job_target_text: patch.job_target_text,
+          education: patch.education,
+          skills: patch.skills,
+          projects: patch.projects,
+          internships: patch.internships,
+          certificates: patch.certificates,
+          awards: patch.awards,
+        })
+      } else {
+        const emptyBase: V2ProfileData = {
+          name: '',
+          job_target_text: '',
+          domain_hint: '',
+          education: [],
+          skills: [],
+          projects: [],
+          internships: [],
+          awards: [],
+          certificates: [],
+          raw_text: '',
+        }
+        const confirmedProfile = manualPayloadToV2Profile(payload, emptyBase)
+        await saveProfile({
+          raw_profile: confirmedProfile,
+          confirmed_profile: confirmedProfile,
+          document: {
+            filename: 'manual-input.txt',
+            content_type: 'text/plain',
+            raw_text: '',
+            text_format: 'plain',
+            extraction_method: 'manual',
+            ocr_used: false,
+            file_hash: '',
+            warnings: [],
+          },
+          parse_meta: {
+            llm_model: '',
+            evidence_sources: ['manual'],
+            json_repaired: false,
+            retry_count: 0,
+            quality_score: 0,
+            quality_checks: {},
+            warnings: [],
+          },
+        })
+      }
+      await loadProfile()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
+    } finally {
+      setSavingEdit(false)
+    }
+  }, [hasProfile, v2Data, manualPayloadToV2Profile, loadProfile, toast])
+
+  const handleSaveEducation = useCallback(async (edu: V2Education) => {
+    try {
+      await patchProfileData({ education: [edu] })
       await loadProfile()
       toast('已保存')
     } catch (err) {
       toast(err instanceof Error ? err.message : '保存失败')
     }
-  }, [profileObj, loadProfile, toast])
-
-  const handleSaveEducation = useCallback(async (edu: Education) => {
-    await savePatch({ education: edu })
-  }, [savePatch])
+  }, [loadProfile, toast])
 
   const handleSaveSkills = useCallback(async (newSkills: Skill[]) => {
-    await savePatch({ skills: newSkills })
-  }, [savePatch])
+    try {
+      await patchProfileData({
+        skills: newSkills
+          .filter((s) => s.name.trim())
+          .map((s) => ({ name: s.name.trim(), level: normalizeV2SkillLevel(s.level) })),
+      })
+      await loadProfile()
+      toast('已保存')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
+    }
+  }, [loadProfile, toast])
 
   const handleSaveInternships = useCallback(async (newInterns: Internship[]) => {
-    await savePatch({ internships: newInterns })
-  }, [savePatch])
+    try {
+      await patchProfileData({
+        internships: newInterns.map((i) => ({
+          company: i.company,
+          role: i.role,
+          duration: i.duration || '',
+          tech_stack: i.tech_stack || [],
+          highlights: i.highlights || '',
+        })),
+      })
+      await loadProfile()
+      toast('已保存')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
+    }
+  }, [loadProfile, toast])
 
-  const handleSaveProjects = useCallback(async (newProjects: Array<string | Record<string, unknown>>) => {
-    await savePatch({ projects: newProjects })
-  }, [savePatch])
+  const handleSaveProjects = useCallback(async (newProjects: V2Project[]) => {
+    try {
+      await patchProfileData({
+        projects: newProjects.filter((p) => p.name || p.description || p.tech_stack.length || p.highlights),
+      })
+      await loadProfile()
+      toast('已保存')
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '保存失败')
+    }
+  }, [loadProfile, toast])
 
   const handlePatchProfile = useCallback(async (patch: Partial<V2ProfileData>) => {
     try {
@@ -316,9 +404,9 @@ export default function ProfilePage() {
           {hasProfile && v2Data ? (
             <ProfileReadonlyView
               profile={v2Data}
-              source={isMock ? 'resume' : (v1Data?.source || 'resume')}
-              updatedAt={v1Data?.updated_at}
-              onDelete={handleDelete}
+              source={isMock ? 'resume' : (source || 'resume')}
+              updatedAt={updatedAt ?? undefined}
+              onDelete={deleteProfile}
               onSaveEducation={handleSaveEducation}
               onSaveSkills={handleSaveSkills}
               onSaveInternships={handleSaveInternships}
@@ -335,7 +423,7 @@ export default function ProfilePage() {
                   <div className="flex items-center gap-3 mb-6">
                     <span className="inline-block h-px w-8" style={{ background: '#9A9590' }} />
                     <p className="text-[11px] font-medium tracking-[0.12em]" style={{ fontFamily: 'var(--font-sans)', color: '#9A9590' }}>
-                      AI 职业能力画像
+                      个人画像
                     </p>
                   </div>
 
@@ -350,7 +438,6 @@ export default function ProfilePage() {
                   >
                     <span style={{ fontWeight: 400 }}>创建你的</span>
                     <br />
-                    <span style={{ fontWeight: 600 }}>AI </span>
                     <span style={{ fontWeight: 600, color: '#B85C38' }}>职业能力档案</span>
                   </h1>
 
@@ -363,7 +450,7 @@ export default function ProfilePage() {
                       maxWidth: '460px',
                     }}
                   >
-                    上传简历或补充关键经历，CareerPlan 将自动识别你的技能结构、项目亮点与潜在优势，生成一份专属成长分析。
+                    上传简历或补充关键经历，整理你的技能结构、项目经历与偏好约束，形成可编辑的个人画像。
                   </p>
 
                   {/* Ceremony Upload */}
@@ -399,7 +486,7 @@ export default function ProfilePage() {
                 <div className="flex items-center justify-center">
                   <img
                     src="/profile-hero.png"
-                    alt="AI 职业能力档案"
+                    alt="职业能力档案"
                     className="w-full max-w-[380px] md:max-w-[430px]"
                     style={{ objectFit: 'contain' }}
                   />

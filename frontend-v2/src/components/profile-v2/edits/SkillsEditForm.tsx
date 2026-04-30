@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { EditModal, FormField, FormInput } from '../EditModal'
 import { X, Plus } from 'lucide-react'
 import type { Skill } from '@/types/profile'
@@ -24,6 +24,15 @@ export function SkillsEditForm({ open, onClose, data, onSave }: SkillsEditFormPr
   const [newSkill, setNewSkill] = useState('')
   const [saving, setSaving] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const prevOpenRef = useRef(false)
+
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setSkills(data)
+      setNewSkill('')
+    }
+    prevOpenRef.current = open
+  }, [open, data])
 
   const addSkill = useCallback(() => {
     const name = newSkill.trim()

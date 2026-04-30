@@ -4,11 +4,12 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.orm import Session
-from backend.models.profile import Profile, ProfileParse
 from backend2.schemas.profile import (
+    MyProfileResponse,
     ParseResumePreviewResponse,
     ProfileData,
     ProfileDataPatch,
@@ -18,6 +19,7 @@ from backend2.schemas.profile import (
 )
 from backend2.services.profile.parser.evidence import resumesdk
 from backend2.services.profile.parser.pipeline import ParserPipeline
+from backend2.services.profile import repository as repo
 
 
 logger = logging.getLogger(__name__)
@@ -64,6 +66,9 @@ def save_profile(
     # 自动判断用户是否做过编辑
     is_edited = raw_json != confirmed_json
 
+    # 根据文档来源设置 source
+    profile_source = "manual" if document.extraction_method == "manual" else "resume"
+
     # 用 confirmed_profile 重新计算 quality（覆盖 meta 里的 score）
     from backend2.services.profile.parser.quality import score_profile
 
@@ -74,29 +79,28 @@ def save_profile(
     # 事务开始
     try:
         # 1. 插入或更新 profiles
-        profile = db.query(Profile).filter(
-            Profile.user_id == user_id
-        ).first()
-
+        profile = repo.get_profile(db, user_id)
         if profile is None:
-            profile = Profile(
+            profile = repo.create_profile(
+                db,
                 user_id=user_id,
                 name=confirmed_profile.name or "",
                 profile_json=json.dumps(confirmed_json, ensure_ascii=False),
                 quality_json=json.dumps(meta_json, ensure_ascii=False),
-                source="resume",
+                source=profile_source,
             )
-            db.add(profile)
-            db.flush()  # 拿到 profile.id
         else:
-            profile.name = confirmed_profile.name or profile.name
-            profile.profile_json = json.dumps(confirmed_json, ensure_ascii=False)
-            profile.quality_json = json.dumps(meta_json, ensure_ascii=False)
-            profile.source = "resume"
-            db.flush()
+            repo.update_profile_fields(
+                db, profile,
+                name=confirmed_profile.name or profile.name,
+                profile_json=json.dumps(confirmed_json, ensure_ascii=False),
+                quality_json=json.dumps(meta_json, ensure_ascii=False),
+                source=profile_source,
+            )
 
         # 2. 插入 profile_parses（保留原始解析快照）
-        parse_snapshot = ProfileParse(
+        parse_snapshot = repo.create_parse(
+            db,
             profile_id=profile.id,
             file_hash=document.file_hash or "",
             raw_profile_json=json.dumps(raw_json, ensure_ascii=False),
@@ -104,12 +108,13 @@ def save_profile(
             document_json=json.dumps(document_json, ensure_ascii=False),
             meta_json=json.dumps(meta_json, ensure_ascii=False),
         )
-        db.add(parse_snapshot)
-        db.flush()
 
         # 3. 回填 active_parse_id + is_edited
-        profile.active_parse_id = parse_snapshot.id
-        profile.is_edited = is_edited
+        repo.update_profile_fields(
+            db, profile,
+            active_parse_id=parse_snapshot.id,
+            is_edited=is_edited,
+        )
 
         db.commit()
         db.refresh(profile)
@@ -130,7 +135,7 @@ def save_profile(
         logger.exception("画像保存失败: user_id=%d", user_id)
         raise
 
-def get_my_profile(db: Session, user_id: int) -> ProfileData:
+def get_my_profile(db: Session, user_id: int) -> MyProfileResponse:
     """读取用户最新确认后的画像。
 
     优先从 active_parse 取 confirmed_profile_json（v2 原始格式），
@@ -139,7 +144,12 @@ def get_my_profile(db: Session, user_id: int) -> ProfileData:
     from backend2.services.profile.resolver import resolve_profile_context
 
     profile_data, _profile_id, _parse_id = resolve_profile_context(db, user_id)
-    return profile_data
+    profile_row = repo.get_profile(db, user_id)
+    return MyProfileResponse(
+        profile=profile_data,
+        source=profile_row.source if profile_row else "",
+        updated_at=profile_row.updated_at.isoformat() if profile_row and profile_row.updated_at else None,
+    )
 
 
 def patch_profile_data(
@@ -153,19 +163,24 @@ def patch_profile_data(
     因为 get_my_profile() 优先从 active_parse 读取。
     """
     from backend2.services.profile.resolver import resolve_profile_context
-    from backend.models.profile import Profile, ProfileParse
 
     profile_data, profile_id, _parse_id = resolve_profile_context(db, user_id)
     if profile_id is None:
         raise HTTPException(status_code=404, detail="画像不存在")
 
-    # 读取当前 JSON
-    profile = db.query(Profile).filter(Profile.user_id == user_id).first()
+    # 读取当前 JSON（加行锁防止并发 PATCH 覆盖）
+    profile = repo.get_profile_for_update(db, user_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="画像不存在")
     current_json = json.loads(profile.profile_json or "{}")
 
     # 只覆盖请求中提供的字段
     patch_dict = patch.model_dump(exclude_unset=True, mode="json")
     current_json.update(patch_dict)
+
+    # 同步更新 profiles.name
+    if patch.name is not None:
+        profile.name = patch.name
 
     updated_json = json.dumps(current_json, ensure_ascii=False)
 
@@ -174,14 +189,51 @@ def patch_profile_data(
 
     # 同步更新当前 active_parse 的 confirmed_profile_json
     if profile.active_parse_id:
-        parse_snapshot = db.query(ProfileParse).filter(
-            ProfileParse.id == profile.active_parse_id
-        ).first()
-        if parse_snapshot:
-            parse_snapshot.confirmed_profile_json = updated_json
+        repo.update_parse_confirmed_json(db, profile.active_parse_id, updated_json)
 
     db.commit()
     db.refresh(profile)
 
     logger.info("画像局部更新: user_id=%d, fields=%s", user_id, list(patch_dict.keys()))
     return ProfileData.model_validate(current_json)
+
+
+def delete_my_profile(
+    db: Session,
+    user_id: int,
+    before_delete_parses: Callable[[int], None] | None = None,
+) -> int | None:
+    """重置用户画像内容（仅 profiles + profile_parses）。
+
+    保留 profiles 行，避免删除画像时级联影响 applications、projects、
+    interviews、reports 等依赖 profile_id 的业务数据。
+
+    Args:
+        before_delete_parses: 可选跨域清理回调。调用方可在删除
+            profile_parses 前解除其它表对 profile_parses.id 的外键引用。
+
+    Returns:
+        profile_id，无画像时返回 None。
+    """
+    try:
+        profile = repo.get_profile(db, user_id)
+        if profile is None:
+            raise HTTPException(status_code=404, detail="画像不存在")
+
+        pid = profile.id
+
+        repo.reset_profile_fields(db, profile)
+        if before_delete_parses is not None:
+            before_delete_parses(pid)
+        repo.delete_parses_for_profile(db, pid)
+        db.commit()
+
+        logger.info("画像已重置: user_id=%d, profile_id=%d", user_id, pid)
+        return pid
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        logger.exception("画像重置失败: user_id=%d", user_id)
+        raise

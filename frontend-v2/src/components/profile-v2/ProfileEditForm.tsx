@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import type { V2ProfileData } from '@/types/profile-v2'
@@ -47,6 +47,21 @@ export default function ProfileEditForm({ open, onClose, initialData, onSave }: 
     initialData.constraints?.find((c) => c.type === 'salary_min')?.value ?? ''
   )
   const [saving, setSaving] = useState(false)
+
+  const prevOpenRef = useRef(false)
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      setTags(initialData.tags?.join(', ') ?? '')
+      setStrengths(initialData.strengths?.join('\n') ?? '')
+      setWeaknesses(initialData.weaknesses?.join('\n') ?? '')
+      setCities(initialData.constraints?.filter((c) => c.type === 'location').map((c) => c.value) ?? [])
+      setIndustries(initialData.preferences?.filter((p) => p.type === 'industry').map((p) => p.value) ?? [])
+      setCompanySizes(initialData.preferences?.filter((p) => p.type === 'company_size').map((p) => p.value) ?? [])
+      setGrowth(initialData.preferences?.find((p) => p.type === 'growth_speed')?.value ?? '')
+      setSalary(initialData.constraints?.find((c) => c.type === 'salary_min')?.value ?? '')
+    }
+    prevOpenRef.current = open
+  }, [open, initialData])
 
   const handleSubmit = async () => {
     setSaving(true)

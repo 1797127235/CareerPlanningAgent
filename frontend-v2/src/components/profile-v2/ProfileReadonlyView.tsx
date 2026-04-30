@@ -16,9 +16,10 @@ import {
   Tag,
   Heart,
   Shield,
+  ShieldCheck,
 } from 'lucide-react'
-import type { V2ProfileData } from '@/types/profile-v2'
-import type { Education, Skill, Internship } from '@/types/profile'
+import type { V2ProfileData, V2Education, V2Project } from '@/types/profile-v2'
+import type { Skill, Internship } from '@/types/profile'
 import { EducationEditForm } from './edits/EducationEditForm'
 import { SkillsEditForm } from './edits/SkillsEditForm'
 import { InternshipsEditForm } from './edits/InternshipsEditForm'
@@ -96,10 +97,10 @@ interface Props {
   source?: string
   updatedAt?: string
   onDelete?: () => Promise<void>
-  onSaveEducation?: (data: Education) => Promise<void>
+  onSaveEducation?: (data: V2Education) => Promise<void>
   onSaveSkills?: (data: Skill[]) => Promise<void>
   onSaveInternships?: (data: Internship[]) => Promise<void>
-  onSaveProjects?: (data: Array<string | Record<string, unknown>>) => Promise<void>
+  onSaveProjects?: (data: V2Project[]) => Promise<void>
   onOpenEdit?: () => void
 }
 
@@ -133,10 +134,10 @@ export default function ProfileReadonlyView({
     }
   }, [onDelete])
 
-  /* ── Adapt v2 → v1 for edit forms ── */
-  const v1Education: Education = useMemo(() => {
+  /* ── v2 data for edit forms ── */
+  const v2Education: V2Education = useMemo(() => {
     const e = profile.education[0]
-    return e ? { school: e.school, major: e.major, degree: e.degree } : {}
+    return e ?? { school: '', major: '', degree: '', duration: '' }
   }, [profile.education])
 
   const v1Skills: Skill[] = useMemo(() => {
@@ -144,7 +145,9 @@ export default function ProfileReadonlyView({
       beginner: 'beginner',
       familiar: 'familiar',
       intermediate: 'intermediate',
-      advanced: 'expert',
+      advanced: 'advanced',
+      expert: 'advanced',  // v1 compat: v1 'expert' maps to v2 'advanced' (v2 has no 'expert')
+      proficient: 'advanced',  // v1 compat: 'proficient' maps to 'advanced'
     }
     return profile.skills.map((s) => ({
       name: s.name,
@@ -162,15 +165,9 @@ export default function ProfileReadonlyView({
     })),
   [profile.internships])
 
-  const v1Projects = useMemo(() =>
-    profile.projects.map((p) => ({
-      name: p.name,
-      description: p.description,
-      tech_stack: p.tech_stack,
-    })),
-  [profile.projects])
+  const v2Projects: V2Project[] = useMemo(() => profile.projects, [profile.projects])
 
-  const handleSaveEdu = useCallback(async (edu: Education) => {
+  const handleSaveEdu = useCallback(async (edu: V2Education) => {
     if (onSaveEducation) await onSaveEducation(edu)
   }, [onSaveEducation])
 
@@ -182,7 +179,7 @@ export default function ProfileReadonlyView({
     if (onSaveInternships) await onSaveInternships(interns)
   }, [onSaveInternships])
 
-  const handleSaveProjects = useCallback(async (projects: Array<string | Record<string, unknown>>) => {
+  const handleSaveProjects = useCallback(async (projects: V2Project[]) => {
     if (onSaveProjects) await onSaveProjects(projects)
   }, [onSaveProjects])
 
@@ -200,7 +197,7 @@ export default function ProfileReadonlyView({
       {/* ── Header ── */}
       <motion.header custom={0} variants={fadeUp} initial="hidden" animate="visible" className="mb-10">
         <div className="flex items-start justify-between">
-          <Kicker text="AI 职业能力画像" />
+          <Kicker text="个人画像" />
           {onDelete && (
             <button
               onClick={() => setDeleteConfirm(true)}
@@ -637,7 +634,7 @@ export default function ProfileReadonlyView({
           <div>
             <p className="text-[14px] font-semibold" style={{ ...sans, color: ink(1) }}>补充画像信息</p>
             <p className="text-[12px] mt-0.5" style={{ ...sans, color: ink(3) }}>
-              添加标签、能力维度、优势短板、偏好与约束，让画像更完整
+              添加标签、优势短板、偏好与约束，让画像更完整
             </p>
           </div>
           {onOpenEdit && (
@@ -665,7 +662,7 @@ export default function ProfileReadonlyView({
         <EducationEditForm
           open={editEdu}
           onClose={() => setEditEdu(false)}
-          data={v1Education}
+          data={v2Education}
           onSave={handleSaveEdu}
         />
       )}
@@ -689,7 +686,7 @@ export default function ProfileReadonlyView({
         <ProjectsEditForm
           open={editProjects}
           onClose={() => setEditProjects(false)}
-          data={v1Projects}
+          data={v2Projects}
           onSave={handleSaveProjects}
         />
       )}

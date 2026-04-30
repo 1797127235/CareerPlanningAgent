@@ -104,6 +104,7 @@ export {
   saveProfile,
   fetchMyProfileV2,
   patchProfileData,
+  deleteMyProfileV2,
 } from './profiles-v2'
 export type {
   V2ProfileData,
@@ -113,6 +114,7 @@ export type {
   V2Project,
   V2ParsePreviewResponse,
   V2SaveProfileResponse,
+  V2MyProfileResponse,
 } from '@/types/profile-v2'
 export { fetchRecommendations, fetchMatchDetail } from './recommendations'
 export type { Recommendation, RecommendationsResponse, MatchDetail } from './recommendations'

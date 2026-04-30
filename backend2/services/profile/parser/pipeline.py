@@ -30,6 +30,7 @@ from backend2.services.profile.parser.extractors import (
     TxtTextExtractor,
 )
 from backend2.services.profile.parser.llm_parser import LLMParseResult, parse as llm_parse
+from backend2.services.profile.parser.inference import enrich_profile
 from backend2.services.profile.parser.postprocess import postprocess
 from backend2.services.profile.parser.quality import score_profile
 
@@ -141,7 +142,10 @@ class ParserPipeline:
         # 4. 后处理（防御性清理 + 事实保真）
         profile = postprocess(profile, document)
 
-        # 5. 质量评分
+        # 5. 推断分析字段（dimension_scores、tags、strengths、weaknesses）
+        profile = enrich_profile(profile)
+
+        # 6. 质量评分
         quality_meta = score_profile(profile)
         meta.quality_score = quality_meta.quality_score
         meta.quality_checks = quality_meta.quality_checks

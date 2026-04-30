@@ -41,6 +41,7 @@ import type {
   V2ParseMeta,
   V2ParsePreviewResponse,
   V2SaveProfileResponse,
+  V2MyProfileResponse,
 } from '@/types/profile-v2'
 
 export type {
@@ -53,6 +54,7 @@ export type {
   V2ParseMeta,
   V2ParsePreviewResponse,
   V2SaveProfileResponse,
+  V2MyProfileResponse,
 } from '@/types/profile-v2'
 
 // ── API ────────────────────────────────────────────────────────────────
@@ -80,12 +82,39 @@ export async function saveProfile(request: {
   })
 }
 
-/** 读取当前用户最新画像（v2 格式） */
-export async function fetchMyProfileV2(): Promise<V2ProfileData> {
-  return v2RawFetch<V2ProfileData>('/profiles/me')
+/** 读取当前用户最新画像（v2 格式）及元信息 */
+export async function fetchMyProfileV2(): Promise<V2MyProfileResponse> {
+  return v2RawFetch<V2MyProfileResponse>('/profiles/me')
 }
 
+// KEEP IN SYNC WITH backend2/schemas/profile.py:ProfileDataPatch
 export interface V2ProfileDataPatch {
+  name?: string
+  job_target_text?: string
+  education?: Array<{
+    degree: string
+    major: string
+    school: string
+    graduation_year?: number
+    duration: string
+  }>
+  skills?: Array<{ name: string; level: string }>
+  projects?: Array<{
+    name: string
+    description: string
+    tech_stack: string[]
+    duration: string
+    highlights: string
+  }>
+  internships?: Array<{
+    company: string
+    role: string
+    duration: string
+    tech_stack: string[]
+    highlights: string
+  }>
+  awards?: string[]
+  certificates?: string[]
   dimension_scores?: Array<{ name: string; score: number; source: string }>
   tags?: string[]
   strengths?: string[]
@@ -94,10 +123,15 @@ export interface V2ProfileDataPatch {
   preferences?: Array<{ type: string; value: string; label: string }>
 }
 
-/** 局部更新用户画像（补充信息） */
+/** 局部更新用户画像 */
 export async function patchProfileData(patch: V2ProfileDataPatch): Promise<V2ProfileData> {
   return v2RawFetch<V2ProfileData>('/profiles/me/profile-data', {
     method: 'PATCH',
     body: JSON.stringify(patch),
   })
+}
+
+/** 重置/删除当前用户画像 */
+export async function deleteMyProfileV2(): Promise<void> {
+  return v2RawFetch<void>('/profiles/me', { method: 'DELETE' })
 }
