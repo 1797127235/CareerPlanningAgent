@@ -1,6 +1,6 @@
 #Requires -Version 5.1
 # CareerOS - Quick Launcher
-# Double-click to start both backend and frontend
+# Double-click to start backend and frontend
 
 $ErrorActionPreference = "Stop"
 $Root = $PSScriptRoot
@@ -30,12 +30,12 @@ if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
 Write-Host "[OK] npm: $(npm --version 2>&1)" -ForegroundColor Green
 
 # Check files
-if (-not (Test-Path "$Root\backend\app.py")) {
-    Write-Host "[ERROR] backend\app.py not found" -ForegroundColor Red
+if (-not (Test-Path "$Root\backend2\app.py")) {
+    Write-Host "[ERROR] backend2\app.py not found" -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }
-Write-Host "[OK] Backend file found" -ForegroundColor Green
+Write-Host "[OK] Backend2 file found" -ForegroundColor Green
 
 if (-not (Test-Path "$Root\frontend-v2\package.json")) {
     Write-Host "[ERROR] frontend-v2\package.json not found" -ForegroundColor Red
@@ -50,22 +50,15 @@ Write-Host "  Starting services...                  " -ForegroundColor White
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Start Backend v1
-Write-Host "[1/3] Starting Backend v1 (port 8000)..." -ForegroundColor Yellow
-$backendCmd = "Set-Location '$Root'; python -m uvicorn backend.app:app --host 0.0.0.0 --port 8000 --reload; Read-Host 'Press Enter to close'"
+# Start Unified Backend (backend2 only)
+Write-Host "[1/2] Starting Unified Backend (port 8000)..." -ForegroundColor Yellow
+$backendCmd = "Set-Location '$Root'; python -m uvicorn backend2.app:app --host 0.0.0.0 --port 8000 --reload; Read-Host 'Press Enter to close'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $backendCmd -WindowStyle Normal
 
 Start-Sleep -Seconds 3
 
-# Start Backend v2
-Write-Host "[2/3] Starting Backend v2 (port 8002)..." -ForegroundColor Yellow
-$backend2Cmd = "Set-Location '$Root'; python -m uvicorn backend2.app:app --host 0.0.0.0 --port 8002 --reload; Read-Host 'Press Enter to close'"
-Start-Process powershell -ArgumentList "-NoExit", "-Command", $backend2Cmd -WindowStyle Normal
-
-Start-Sleep -Seconds 3
-
 # Start Frontend
-Write-Host "[3/3] Starting Frontend (port 5174)..." -ForegroundColor Yellow
+Write-Host "[2/2] Starting Frontend (port 5174)..." -ForegroundColor Yellow
 $frontendCmd = "Set-Location '$Root\frontend-v2'; npm run dev; Read-Host 'Press Enter to close'"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $frontendCmd -WindowStyle Normal
 
@@ -79,7 +72,7 @@ Write-Host ""
 Write-Host "  Backend API: http://localhost:8000/docs" -ForegroundColor Cyan
 Write-Host "  Frontend:    http://localhost:5174" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "Note: Close the two PowerShell windows" -ForegroundColor Yellow
+Write-Host "Note: Close the PowerShell windows" -ForegroundColor Yellow
 Write-Host "      (Backend/Frontend) to stop services" -ForegroundColor Yellow
 Write-Host ""
 Read-Host "Press Enter to close this launcher"

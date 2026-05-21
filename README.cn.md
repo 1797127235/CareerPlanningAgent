@@ -64,7 +64,7 @@ run.bat
 
 ```bash
 # 终端 1：后端
-python -m uvicorn backend.app:app --reload
+python -m uvicorn backend2.app:app --reload
 
 # 终端 2：前端
 cd frontend-v2

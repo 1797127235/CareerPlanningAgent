@@ -76,7 +76,7 @@ def _auto_locate_on_graph(
         recs_raw = llm_result.get("recommendations", [])
         enriched = []
         if recs_raw:
-            from backend.routers.recommendations import _save_rec_cache
+            from backend2.routers.recommendations import _save_rec_cache
             from backend.services.gap_analyzer import profile_hash
 
             graph_nodes = get_graph_nodes()
@@ -288,7 +288,7 @@ def _auto_locate_on_graph(
         # Save recommendations cache — re-query profile to get a fresh
         # session-managed object after commit (avoids DetachedInstanceError)
         try:
-            from backend.routers.recommendations import _save_rec_cache
+            from backend2.routers.recommendations import _save_rec_cache
             from backend.services.gap_analyzer import profile_hash as _ph
 
             fresh_profile = db.query(Profile).filter(Profile.id == profile_id).first()

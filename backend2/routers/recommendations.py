@@ -13,8 +13,8 @@ from pathlib import Path
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
-from backend.db import get_db
+from backend2.core.security import get_current_user
+from backend2.db.session import get_db
 from backend.models import Profile, User
 from backend.services.graph.matching import find_role_id_for_job_target
 
@@ -170,7 +170,7 @@ def get_recommendations_endpoint(
     if background_tasks is not None:
         try:
             profile_data = json.loads(profile.profile_json or "{}")
-            from backend.routers.profiles import _auto_locate_bg
+            from backend2.routers.profiles_legacy import _auto_locate_bg
             background_tasks.add_task(_auto_locate_bg, profile.id, user.id, profile_data)
         except Exception as e:
             logger.warning("[GET-REC] failed to trigger auto-locate: %s", e)

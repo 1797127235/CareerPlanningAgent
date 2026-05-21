@@ -67,7 +67,7 @@ function useActivityPulseLocal(enabled: boolean) {
 }
 
 /* ── Hero — 诗书气质 ── */
-function Hero({ hasProfile }: { hasProfile: boolean }) {
+function Hero({ isAuthenticated }: { isAuthenticated: boolean }) {
   const navigate = useNavigate()
 
   return (
@@ -125,7 +125,7 @@ function Hero({ hasProfile }: { hasProfile: boolean }) {
         {/* 行动按钮 */}
         <div className="mt-10 flex items-center gap-6">
           <button
-            onClick={() => navigate(hasProfile ? '/profile' : '/login')}
+            onClick={() => navigate(isAuthenticated ? '/profile' : '/login')}
             className="rounded-sm px-7 py-2.5 text-[14px] font-medium text-white transition-colors duration-200"
             style={{ background: t.button, ...sans, letterSpacing: '0.04em' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = t.buttonHover }}
@@ -180,7 +180,7 @@ const capabilities = [
   },
   {
     num: '05',
-    title: '成长路径',
+    title: '成长手札',
     desc: '我们把目标拆解为可执行的阶段性能力建设建议，陪伴你持续成长。',
     route: '/growth-log',
   },
@@ -549,7 +549,7 @@ const footerColumns = [
     { label: '成长手札', route: '/growth-log' },
   ],
   [
-    { label: '成长路径', route: '/growth-log' },
+    { label: '成长手札', route: '/growth-log' },
   ],
   [
     { label: '岗位图谱', route: '/graph' },
@@ -634,7 +634,7 @@ export default function HomePage() {
       style={{ background: t.bg, color: t.ink, position: 'relative', zIndex: 2 }}
     >
       <Navbar />
-      <Hero hasProfile={hasProfile} />
+      <Hero isAuthenticated={isAuthenticated} />
       <CapabilitiesSection />
       <Dashboard hasProfile={hasProfile} profile={profile} />
       {!hasProfile && <CTASection isAuthenticated={isAuthenticated} />}

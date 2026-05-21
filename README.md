@@ -64,7 +64,7 @@ run.bat
 
 ```bash
 # Terminal 1: Backend
-python -m uvicorn backend.app:app --reload
+python -m uvicorn backend2.app:app --reload
 
 # Terminal 2: Frontend
 cd frontend-v2

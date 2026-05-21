@@ -187,7 +187,7 @@ WorkingDirectory=$APP_DIR
 EnvironmentFile=$APP_DIR/.env
 Environment=PYTHONPATH=$APP_DIR
 Environment=ENV=production
-ExecStart=$APP_DIR/venv/bin/uvicorn backend.app:app --host 127.0.0.1 --port 8000 --workers 2
+ExecStart=$APP_DIR/venv/bin/uvicorn backend2.app:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=always
 RestartSec=5
 

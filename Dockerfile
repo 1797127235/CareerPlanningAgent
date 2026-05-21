@@ -26,4 +26,4 @@ RUN mkdir -p /app/tmp && chmod 777 /app/tmp
 
 EXPOSE 8000
 
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+CMD ["uvicorn", "backend2.app:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]

@@ -251,7 +251,7 @@ EMBEDDING_MODEL=
 ```bash
 python -m pytest -q tests
 cd frontend-v2 && npm run build
-python -m uvicorn backend.app:app --reload
+python -m uvicorn backend2.app:app --reload
 ```
 
 至少以上命令路径清晰，失败时错误可解释。

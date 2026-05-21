@@ -53,7 +53,7 @@ User=root
 WorkingDirectory=/root/CareerPlanningAgent
 Environment=PYTHONPATH=/root/CareerPlanningAgent
 EnvironmentFile=/root/CareerPlanningAgent/.env
-ExecStart=/root/CareerPlanningAgent/venv/bin/uvicorn backend.app:app --host 127.0.0.1 --port 8000 --workers 2
+ExecStart=/root/CareerPlanningAgent/venv/bin/uvicorn backend2.app:app --host 127.0.0.1 --port 8000 --workers 2
 Restart=always
 RestartSec=5
 

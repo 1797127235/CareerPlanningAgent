@@ -12,8 +12,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
-from backend.db import get_db
+from backend2.core.security import get_current_user
+from backend2.db.session import get_db
 from backend.models import (
     ChatMessage,
     ChatSession,

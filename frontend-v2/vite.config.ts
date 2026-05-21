@@ -9,10 +9,11 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, 'src') },
   },
   server: {
+    host: '127.0.0.1',
     port: 5174,
     proxy: {
       '/api/v2': {
-        target: 'http://localhost:8002',
+        target: 'http://localhost:8000',
         changeOrigin: true,
         configure: (proxy, _options) => {
           proxy.on('proxyRes', (proxyRes, req, _res) => {

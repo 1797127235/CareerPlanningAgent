@@ -12,8 +12,8 @@ from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
-from backend.db import get_db
+from backend2.core.security import get_current_user
+from backend2.db.session import get_db
 from backend.models import JobNode, JobNodeIntro, Profile, User
 from backend.llm import get_llm_client, get_model
 from backend.services.graph import get_graph_service

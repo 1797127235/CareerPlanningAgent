@@ -52,7 +52,7 @@ def main() -> None:
         copied += 1
 
     print(f"Done: {copied} files copied to data/, {skipped} skipped.")
-    print("Run the app: python -m uvicorn backend.app:app --reload")
+    print("Run the app: python -m uvicorn backend2.app:app --reload")
 
 
 if __name__ == "__main__":

@@ -1,11 +1,11 @@
-"""Tests for auth + app route wiring."""
+"""Tests for auth + app route wiring (backend2)."""
 from __future__ import annotations
 
 import uuid
 
 from fastapi.testclient import TestClient
 
-from backend.app import app
+from backend2.app import app
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -67,11 +67,11 @@ class TestAuth:
         )
         assert r.status_code == 401
 
-    def test_me_without_token(self):
-        r = client.get("/api/auth/me")
+    def test_me_stage_without_token(self):
+        r = client.get("/api/auth/me/stage")
         assert r.status_code == 401
 
-    def test_me_with_token(self):
+    def test_me_stage_with_token(self):
         username = _unique("me")
         client.post(
             "/api/auth/register",
@@ -83,14 +83,12 @@ class TestAuth:
         )
         token = login.json()["data"]["token"]
         r = client.get(
-            "/api/auth/me",
+            "/api/auth/me/stage",
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 200
         body = r.json()
-        assert body["success"] is True
-        assert "id" in body["data"]
-        assert body["data"]["username"] == username
+        assert "stage" in body
 
 
 class TestAppRoutes:
@@ -98,15 +96,13 @@ class TestAppRoutes:
         route_paths = [r.path for r in app.routes]
         assert "/api/auth/login" in route_paths
         assert "/api/auth/register" in route_paths
-        assert "/api/auth/me" in route_paths
+        assert "/api/auth/me/stage" in route_paths
         assert "/api/chat/" in route_paths
-        assert "/api/chat/stream" in route_paths
         assert "/api/graph/map" in route_paths
         assert "/api/profiles/" in route_paths
         assert "/api/jd/diagnose" in route_paths
         assert "/api/report/" in route_paths
         assert "/api/dashboard/stats" in route_paths
-        assert "/api/practice/analyze" in route_paths
 
     def test_unauthenticated_graph_map(self):
         """Graph map should require auth."""

@@ -12,10 +12,10 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
-from backend.db import get_db
+from backend2.core.security import get_current_user
+from backend2.db.session import get_db
 from backend.models import Profile, User
-from backend.routers._profiles_helpers import _load_profile_json
+from backend2.routers._profiles_helpers import _load_profile_json
 from backend.utils import ok
 
 logger = logging.getLogger(__name__)

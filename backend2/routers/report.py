@@ -15,8 +15,8 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.auth import get_current_user
-from backend.db import get_db
+from backend2.core.security import get_current_user
+from backend2.db.session import get_db
 from backend.models import ActionPlanV2, ActionProgress, Report, User
 
 router = APIRouter()

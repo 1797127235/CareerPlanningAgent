@@ -12,11 +12,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request,
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
-from backend.db import get_db, SessionLocal
+from backend2.core.security import get_current_user
+from backend2.db.session import get_db, SessionLocal
 from backend.models import Profile, SjtSession, User
 from backend.services.graph.locator import _auto_locate_on_graph
-from backend.routers._profiles_helpers import (
+from backend2.routers._profiles_helpers import (
     _get_or_create_profile,
     _load_profile_json,
     _profile_to_dict,

@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.auth import get_current_user
-from backend.db import get_db
+from backend2.core.security import get_current_user
+from backend2.db.session import get_db
 from backend.models import JDDiagnosis, Profile, User
 from backend.services.graph import get_graph_service
 from backend.services.jd_service import JDService
@@ -99,7 +99,7 @@ def diagnose(
 
     # Coach intervention: JD diagnosis complete
     try:
-        from backend.routers.guidance import create_coach_intervention
+        from backend2.routers.guidance import create_coach_intervention
         match_score = result.get("match_score", 0)
         gap_skills = result.get("gap_skills", [])
         gap_count = len(gap_skills)

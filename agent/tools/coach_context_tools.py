@@ -259,9 +259,9 @@ def save_profile_from_chat(profile_data: str) -> str:
     try:
         from backend.db import SessionLocal
         from backend.models import Profile
-        from backend.routers.profiles import _get_or_create_profile
-        from backend.services.profile_service import ProfileService
-        from backend.routers._profiles_graph import _auto_locate_on_graph
+        from backend2.routers._profiles_helpers import _get_or_create_profile
+        from backend.services.profile import ProfileService
+        from backend.services.graph.locator import _auto_locate_on_graph
 
         db = SessionLocal()
         try:
@@ -271,7 +271,7 @@ def save_profile_from_chat(profile_data: str) -> str:
             existing = _json.loads(profile.profile_json or "{}")
             if existing.get("skills"):
                 # 已有简历数据，合并模式
-                from backend.routers._profiles_helpers import _merge_profiles
+                from backend2.routers._profiles_helpers import _merge_profiles
                 merged = _merge_profiles(existing, data)
             else:
                 merged = data
